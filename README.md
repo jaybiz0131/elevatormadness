@@ -49,10 +49,13 @@ On phones and tablets, on-screen touch controls appear automatically.
   appears) to slip inside — robbers can't see or hit you. You can't shoot
   while hidden, and the exit door doesn't count.
 - Shooting a robber while riding an elevator earns bonus points.
-- **Walkways cross every shaft — but only you can use them.** Robbers turn
-  back at an open shaft; they can only cross where a car is parked. If a
-  robber is standing on a parked car when it gets called away, he's left
-  **stranded** on the walkway — frozen and helpless. Drop the car on him.
+- **Open shafts are deadly.** Step into a shaft with no car and it's a long
+  way down — land on a car below and you're stunned but alive; hit the
+  bottom and it costs a life. Robbers know it too: they turn back at open
+  shafts and only cross where a car is parked... so if one is mid-crossing
+  when you call the car away, he plummets to a horrible death.
+- Robbers die with style: shot robbers are knocked back off their feet and
+  crumple; smashed ones stay flattened under the car.
 - Doors visibly swing open and shut whenever anyone slips in or out.
 - **The elevator is a weapon.** A descending car slowly grinds down and
   smashes anyone it passes through — pinning them under it as it squashes

@@ -170,6 +170,7 @@ let particles = [];
 let popups = [];
 let doors = [];
 let doorAnims = [];
+let corpses = [];
 let exitActive = false;
 
 const player = {
@@ -198,7 +199,7 @@ function supportAt(cx, feetY) {
   const s = shaftAt(cx);
   if (!s) return { type: "floor" };
   if (Math.abs(carFeetY(s) - feetY) < 7) return { type: "car", shaft: s };
-  return { type: "floor", shaft: s };   // walkways cross every shaft opening
+  return { type: "none", shaft: s };    // open shaft: a long way down
 }
 function playerHitbox() {
   const h = player.crouch ? 26 : 44;
@@ -301,7 +302,7 @@ function buildLevel() {
   NF = clamp(7 + game.level, 8, 14);
   worldH = BT + NF * FLOOR_H + 50;
   exitActive = false;
-  bullets = []; particles = []; popups = []; doorAnims = [];
+  bullets = []; particles = []; popups = []; doorAnims = []; corpses = [];
 
   // Every level is a different building: shaft positions are randomized,
   // and a fourth shaft appears from level 4.
@@ -487,6 +488,10 @@ function updatePlayer(dt) {
     if (player.deadT <= 0) {
       if (game.lives > 0) {
         player.dead = false; player.inv = 2.2; player.stun = 0;
+        const s = shaftAt(player.x);
+        if (s && supportAt(player.x, player.feet).type === "none") {
+          player.x = s.x - 20 > BL + 12 ? s.x - 20 : s.x + s.w + 20;
+        }
         bullets = bullets.filter(b => b.from === "p");
       } else {
         game.state = "over";
@@ -508,7 +513,19 @@ function updatePlayer(dt) {
     return;
   }
 
-  if (player.falling) { updateFalling(player, dt); return; }
+  if (player.falling) {
+    updateFalling(player, dt);
+    if (!player.falling && supportAt(player.x, player.feet).type === "none") {
+      // hit the bottom of the shaft
+      game.lives--;
+      player.dead = true; player.deadT = 1.4;
+      game.shake = 0.5;
+      for (let k = 0; k < 14; k++) spark(player.x, player.feet - 8, "#ff6b6b");
+      sfx("hurt");
+      bullets = bullets.filter(b => b.from === "p");
+    }
+    return;
+  }
 
   const sup = supportAt(player.x, player.feet);
   if (sup.type === "none") {
@@ -607,7 +624,7 @@ function smashCheck(s) {
       if (gap < 8) {
         popups.push({ x: r.x, y: r.feet - 50, text: "SMASHED +150", t: 0.9 });
         game.score += 50;   // smash bonus on top of the kill
-        killRobber(r);
+        killRobber(r, { squash: true });
       }
     }
   }
@@ -678,7 +695,16 @@ function updateRobbers(dt) {
       continue;
     }
 
-    if (r.falling) { updateFalling(r, dt); r.board = null; continue; }
+    if (r.falling) {
+      updateFalling(r, dt);
+      r.board = null;
+      if (!r.falling && supportAt(r.x, r.feet).type === "none") {
+        popups.push({ x: r.x, y: r.feet - 50, text: "FELL", t: 0.9 });
+        for (let k = 0; k < 10; k++) spark(r.x, r.feet - 10, "#ff8f5e");
+        killRobber(r, { squash: true });
+      }
+      continue;
+    }
 
     const sup = supportAt(r.x, r.feet);
     if (sup.type === "none") {
@@ -773,8 +799,6 @@ function updateRobbers(dt) {
     }
 
     // Patrol
-    const strand = shaftAt(r.x);
-    if (strand && Math.abs(carFeetY(strand) - r.feet) > 7) continue;  // stranded over an open shaft
     if (r.pauseT > 0) { r.pauseT -= dt; continue; }
     r.wanderT -= dt;
     if (r.wanderT <= 0) {
@@ -843,7 +867,7 @@ function updateBullets(dt) {
         if (r.inDoor) continue;
         if (hits(b, robberHitbox(r))) {
           dead = true;
-          killRobber(r);
+          killRobber(r, { vx: Math.sign(b.vx) * rand(70, 150) });
           break;
         }
       }
@@ -857,10 +881,19 @@ function updateBullets(dt) {
   bullets = survivors;
 }
 
-function killRobber(r) {
+function killRobber(r, o = {}) {
   const i = robbers.indexOf(r);
   if (i >= 0) robbers.splice(i, 1);
   clearClaims(r);
+  corpses.push({
+    x: r.x, feet: r.feet, dir: r.dir,
+    vx: o.vx || 0,
+    vy: o.squash ? 0 : -170,
+    rot: 0,
+    rotV: (o.vx ? Math.sign(o.vx) : (Math.random() < 0.5 ? -1 : 1)) * rand(5, 9),
+    t: 1.1, squash: !!o.squash,
+    floorY: surfaceY(clamp(floorOf(r.feet), 0, NF - 1)),
+  });
   const onCar = supportAt(player.x, player.feet).type === "car";
   const pts = 100 + (onCar ? 50 : 0);
   game.score += pts;
@@ -883,6 +916,20 @@ function spark(x, y, color) {
 
 function updateFx(dt) {
   doorAnims = doorAnims.filter(a => (a.t += dt) < 0.4);
+  corpses = corpses.filter(c => (c.t -= dt) > 0);
+  for (const c of corpses) {
+    if (c.squash) continue;
+    c.x += c.vx * dt;
+    c.vy += 1100 * dt;
+    c.feet += c.vy * dt;
+    c.rot += c.rotV * dt;
+    if (c.feet >= c.floorY) {
+      c.feet = c.floorY; c.vy = 0;
+      c.vx *= 0.82; c.rotV *= 0.7;
+      const flat = c.rot >= 0 ? Math.PI / 2 : -Math.PI / 2;
+      c.rot += (flat - c.rot) * Math.min(1, dt * 12);
+    }
+  }
   particles = particles.filter(p => (p.t -= dt) > 0);
   for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 500 * dt; }
   popups = popups.filter(p => (p.t -= dt) > 0);
@@ -1124,7 +1171,7 @@ function draw() {
     centerText("Robbers have taken the tower.", 330, 16, "#c9d6ef");
     centerText("Ride the elevators. Shoot them first.", 355, 16, "#c9d6ef");
     centerText("Hide in doors (▲) · call the elevator with ▲ at a shaft", 380, 16, "#8fa3c8");
-    centerText("Drop the elevator on robbers to smash them!", 404, 14, "#8fa3c8");
+    centerText("Mind the gap — open shafts are a long way down!", 404, 14, "#8fa3c8");
     if (!assetsReady) {
       centerText("LOADING…", 445, 20, "#8fa3c8");
     } else if (Math.floor(performance.now() / 500) % 2 === 0) {
@@ -1140,6 +1187,23 @@ function draw() {
   ctx.translate(sx, -game.camY + sy);
 
   drawBuilding();
+
+  for (const c of corpses) {
+    const cim = img("rob-stand");
+    if (!cim) continue;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, c.t * 2.5);
+    ctx.translate(c.x, c.feet);
+    if (c.dir < 0) ctx.scale(-1, 1);
+    if (c.squash) {
+      ctx.scale(1, 0.15);
+      ctx.drawImage(cim, -cim.width * 0.42, -cim.height);
+    } else {
+      ctx.rotate(c.rot);
+      ctx.drawImage(cim, -cim.width * 0.42, -cim.height + 6);
+    }
+    ctx.restore();
+  }
 
   for (const r of robbers) {
     if (r.inDoor) continue;
