@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Elevator Madness</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23131a2a'/%3E%3Crect x='18' y='10' width='28' height='44' rx='3' fill='%23f5c542'/%3E%3Crect x='22' y='14' width='9' height='36' fill='%23131a2a'/%3E%3Crect x='33' y='14' width='9' height='36' fill='%23131a2a'/%3E%3C/svg%3E">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #0b0f1a;
+    color: #dbe4f5;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100%;
+    padding: 12px;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  h1 {
+    font-size: 22px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #f5c542;
+    margin: 6px 0 10px;
+    text-shadow: 0 2px 0 #7a5a00;
+  }
+  #wrap { position: relative; width: 100%; max-width: 800px; }
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: #0b0f1a;
+    border: 2px solid #26324d;
+    border-radius: 8px;
+    image-rendering: pixelated;
+  }
+  #hint { font-size: 12px; color: #7c8db0; margin-top: 8px; text-align: center; line-height: 1.6; }
+  #hint b { color: #c9d6ef; }
+
+  /* Touch controls: fixed thumb-zone overlay, shown on touch devices.
+     Shown via JS (.touch-mode on <html>) with a media-query fallback. */
+  #touch {
+    display: none;
+    position: fixed;
+    left: 0; right: 0; bottom: 12px;
+    padding: 0 16px;
+    justify-content: space-between;
+    gap: 10px;
+    z-index: 5;
+    pointer-events: none;
+  }
+  #touch .btn { pointer-events: auto; }
+  .touch-mode #touch { display: flex; }
+  .touch-mode #hint .kb { display: none; }
+  .touch-mode body { padding-bottom: 175px; }
+  @media (pointer: coarse) {
+    #touch { display: flex; }
+    #hint .kb { display: none; }
+    body { padding-bottom: 175px; }
+  }
+  .pad { display: flex; gap: 10px; align-items: center; }
+  .padcol { display: flex; flex-direction: column; gap: 10px; }
+  .btn {
+    width: 66px; height: 66px;
+    border-radius: 14px;
+    border: 2px solid #35486e;
+    background: rgba(22, 32, 58, 0.92);
+    touch-action: none;
+    -webkit-touch-callout: none;
+    color: #c9d6ef;
+    font-size: 24px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active, .btn.down { background: #2a3c63; }
+  .btn.fire { background: #4a1620; border-color: #7e2c3c; color: #ffb3b3; font-size: 15px; letter-spacing: 1px; }
+  .btn.fire:active, .btn.fire.down { background: #75243a; }
+</style>
+</head>
+<body>
+<h1>Elevator Madness</h1>
+<div id="wrap"><canvas id="cv" width="800" height="560"></canvas></div>
+<div id="hint">
+  <span class="kb"><b>&larr;/&rarr;</b> move &nbsp; <b>&uarr;/&darr;</b> ride elevator &nbsp; <b>&darr;</b> crouch (dodge!) &nbsp; <b>Space</b> shoot &nbsp; <b>P</b> pause &nbsp; <b>M</b> mute</span>
+  Clear every robber, then escape through the exit on the ground floor.
+</div>
+<div id="touch">
+  <div class="pad">
+    <div class="btn" data-k="left">&#9664;</div>
+    <div class="btn" data-k="right">&#9654;</div>
+  </div>
+  <div class="pad">
+    <div class="padcol">
+      <div class="btn" data-k="up">&#9650;</div>
+      <div class="btn" data-k="down">&#9660;</div>
+    </div>
+    <div class="btn fire" data-k="fire">FIRE</div>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+// ---------- Constants ----------
+const VIEW_W = 800, VIEW_H = 560;
+const BL = 40, BW = 720;               // building left edge / width
+const BR = BL + BW;                    // building right edge
+const BT = 60;                         // building top (world y)
+const FLOOR_H = 88;
+const CAR_SPEED = 150;                 // px/s elevator speed
+const GRAV = 1500;
+const P_SPEED = 175;
+const P_BULLET_V = 560, E_BULLET_V = 300;
+const HI_KEY = "gcmp-elevator-madness-hi";
+
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+
+// ---------- Game state ----------
+const game = {
+  state: "title",          // title | play | over
+  level: 1,
+  score: 0,
+  hi: Number(localStorage.getItem(HI_KEY) || 0),
+  lives: 3,
+  paused: false,
+  muted: false,
+  camY: 0,
+  banner: null,            // {text, t}
+  shake: 0,
+};
+
+let NF = 8;                // floors this level
+let worldH = 0;
+let shafts = [];
+let robbers = [];
+let bullets = [];
+let particles = [];
+let popups = [];
+let exitActive = false;
+
+const player = {
+  x: 0, feet: 0, dir: 1, w: 22,
+  crouch: false, falling: false, vy: 0, fallFrom: 0,
+  stun: 0, inv: 0, dead: false, deadT: 0,
+  fireCd: 0, walkT: 0,
+};
+
+// ---------- Helpers ----------
+const surfaceY = f => BT + (f + 1) * FLOOR_H;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rand = (a, b) => a + Math.random() * (b - a);
+const randInt = (a, b) => Math.floor(rand(a, b + 1));
+
+function carFeetY(s) { return BT + (s.car.pos + 1) * FLOOR_H; }
+function shaftAt(cx, margin = 0) {
+  for (const s of shafts)
+    if (cx > s.x - margin && cx < s.x + s.w + margin) return s;
+  return null;
+}
+// What is under an entity whose feet are at feetY, center at cx?
+function supportAt(cx, feetY) {
+  const s = shaftAt(cx);
+  if (!s) return { type: "floor" };
+  if (Math.abs(carFeetY(s) - feetY) < 7) return { type: "car", shaft: s };
+  return { type: "none", shaft: s };
+}
+function playerHitbox() {
+  const h = player.crouch ? 26 : 44;
+  return { x: player.x - player.w / 2, y: player.feet - h, w: player.w, h };
+}
+function robberHitbox(r) {
+  return { x: r.x - 11, y: r.feet - 44, w: 22, h: 44 };
+}
+function hits(b, box) {
+  return b.x > box.x && b.x < box.x + box.w && b.y > box.y && b.y < box.y + box.h;
+}
+
+// ---------- Audio (tiny WebAudio blips) ----------
+let AC = null;
+function audio() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (AC && AC.state === "suspended") AC.resume();
+  return AC;
+}
+function sfx(type) {
+  if (game.muted) return;
+  const ac = audio();
+  if (!ac) return;
+  const t = ac.currentTime;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  if (type === "shoot") {
+    o.type = "square"; o.frequency.setValueAtTime(900, t);
+    o.frequency.exponentialRampToValueAtTime(180, t + 0.09);
+    g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.start(t); o.stop(t + 0.1);
+  } else if (type === "eshoot") {
+    o.type = "square"; o.frequency.setValueAtTime(320, t);
+    o.frequency.exponentialRampToValueAtTime(120, t + 0.12);
+    g.gain.setValueAtTime(0.045, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+    o.start(t); o.stop(t + 0.13);
+  } else if (type === "die") {
+    o.type = "sawtooth"; o.frequency.setValueAtTime(500, t);
+    o.frequency.exponentialRampToValueAtTime(60, t + 0.3);
+    g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+    o.start(t); o.stop(t + 0.32);
+  } else if (type === "hurt") {
+    o.type = "sawtooth"; o.frequency.setValueAtTime(160, t);
+    o.frequency.exponentialRampToValueAtTime(40, t + 0.45);
+    g.gain.setValueAtTime(0.1, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    o.start(t); o.stop(t + 0.5);
+  } else if (type === "ding") {
+    o.type = "sine"; o.frequency.setValueAtTime(1250, t);
+    g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    o.start(t); o.stop(t + 0.25);
+  } else if (type === "clear") {
+    o.type = "triangle"; o.frequency.setValueAtTime(520, t);
+    o.frequency.setValueAtTime(660, t + 0.12); o.frequency.setValueAtTime(880, t + 0.24);
+    g.gain.setValueAtTime(0.07, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    o.start(t); o.stop(t + 0.5);
+  }
+}
+
+// ---------- Level setup ----------
+function buildLevel() {
+  NF = clamp(7 + game.level, 8, 14);
+  worldH = BT + NF * FLOOR_H + 50;
+  exitActive = false;
+  bullets = []; particles = []; popups = [];
+
+  shafts = [
+    { x: BL + 118, w: 72, car: { pos: 0, target: null } },
+    { x: BL + 328, w: 72, car: { pos: Math.floor(NF / 2), target: null } },
+    { x: BL + 538, w: 72, car: { pos: NF - 1, target: null } },
+  ];
+
+  // Player starts on the roof floor, far left
+  player.x = BL + 45; player.feet = surfaceY(0);
+  player.dir = 1; player.crouch = false; player.falling = false; player.vy = 0;
+  player.stun = 0; player.inv = 2; player.dead = false; player.fireCd = 0;
+
+  robbers = [];
+  const count = clamp(5 + game.level * 2, 7, 26);
+  for (let i = 0; i < count; i++) {
+    let f, x, tries = 0;
+    do {
+      f = randInt(0, NF - 1);
+      x = rand(BL + 30, BR - 30);
+      tries++;
+    } while (tries < 60 && (shaftAt(x, 24) || (f === 0 && Math.abs(x - player.x) < 240)));
+    robbers.push({
+      x, feet: surfaceY(f), dir: Math.random() < 0.5 ? -1 : 1,
+      speed: rand(50, 62) + game.level * 5,
+      falling: false, vy: 0, fallFrom: 0, stun: 0,
+      aim: -1,                                   // -1 = not aiming
+      cool: rand(0.3, 1.6),
+      pauseT: 0, wanderT: rand(1.5, 4),
+      walkT: Math.random() * 6,
+    });
+  }
+  game.camY = 0;
+  game.banner = { text: "LEVEL " + game.level, t: 1.6 };
+}
+
+function startGame() {
+  game.level = 1; game.score = 0; game.lives = 3;
+  game.state = "play"; game.paused = false;
+  buildLevel();
+}
+
+// ---------- Input ----------
+// Detect touch in JS, not just CSS media queries — some embedded webviews
+// misreport pointer type and would otherwise hide the touch controls.
+const isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+if (isTouch) {
+  document.documentElement.classList.add("touch-mode");
+  window.addEventListener("contextmenu", e => e.preventDefault());
+}
+// Some embeds strip <head> meta tags; without a viewport tag phones render
+// the page zoomed out and controls become unusable.
+if (!document.querySelector('meta[name="viewport"]')) {
+  const vp = document.createElement("meta");
+  vp.name = "viewport";
+  vp.content = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
+  document.head.appendChild(vp);
+}
+
+const keys = { left: false, right: false, up: false, down: false, fire: false };
+const KEYMAP = {
+  ArrowLeft: "left", a: "left", A: "left",
+  ArrowRight: "right", d: "right", D: "right",
+  ArrowUp: "up", w: "up", W: "up",
+  ArrowDown: "down", s: "down", S: "down",
+  " ": "fire", j: "fire", J: "fire", Enter: "fire",
+};
+window.addEventListener("keydown", e => {
+  if (e.key === "m" || e.key === "M") { game.muted = !game.muted; return; }
+  if (e.key === "p" || e.key === "P") { if (game.state === "play") game.paused = !game.paused; return; }
+  const k = KEYMAP[e.key];
+  if (!k) return;
+  e.preventDefault();
+  keys[k] = true;
+  audio();
+  if (game.state !== "play" && (k === "fire")) startGame();
+});
+window.addEventListener("keyup", e => {
+  const k = KEYMAP[e.key];
+  if (k) { e.preventDefault(); keys[k] = false; }
+});
+// Touch buttons (pointer events with touch-event fallback for old webviews)
+document.querySelectorAll("#touch .btn").forEach(b => {
+  const k = b.dataset.k;
+  const on = e => { e.preventDefault(); b.classList.add("down"); keys[k] = true; audio();
+                    if (game.state !== "play" && k === "fire") startGame(); };
+  const off = e => { e.preventDefault(); b.classList.remove("down"); keys[k] = false; };
+  if (window.PointerEvent) {
+    b.addEventListener("pointerdown", on);
+    b.addEventListener("pointerup", off);
+    b.addEventListener("pointercancel", off);
+    b.addEventListener("pointerleave", off);
+  } else {
+    b.addEventListener("touchstart", on, { passive: false });
+    b.addEventListener("touchend", off);
+    b.addEventListener("touchcancel", off);
+    b.addEventListener("mousedown", on);
+    b.addEventListener("mouseup", off);
+  }
+});
+// Tap anywhere to start (button handlers run first, so no double-start)
+const tapStart = () => { audio(); if (game.state !== "play") startGame(); };
+if (window.PointerEvent) window.addEventListener("pointerdown", tapStart);
+else { window.addEventListener("touchstart", tapStart); window.addEventListener("mousedown", tapStart); }
+
+// ---------- Update ----------
+function firePlayer() {
+  if (player.fireCd > 0 || player.dead || player.stun > 0) return;
+  if (bullets.filter(b => b.from === "p").length >= 2) return;
+  const y = player.feet - (player.crouch ? 14 : 30);
+  bullets.push({ x: player.x + player.dir * 16, y, vx: player.dir * P_BULLET_V, from: "p" });
+  player.fireCd = 0.28;
+  sfx("shoot");
+}
+
+function updateFalling(ent, dt) {
+  ent.vy += GRAV * dt;
+  let ny = ent.feet + ent.vy * dt;
+  const s = shaftAt(ent.x);
+  let landY = surfaceY(NF - 1);                 // shaft/building bottom
+  if (s) {
+    const cf = carFeetY(s);
+    if (cf >= ent.feet - 1 && cf <= ny) landY = Math.min(landY, cf);
+  } else {
+    // not in a shaft: land on next floor surface below
+    for (let f = 0; f < NF; f++) {
+      const sy = surfaceY(f);
+      if (sy >= ent.feet - 1 && sy <= ny) { landY = Math.min(landY, sy); break; }
+    }
+  }
+  if (ny >= landY) {
+    ent.feet = landY; ent.falling = false; ent.vy = 0;
+    if (landY - ent.fallFrom > FLOOR_H * 1.4) { ent.stun = 0.9; game.shake = 0.25; }
+  } else {
+    ent.feet = ny;
+  }
+}
+
+function updatePlayer(dt) {
+  player.fireCd = Math.max(0, player.fireCd - dt);
+  player.inv = Math.max(0, player.inv - dt);
+  player.stun = Math.max(0, player.stun - dt);
+
+  if (player.dead) {
+    player.deadT -= dt;
+    if (player.deadT <= 0) {
+      if (game.lives > 0) {
+        player.dead = false; player.inv = 2.2; player.stun = 0;
+        bullets = bullets.filter(b => b.from === "p");
+      } else {
+        game.state = "over";
+        if (game.score > game.hi) { game.hi = game.score; localStorage.setItem(HI_KEY, String(game.hi)); }
+      }
+    }
+    return;
+  }
+
+  if (player.falling) { updateFalling(player, dt); return; }
+
+  const sup = supportAt(player.x, player.feet);
+  if (sup.type === "none") {
+    player.falling = true; player.vy = 0; player.fallFrom = player.feet;
+    return;
+  }
+
+  const onCar = sup.type === "car";
+  const car = onCar ? sup.shaft.car : null;
+  const carMoving = onCar && car.target !== null;
+
+  // Crouch only on solid ground (down on a car = ride down)
+  player.crouch = !onCar && keys.down && player.stun === 0;
+
+  // Ride elevator
+  if (onCar && player.stun === 0 && !carMoving) {
+    const f = Math.round(car.pos);
+    if (keys.up && f > 0) { car.target = f - 1; }
+    else if (keys.down && f < NF - 1) { car.target = f + 1; }
+  }
+
+  // Horizontal movement
+  if (player.stun === 0 && !player.crouch) {
+    let vx = 0;
+    if (keys.left) { vx -= P_SPEED; player.dir = -1; }
+    if (keys.right) { vx += P_SPEED; player.dir = 1; }
+    if (vx !== 0) { player.x += vx * dt; player.walkT += dt * 10; }
+  } else if (player.stun === 0) {
+    if (keys.left) player.dir = -1;
+    if (keys.right) player.dir = 1;
+  }
+  player.x = clamp(player.x, BL + 12, BR - 12);
+
+  // While the car is between floors, keep the player inside the cage
+  if (onCar) {
+    const frac = Math.abs(car.pos - Math.round(car.pos));
+    if (frac > 0.04) {
+      const s = sup.shaft;
+      player.x = clamp(player.x, s.x + 12, s.x + s.w - 12);
+    }
+    player.feet = carFeetY(sup.shaft);
+  }
+
+  if (keys.fire) firePlayer();
+}
+
+function hurtPlayer() {
+  if (player.inv > 0 || player.dead) return;
+  game.lives--;
+  player.dead = true; player.deadT = 1.2;
+  game.shake = 0.5;
+  sfx("hurt");
+  bullets = bullets.filter(b => b.from === "p");
+}
+
+function updateCars(dt) {
+  for (const s of shafts) {
+    const c = s.car;
+    if (c.target === null) continue;
+    const d = c.target - c.pos;
+    const step = (CAR_SPEED / FLOOR_H) * dt * Math.sign(d);
+    if (Math.abs(step) >= Math.abs(d)) {
+      c.pos = c.target; c.target = null; sfx("ding");
+    } else {
+      c.pos += step;
+    }
+  }
+}
+
+function updateRobbers(dt) {
+  const lowShotChance = game.level >= 3 ? 0.28 : 0;
+  for (const r of robbers) {
+    r.stun = Math.max(0, r.stun - dt);
+    if (r.falling) { updateFalling(r, dt); continue; }
+
+    const sup = supportAt(r.x, r.feet);
+    if (sup.type === "none") { r.falling = true; r.vy = 0; r.fallFrom = r.feet; r.aim = -1; continue; }
+    if (sup.type === "car") r.feet = carFeetY(sup.shaft);
+    if (r.stun > 0) { r.aim = -1; continue; }
+
+    r.cool = Math.max(0, r.cool - dt);
+
+    // Can this robber see the player?
+    const sameFloor = !player.dead && Math.abs(player.feet - r.feet) < 24;
+    const dx = player.x - r.x;
+    const seen = sameFloor && Math.abs(dx) < 520 && Math.abs(dx) > 8;
+
+    if (seen) {
+      r.dir = Math.sign(dx);
+      if (r.cool === 0) {
+        if (r.aim < 0) r.aim = Math.max(0.2, 0.5 - game.level * 0.03);
+        r.aim -= dt;
+        if (r.aim <= 0) {
+          const low = Math.random() < lowShotChance;
+          bullets.push({
+            x: r.x + r.dir * 15,
+            y: r.feet - (low ? 14 : 30),
+            vx: r.dir * (E_BULLET_V + game.level * 15),
+            from: "e", low,
+          });
+          sfx("eshoot");
+          r.aim = -1;
+          r.cool = Math.max(0.6, rand(1.1, 2.0) - game.level * 0.07);
+        }
+      }
+      continue; // stand and shoot, no patrolling while engaged
+    }
+    r.aim = -1;
+
+    // Patrol
+    if (r.pauseT > 0) { r.pauseT -= dt; continue; }
+    r.wanderT -= dt;
+    if (r.wanderT <= 0) {
+      r.wanderT = rand(1.5, 4);
+      if (Math.random() < 0.35) { r.pauseT = rand(0.4, 1); continue; }
+      if (Math.random() < 0.4) r.dir *= -1;
+    }
+    const nx = r.x + r.dir * r.speed * dt;
+    const ns = shaftAt(nx, 14);
+    const blocked =
+      nx < BL + 16 || nx > BR - 16 ||
+      (ns && Math.abs(carFeetY(ns) - r.feet) > 7);   // open shaft ahead
+    if (blocked) { r.dir *= -1; }
+    else { r.x = nx; r.walkT += dt * 8; }
+  }
+}
+
+function updateBullets(dt) {
+  for (const b of bullets) b.x += b.vx * dt;
+  const pbox = playerHitbox();
+  const survivors = [];
+  for (const b of bullets) {
+    if (b.x < BL + 4 || b.x > BR - 4) { spark(b.x, b.y, "#8fa3c8"); continue; }
+    let dead = false;
+    if (b.from === "p") {
+      for (const r of robbers) {
+        if (hits(b, robberHitbox(r))) {
+          dead = true;
+          killRobber(r);
+          break;
+        }
+      }
+    } else if (!player.dead && player.inv === 0 && hits(b, pbox)) {
+      dead = true;
+      hurtPlayer();
+      spark(b.x, b.y, "#ff6b6b");
+    }
+    if (!dead) survivors.push(b);
+  }
+  bullets = survivors;
+}
+
+function killRobber(r) {
+  const i = robbers.indexOf(r);
+  if (i >= 0) robbers.splice(i, 1);
+  const onCar = supportAt(player.x, player.feet).type === "car";
+  const pts = 100 + (onCar ? 50 : 0);
+  game.score += pts;
+  popups.push({ x: r.x, y: r.feet - 50, text: "+" + pts, t: 0.9 });
+  for (let k = 0; k < 12; k++) spark(r.x, r.feet - 22, "#ff8f5e");
+  sfx("die");
+  if (robbers.length === 0) {
+    exitActive = true;
+    game.banner = { text: "ALL CLEAR! GET TO THE EXIT ↓", t: 2.5 };
+    sfx("clear");
+  }
+}
+
+function spark(x, y, color) {
+  particles.push({
+    x, y, vx: rand(-140, 140), vy: rand(-180, 60),
+    t: rand(0.25, 0.55), color,
+  });
+}
+
+function updateFx(dt) {
+  particles = particles.filter(p => (p.t -= dt) > 0);
+  for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 500 * dt; }
+  popups = popups.filter(p => (p.t -= dt) > 0);
+  for (const p of popups) p.y -= 35 * dt;
+  if (game.banner && (game.banner.t -= dt) <= 0) game.banner = null;
+  game.shake = Math.max(0, game.shake - dt);
+}
+
+function exitBox() {
+  return { x: BR - 46, y: surfaceY(NF - 1) - 56, w: 36, h: 56 };
+}
+
+function update(dt) {
+  updateCars(dt);
+  updatePlayer(dt);
+  updateRobbers(dt);
+  updateBullets(dt);
+  updateFx(dt);
+
+  // Reached the exit?
+  if (exitActive && !player.dead) {
+    const e = exitBox(), pb = playerHitbox();
+    if (pb.x < e.x + e.w && pb.x + pb.w > e.x && Math.abs(player.feet - surfaceY(NF - 1)) < 8) {
+      const bonus = 500 + game.level * 100;
+      game.score += bonus;
+      popups.push({ x: player.x, y: player.feet - 60, text: "ESCAPE +" + bonus, t: 1.2 });
+      game.level++;
+      buildLevel();
+      sfx("clear");
+      return;
+    }
+  }
+
+  // Camera follows player
+  const target = clamp(player.feet - VIEW_H * 0.58, 0, Math.max(0, worldH - VIEW_H));
+  game.camY += (target - game.camY) * Math.min(1, dt * 6);
+}
+
+// ---------- Drawing ----------
+function drawBuilding() {
+  // Facade behind everything
+  ctx.fillStyle = "#141c30";
+  ctx.fillRect(BL, BT, BW, worldH - BT - 40);
+
+  for (let f = 0; f < NF; f++) {
+    const top = surfaceY(f) - FLOOR_H;
+    // room interior
+    ctx.fillStyle = f % 2 ? "#182238" : "#151f34";
+    ctx.fillRect(BL, top, BW, FLOOR_H);
+    // windows
+    ctx.fillStyle = "#0e1526";
+    for (let wx = BL + 34; wx < BR - 40; wx += 92) {
+      if (!shaftAt(wx, 26) && !shaftAt(wx + 26, 26)) ctx.fillRect(wx, top + 18, 26, 34);
+    }
+    // floor slab (with gaps at shafts)
+    ctx.fillStyle = "#2c3b5e";
+    let x0 = BL;
+    for (const s of [...shafts].sort((a, b) => a.x - b.x)) {
+      ctx.fillRect(x0, surfaceY(f) - 6, s.x - x0, 8);
+      x0 = s.x + s.w;
+    }
+    ctx.fillRect(x0, surfaceY(f) - 6, BR - x0, 8);
+    // floor number
+    ctx.fillStyle = "#3d5178";
+    ctx.font = "bold 12px monospace";
+    ctx.fillText(String(NF - f), BL + 8, surfaceY(f) - 14);
+  }
+
+  // outer walls + roof + ground
+  ctx.fillStyle = "#3a4c74";
+  ctx.fillRect(BL - 8, BT - 10, 8, worldH - BT - 30);
+  ctx.fillRect(BR, BT - 10, 8, worldH - BT - 30);
+  ctx.fillRect(BL - 8, BT - 10, BW + 16, 10);
+  ctx.fillStyle = "#1d2a45";
+  ctx.fillRect(0, worldH - 40, VIEW_W, 40);
+
+  // shafts
+  for (const s of shafts) {
+    ctx.fillStyle = "#0a0f1c";
+    ctx.fillRect(s.x, BT, s.w, worldH - BT - 46);
+    ctx.strokeStyle = "#26324d";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(s.x + 6, BT); ctx.lineTo(s.x + 6, worldH - 46);
+    ctx.moveTo(s.x + s.w - 6, BT); ctx.lineTo(s.x + s.w - 6, worldH - 46);
+    ctx.stroke();
+
+    // elevator car
+    const fy = carFeetY(s);
+    ctx.fillStyle = "#f5c542";
+    ctx.fillRect(s.x + 4, fy - 2, s.w - 8, 6);                    // cage floor
+    ctx.fillRect(s.x + 4, fy - FLOOR_H + 16, s.w - 8, 5);         // cage roof
+    ctx.fillRect(s.x + 4, fy - FLOOR_H + 16, 4, FLOOR_H - 12);    // sides
+    ctx.fillRect(s.x + s.w - 8, fy - FLOOR_H + 16, 4, FLOOR_H - 12);
+    ctx.strokeStyle = "#8a6d1c";
+    ctx.beginPath();
+    ctx.moveTo(s.x + s.w / 2, BT); ctx.lineTo(s.x + s.w / 2, fy - FLOOR_H + 16);
+    ctx.stroke();
+  }
+
+  // exit door on the ground floor
+  const e = exitBox();
+  ctx.fillStyle = exitActive ? "#2fae5f" : "#31405f";
+  ctx.fillRect(e.x, e.y, e.w, e.h);
+  ctx.fillStyle = exitActive ? "#0d3a1e" : "#1a2338";
+  ctx.fillRect(e.x + 5, e.y + 6, e.w - 10, e.h - 6);
+  ctx.fillStyle = exitActive ? "#8dffb8" : "#5f7ba8";
+  ctx.font = "bold 11px monospace";
+  ctx.fillText("EXIT", e.x + 3, e.y - 6);
+}
+
+function drawGuy(x, feet, dir, opts) {
+  const { crouch = false, color = "#4f8ef7", hat = false, walkT = 0, stun = 0 } = opts;
+  const h = crouch ? 26 : 44;
+  const top = feet - h;
+  ctx.save();
+  if (stun > 0) ctx.globalAlpha = 0.45 + 0.3 * Math.sin(stun * 30);
+  // legs
+  ctx.strokeStyle = color; ctx.lineWidth = 5; ctx.lineCap = "round";
+  const leg = crouch ? 6 : 13;
+  const swing = Math.sin(walkT) * (crouch ? 1 : 4);
+  ctx.beginPath();
+  ctx.moveTo(x, feet - leg); ctx.lineTo(x - 4 - swing, feet);
+  ctx.moveTo(x, feet - leg); ctx.lineTo(x + 4 + swing, feet);
+  ctx.stroke();
+  // body
+  ctx.fillStyle = color;
+  ctx.fillRect(x - 7, top + 10, 14, h - 10 - leg + 4);
+  // head
+  ctx.fillStyle = "#ffd9b3";
+  ctx.beginPath(); ctx.arc(x, top + 6, 6, 0, Math.PI * 2); ctx.fill();
+  if (hat) {
+    ctx.fillStyle = "#20242e";
+    ctx.fillRect(x - 8, top - 2, 16, 3);
+    ctx.fillRect(x - 5, top - 7, 10, 6);
+  }
+  // gun
+  ctx.strokeStyle = "#c9d6ef"; ctx.lineWidth = 3;
+  const gy = feet - (crouch ? 14 : 30);
+  ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x + dir * 14, gy); ctx.stroke();
+  ctx.restore();
+}
+
+function drawHUD() {
+  ctx.fillStyle = "rgba(8,12,22,0.9)";
+  ctx.fillRect(0, 0, VIEW_W, 34);
+  ctx.fillStyle = "#26324d";
+  ctx.fillRect(0, 33, VIEW_W, 1);
+  ctx.font = "bold 14px monospace";
+  ctx.fillStyle = "#f5c542";
+  ctx.fillText("SCORE " + game.score, 14, 22);
+  ctx.fillStyle = "#8fa3c8";
+  ctx.fillText("HI " + Math.max(game.hi, game.score), 170, 22);
+  ctx.fillStyle = "#c9d6ef";
+  ctx.fillText("LEVEL " + game.level, 300, 22);
+  ctx.fillStyle = "#ff8f5e";
+  ctx.fillText("ROBBERS " + robbers.length, 420, 22);
+  // lives
+  ctx.fillStyle = "#ff5d73";
+  for (let i = 0; i < game.lives; i++) {
+    const lx = VIEW_W - 30 - i * 22, ly = 12;
+    ctx.beginPath();
+    ctx.arc(lx - 3, ly, 4, 0, Math.PI * 2); ctx.arc(lx + 3, ly, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(lx - 6.5, ly + 2); ctx.lineTo(lx, ly + 10); ctx.lineTo(lx + 6.5, ly + 2);
+    ctx.fill();
+  }
+  if (game.muted) { ctx.fillStyle = "#5f7ba8"; ctx.fillText("MUTE", VIEW_W - 130, 22); }
+}
+
+function centerText(text, y, size, color) {
+  ctx.font = "bold " + size + "px monospace";
+  ctx.fillStyle = color;
+  const w = ctx.measureText(text).width;
+  ctx.fillText(text, (VIEW_W - w) / 2, y);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+  ctx.fillStyle = "#0b0f1a";
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+  if (game.state === "title") {
+    centerText("ELEVATOR", 190, 56, "#f5c542");
+    centerText("MADNESS", 250, 56, "#f5c542");
+    centerText("Robbers have taken the tower.", 320, 16, "#c9d6ef");
+    centerText("Ride the elevators. Shoot them first.", 345, 16, "#c9d6ef");
+    centerText("Crouch to dodge their shots!", 370, 16, "#8fa3c8");
+    if (Math.floor(performance.now() / 500) % 2 === 0)
+      centerText("PRESS FIRE / TAP TO START", 440, 20, "#2fae5f");
+    if (game.hi > 0) centerText("HIGH SCORE " + game.hi, 490, 14, "#8fa3c8");
+    return;
+  }
+
+  ctx.save();
+  let sx = 0, sy = 0;
+  if (game.shake > 0) { sx = rand(-4, 4) * game.shake; sy = rand(-4, 4) * game.shake; }
+  ctx.translate(sx, -game.camY + sy);
+
+  drawBuilding();
+
+  for (const r of robbers)
+    drawGuy(r.x, r.feet, r.dir, { color: "#b03434", hat: true, walkT: r.walkT, stun: r.stun });
+
+  if (!player.dead && (player.inv <= 0 || Math.floor(performance.now() / 90) % 2 === 0))
+    drawGuy(player.x, player.feet, player.dir,
+            { crouch: player.crouch, color: "#4f8ef7", walkT: player.walkT, stun: player.stun });
+  if (player.dead) {
+    ctx.fillStyle = "#4f8ef7";
+    ctx.fillRect(player.x - 20, player.feet - 10, 40, 8);   // knocked flat
+  }
+
+  ctx.fillStyle = "#ffe98a";
+  for (const b of bullets) {
+    ctx.fillStyle = b.from === "p" ? "#ffe98a" : "#ff7d7d";
+    ctx.fillRect(b.x - 5, b.y - 1.5, 10, 3);
+  }
+  for (const p of particles) {
+    ctx.globalAlpha = Math.min(1, p.t * 3);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+    ctx.globalAlpha = 1;
+  }
+  ctx.font = "bold 14px monospace";
+  for (const p of popups) {
+    ctx.globalAlpha = Math.min(1, p.t * 2);
+    ctx.fillStyle = "#ffe98a";
+    ctx.fillText(p.text, p.x - 20, p.y);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+
+  drawHUD();
+
+  if (game.banner) {
+    ctx.globalAlpha = Math.min(1, game.banner.t);
+    centerText(game.banner.text, VIEW_H / 2 - 60, 30, "#f5c542");
+    ctx.globalAlpha = 1;
+  }
+  if (exitActive) {
+    centerText("↓ EXIT: GROUND FLOOR ↓", 56, 14, "#8dffb8");
+  }
+  if (game.paused) {
+    ctx.fillStyle = "rgba(8,12,22,0.75)";
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    centerText("PAUSED", VIEW_H / 2, 40, "#f5c542");
+    centerText("Press P to resume", VIEW_H / 2 + 40, 16, "#c9d6ef");
+  }
+  if (game.state === "over") {
+    ctx.fillStyle = "rgba(8,12,22,0.82)";
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    centerText("GAME OVER", VIEW_H / 2 - 40, 48, "#ff5d73");
+    centerText("SCORE " + game.score, VIEW_H / 2 + 10, 22, "#f5c542");
+    if (game.score >= game.hi && game.score > 0)
+      centerText("NEW HIGH SCORE!", VIEW_H / 2 + 44, 18, "#8dffb8");
+    centerText("PRESS FIRE / TAP TO PLAY AGAIN", VIEW_H / 2 + 90, 16, "#2fae5f");
+  }
+}
+
+// ---------- Main loop ----------
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.033, (now - last) / 1000);
+  last = now;
+  if (game.state === "play" && !game.paused) update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
