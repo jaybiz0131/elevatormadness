@@ -2,11 +2,13 @@
 
 A retro arcade game in the spirit of Elevator Action. Robbers have taken the
 tower — ride the elevators between floors, shoot them before they shoot you,
-crouch to dodge their bullets, then escape through the ground-floor exit to
-reach the next level.
+crouch to dodge or duck into a doorway to hide, then escape through the
+ground-floor exit to reach the next level.
 
-The whole game is a single self-contained file: `index.html`. No build step,
-no dependencies, no server required.
+The whole game is a single self-contained file: `index.html` (pixel-art
+sprites are embedded as data URIs). No build step, no dependencies, no server
+required. Original artwork lives in `art/source`; the game-ready cuts are in
+`art/sprites`.
 
 ## Play it
 
@@ -23,6 +25,7 @@ no dependencies, no server required.
 |---|---|
 | ← / → (or A / D) | Move |
 | ↑ / ↓ (or W / S) | Ride an elevator when standing in a car |
+| ↑ at a door | Hide inside (press ↑ or ↓ again to step out) |
 | ↓ on solid floor | Crouch — ducks under enemy shots |
 | Space or J | Shoot |
 | P | Pause |
@@ -34,9 +37,14 @@ On phones and tablets, on-screen touch controls appear automatically.
 
 - Robbers aim chest-high; crouching dodges their shots. From level 3 they
   start firing low shots too.
+- **Robbers use the elevators.** If you're on another floor, they'll call a
+  free car, board it, and ride to your floor to hunt you down.
+- **Doorways are safe houses.** Press ↑ in front of any door (a small ▲
+  appears) to slip inside — robbers can't see or hit you. You can't shoot
+  while hidden, and the exit door doesn't count.
 - Shooting a robber while riding an elevator earns bonus points.
 - Walking over an open elevator shaft with no car in it means a fall — long
   drops stun you for a moment.
-- Clear every robber to activate the green EXIT on the ground floor. Each
+- Clear every robber to activate the glowing EXIT on the ground floor. Each
   level adds more floors, more robbers, and faster enemies.
 - Your high score is saved in the browser.
