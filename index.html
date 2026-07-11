@@ -515,8 +515,8 @@ function updatePlayer(dt) {
 
   if (player.falling) {
     updateFalling(player, dt);
-    if (!player.falling && supportAt(player.x, player.feet).type === "none") {
-      // hit the bottom of the shaft
+    if (!player.falling && player.feet - player.fallFrom > FLOOR_H * 1.2) {
+      // a fall of more than one floor is fatal
       game.lives--;
       player.dead = true; player.deadT = 1.4;
       game.shake = 0.5;
@@ -528,10 +528,7 @@ function updatePlayer(dt) {
   }
 
   const sup = supportAt(player.x, player.feet);
-  if (sup.type === "none") {
-    player.falling = true; player.vy = 0; player.fallFrom = player.feet;
-    return;
-  }
+  // walkways cross the shafts: an open shaft is still solid ground for the player
 
   const onCar = sup.type === "car";
   const car = onCar ? sup.shaft.car : null;
@@ -1194,7 +1191,7 @@ function draw() {
     centerText("Robbers have taken the tower.", 330, 16, "#c9d6ef");
     centerText("Ride the elevators. Shoot them first.", 355, 16, "#c9d6ef");
     centerText("Hide in doors (▲) · call the elevator with ▲ at a shaft", 380, 16, "#8fa3c8");
-    centerText("Mind the gap — open shafts are a long way down!", 404, 14, "#8fa3c8");
+    centerText("Walkways cross the shafts — mind the elevators!", 404, 14, "#8fa3c8");
     if (!assetsReady) {
       centerText("LOADING…", 445, 20, "#8fa3c8");
     } else if (Math.floor(performance.now() / 500) % 2 === 0) {
