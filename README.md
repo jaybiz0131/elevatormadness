@@ -39,6 +39,11 @@ On phones and tablets, on-screen touch controls appear automatically.
   start firing low shots too.
 - **Robbers use the elevators.** If you're on another floor, they'll call a
   free car, board it, and ride to your floor to hunt you down.
+- **Robbers use the doors too.** They duck into doorways and re-emerge from a
+  different door — often on another floor, sometimes on yours. A robber
+  inside a door can't be shot, but they always pop back out within seconds,
+  and the last two robbers alive never hide, so the level can always be
+  finished.
 - **Doorways are safe houses.** Press ↑ in front of any door (a small ▲
   appears) to slip inside — robbers can't see or hit you. You can't shoot
   while hidden, and the exit door doesn't count.

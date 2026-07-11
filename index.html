@@ -330,6 +330,7 @@ function buildLevel() {
       walkT: Math.random() * 6, moving: false,
       flashT: 0, lowT: 0,
       board: null, riding: null,                 // elevator-chasing state
+      inDoor: null, doorCd: rand(2, 6),          // door-hopping state
     });
   }
   game.camY = 0;
@@ -577,6 +578,23 @@ function updateRobbers(dt) {
     r.flashT = Math.max(0, r.flashT - dt);
     r.lowT = Math.max(0, r.lowT - dt);
     r.moving = false;
+    r.doorCd = Math.max(0, r.doorCd - dt);
+
+    // Inside a doorway: invisible and safe, then pops out somewhere else
+    if (r.inDoor) {
+      r.inDoor.t -= dt;
+      if (r.inDoor.t <= 0) {
+        r.x = r.inDoor.out.x;
+        r.feet = surfaceY(r.inDoor.out.f);
+        r.inDoor = null;
+        r.pauseT = 0.35;
+        r.cool = Math.max(r.cool, 0.7);   // grace beat before they can shoot
+        for (let k = 0; k < 8; k++) spark(r.x, r.feet - 24, "#c9a86a");
+        sfx("door");
+      }
+      continue;
+    }
+
     if (r.falling) { updateFalling(r, dt); r.board = null; continue; }
 
     const sup = supportAt(r.x, r.feet);
@@ -698,7 +716,30 @@ function updateRobbers(dt) {
       nx < BL + 16 || nx > BR - 16 ||
       (ns && Math.abs(carFeetY(ns) - r.feet) > 7);   // open shaft ahead
     if (blocked) { r.dir *= -1; }
-    else { r.x = nx; r.walkT += dt * 8; r.moving = true; }
+    else {
+      r.x = nx; r.walkT += dt * 8; r.moving = true;
+      // Duck into a passing doorway and re-emerge on another floor.
+      // The last two robbers alive never hop, so the level can't stall.
+      if (r.doorCd === 0 && robbers.length > 2 &&
+          robbers.filter(q => q.inDoor).length < 3) {
+        const d = nearestDoor(r.x, rf);
+        if (d && Math.abs(d.x - r.x) < 10 && Math.random() < 0.5) {
+          let tf = rf;
+          if (!player.dead && Math.random() < 0.4) tf = pf;
+          if (tf === rf && NF > 1) {
+            do { tf = randInt(0, NF - 1); } while (tf === rf);
+          }
+          const opts = doors.filter(q => q.f === tf);
+          if (opts.length) {
+            r.inDoor = { t: rand(1.2, 3), out: opts[randInt(0, opts.length - 1)] };
+            r.doorCd = rand(6, 12);
+            r.board = null;
+            for (let k = 0; k < 8; k++) spark(d.x, r.feet - 24, "#c9a86a");
+            sfx("door");
+          }
+        }
+      }
+    }
   }
 }
 
@@ -711,6 +752,7 @@ function updateBullets(dt) {
     let dead = false;
     if (b.from === "p") {
       for (const r of robbers) {
+        if (r.inDoor) continue;
         if (hits(b, robberHitbox(r))) {
           dead = true;
           killRobber(r);
@@ -994,11 +1036,13 @@ function draw() {
 
   drawBuilding();
 
-  for (const r of robbers)
+  for (const r of robbers) {
+    if (r.inDoor) continue;
     drawActor("rob", r.x, r.feet, r.dir, {
       moving: r.moving, walkT: r.walkT, stun: r.stun,
       flashT: r.flashT, crouch: r.lowT > 0,
     });
+  }
 
   if (player.hidden) {
     // faint silhouette tucked into the doorway
