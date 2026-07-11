@@ -159,6 +159,9 @@ const game = {
   camY: 0,
   banner: null,            // {text, t}
   shake: 0,
+  levelT: 0,               // level stopwatch (par-time bonus)
+  comboT: 0, comboN: 0,    // kill combo
+  nextLife: 5000,          // next 1-UP threshold
 };
 
 let NF = 8;                // floors this level
@@ -171,7 +174,10 @@ let popups = [];
 let doors = [];
 let doorAnims = [];
 let corpses = [];
+let pickups = [];
 let exitActive = false;
+let waveDone = true, waveAt = 0;      // mid-level reinforcements
+let lootTotal = 0, lootGot = 0;
 
 const player = {
   x: 0, feet: 0, dir: 1, w: 22,
@@ -276,6 +282,49 @@ function sfx(type) {
   }
 }
 
+// Minimal chiptune: a moody bass pulse with an off-beat tick, plus an
+// elevator hum whenever any car is moving. All gated by the mute toggle.
+const BASSLINE = [110, 110, 130.8, 110, 98, 98, 130.8, 146.8];
+let musicT = 0, musicStep = 0, humOsc = null, humGain = null;
+function tickMusic(dt) {
+  if (game.muted || game.state !== "play" || game.paused || !AC) return;
+  musicT -= dt;
+  if (musicT > 0) return;
+  musicT = 0.24;
+  const t = AC.currentTime;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = "triangle";
+  o.frequency.value = BASSLINE[musicStep % 8] / 2;
+  g.gain.setValueAtTime(0.05, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+  o.connect(g); g.connect(AC.destination);
+  o.start(t); o.stop(t + 0.22);
+  if (musicStep % 4 === 2) {
+    const o2 = AC.createOscillator(), g2 = AC.createGain();
+    o2.type = "square"; o2.frequency.value = 1760;
+    g2.gain.setValueAtTime(0.009, t);
+    g2.gain.exponentialRampToValueAtTime(0.0005, t + 0.03);
+    o2.connect(g2); g2.connect(AC.destination);
+    o2.start(t); o2.stop(t + 0.04);
+  }
+  musicStep++;
+}
+function updateHum() {
+  if (!AC) return;
+  const moving = game.state === "play" && !game.paused && !game.muted &&
+                 shafts.some(s => s.car.target !== null);
+  if (moving && !humOsc) {
+    humOsc = AC.createOscillator(); humGain = AC.createGain();
+    humOsc.type = "sawtooth"; humOsc.frequency.value = 55;
+    humGain.gain.value = 0.014;
+    humOsc.connect(humGain); humGain.connect(AC.destination);
+    humOsc.start();
+  } else if (!moving && humOsc) {
+    try { humOsc.stop(); } catch (e) {}
+    humOsc = null; humGain = null;
+  }
+}
+
 // ---------- Level setup ----------
 function exitBox() {
   return { x: BR - 56, y: surfaceY(NF - 1) - 58, w: 30, h: 58 };
@@ -292,9 +341,18 @@ function buildDoors() {
         if (x < BL + 24 || x > BR - 24) continue;
         if (shaftAt(x, 26)) continue;
         if (f === NF - 1 && Math.abs(x - (e.x + e.w / 2)) < 60) continue;
-        doors.push({ x, f });
+        doors.push({ x, f, loot: false });
       }
     }
+  }
+  // a few doors hide briefcases worth collecting
+  lootTotal = Math.min(doors.length, 3 + Math.floor(game.level / 2));
+  lootGot = 0;
+  const pool = [...doors];
+  for (let i = 0; i < lootTotal && pool.length; i++) {
+    const k = randInt(0, pool.length - 1);
+    pool[k].loot = true;
+    pool.splice(k, 1);
   }
 }
 
@@ -302,7 +360,8 @@ function buildLevel() {
   NF = clamp(7 + game.level, 8, 14);
   worldH = BT + NF * FLOOR_H + 50;
   exitActive = false;
-  bullets = []; particles = []; popups = []; doorAnims = []; corpses = [];
+  bullets = []; particles = []; popups = []; doorAnims = []; corpses = []; pickups = [];
+  game.levelT = 0;
 
   // Every level is a different building: shaft positions are randomized,
   // and a fourth shaft appears from level 4.
@@ -343,27 +402,35 @@ function buildLevel() {
       x = rand(BL + 30, BR - 30);
       tries++;
     } while (tries < 60 && (shaftAt(x, 24) || (f === 0 && Math.abs(x - player.x) < 240)));
-    robbers.push({
-      x, feet: surfaceY(f), dir: Math.random() < 0.5 ? -1 : 1,
-      speed: rand(50, 62) + game.level * 5,
-      falling: false, vy: 0, fallFrom: 0, stun: 0,
-      aim: -1,                                   // -1 = not aiming
-      cool: rand(0.3, 1.6),
-      pauseT: 0, wanderT: rand(1.5, 4),
-      walkT: Math.random() * 6, moving: false,
-      flashT: 0, lowT: 0,
-      board: null, riding: null,                 // elevator-chasing state
-      inDoor: null, doorCd: rand(2, 6),          // door-hopping state
-      squash: 0,                                 // flattening under a descending car
-    });
+    robbers.push(makeRobber(x, f));
   }
+  waveDone = game.level < 2;
+  waveAt = waveDone ? 0 : Math.ceil(count / 2);
   game.camY = 0;
   game.banner = { text: "LEVEL " + game.level, t: 1.6 };
+}
+
+function makeRobber(x, f) {
+  return {
+    x, feet: surfaceY(f), dir: Math.random() < 0.5 ? -1 : 1,
+    speed: rand(50, 62) + game.level * 5,
+    falling: false, vy: 0, fallFrom: 0, stun: 0,
+    aim: -1,                                   // -1 = not aiming
+    cool: rand(0.3, 1.6),
+    pauseT: 0, wanderT: rand(1.5, 4),
+    walkT: Math.random() * 6, moving: false,
+    flashT: 0, lowT: 0,
+    alert: 0,                                  // heard gunfire / saw an ally die
+    board: null, riding: null,                 // elevator-chasing state
+    inDoor: null, doorCd: rand(2, 6),          // door-hopping state
+    squash: 0,                                 // flattening under a descending car
+  };
 }
 
 function startGame() {
   if (!assetsReady) return;
   game.level = 1; game.score = 0; game.lives = 3;
+  game.nextLife = 5000; game.comboT = 0; game.comboN = 0;
   game.state = "play"; game.paused = false;
   buildLevel();
 }
@@ -431,6 +498,24 @@ document.querySelectorAll("#touch .btn").forEach(b => {
     b.addEventListener("mouseup", off);
   }
 });
+window.addEventListener("blur", () => { if (game.state === "play") game.paused = true; });
+
+// Context-aware label on the mobile ▲ button (ride / call / hide)
+const upBtn = document.querySelector('#touch .btn[data-k="up"]');
+if (upBtn) setInterval(() => {
+  if (game.state !== "play") { upBtn.textContent = "▲"; upBtn.style.fontSize = "24px"; return; }
+  let label = "▲";
+  if (player.hidden) label = "EXIT";
+  else if (supportAt(player.x, player.feet).type !== "car") {
+    if (nearestDoor(player.x, floorOf(player.feet))) label = "HIDE";
+    else if (shaftAt(player.x, 26)) label = "CALL";
+  }
+  if (upBtn.textContent !== label) {
+    upBtn.textContent = label;
+    upBtn.style.fontSize = label === "▲" ? "24px" : "13px";
+  }
+}, 200);
+
 // Tap anywhere to start (button handlers run first, so no double-start)
 const tapStart = () => { audio(); if (game.state !== "play") startGame(); };
 if (window.PointerEvent) window.addEventListener("pointerdown", tapStart);
@@ -439,10 +524,14 @@ else { window.addEventListener("touchstart", tapStart); window.addEventListener(
 // ---------- Update ----------
 function firePlayer() {
   if (player.fireCd > 0 || player.dead || player.stun > 0 || player.hidden) return;
-  if (bullets.filter(b => b.from === "p").length >= 2) return;
+  const cap = player.rapidT > 0 ? 4 : 2;
+  if (bullets.filter(b => b.from === "p").length >= cap) return;
   const y = player.feet - (player.crouch ? 20 : 30);
   bullets.push({ x: player.x + player.dir * 16, y, vx: player.dir * P_BULLET_V, from: "p" });
-  player.fireCd = 0.28;
+  if (player.spreadT > 0) {
+    bullets.push({ x: player.x + player.dir * 16, y: player.feet - 14, vx: player.dir * P_BULLET_V, from: "p" });
+  }
+  player.fireCd = player.rapidT > 0 ? 0.13 : 0.28;
   player.flashT = 0.07;
   sfx("shoot");
 }
@@ -496,6 +585,12 @@ function updatePlayer(dt) {
       } else {
         game.state = "over";
         if (game.score > game.hi) { game.hi = game.score; try { localStorage.setItem(HI_KEY, String(game.hi)); } catch (e) {} }
+        try {
+          const t = JSON.parse(localStorage.getItem("gcmp-em-top5") || "[]");
+          t.push(game.score);
+          t.sort((a, b) => b - a);
+          localStorage.setItem("gcmp-em-top5", JSON.stringify(t.slice(0, 5)));
+        } catch (e) {}
       }
     }
     return;
@@ -517,6 +612,7 @@ function updatePlayer(dt) {
     updateFalling(player, dt);
     if (!player.falling && player.feet - player.fallFrom > FLOOR_H * 1.2) {
       // a fall of more than one floor is fatal
+      player.cause = "fall";
       game.lives--;
       player.dead = true; player.deadT = 1.4;
       game.shake = 0.5;
@@ -541,6 +637,13 @@ function updatePlayer(dt) {
       player.hidden = true;
       player.x = d.x;
       doorAnim(d.x, d.f);
+      if (d.loot) {
+        d.loot = false;
+        lootGot++;
+        game.score += 500;
+        popups.push({ x: d.x, y: player.feet - 66, text: "BRIEFCASE +500", t: 1.1 });
+        sfx("clear");
+      }
       sfx("door");
       return;
     }
@@ -592,8 +695,16 @@ function updatePlayer(dt) {
   if (keys.fire) firePlayer();
 }
 
-function hurtPlayer() {
+function hurtPlayer(cause) {
   if (player.inv > 0 || player.dead || player.hidden) return;
+  if (player.vest) {
+    player.vest = false;
+    player.inv = 1.6;
+    popups.push({ x: player.x, y: player.feet - 66, text: "VEST SAVED YOU", t: 1.2 });
+    sfx("ding");
+    return;
+  }
+  player.cause = cause || "shot";
   game.lives--;
   player.dead = true; player.deadT = 1.2;
   game.shake = 0.5;
@@ -609,7 +720,7 @@ function smashCheck(s) {
   if (!player.dead && !player.hidden && shaftAt(player.x) === s &&
       floorOf(player.feet) !== target) {
     const gap = player.feet - fy;
-    if (gap > 0 && gap < 30) hurtPlayer();
+    if (gap > 0 && gap < 30) hurtPlayer("smash");
   }
   for (const r of [...robbers]) {
     if (r.inDoor) continue;
@@ -674,6 +785,15 @@ function updateRobbers(dt) {
     r.lowT = Math.max(0, r.lowT - dt);
     r.moving = false;
     r.doorCd = Math.max(0, r.doorCd - dt);
+    r.alert = Math.max(0, r.alert - dt);
+    // a bullet whizzing past puts this robber on alert
+    if (r.alert === 0) {
+      for (const b of bullets) {
+        if (b.from === "p" && Math.abs(b.y - (r.feet - 30)) < 44 && Math.abs(b.x - r.x) < 90) {
+          r.alert = 4; break;
+        }
+      }
+    }
     r.squash = Math.max(0, r.squash - dt * 3);
 
     // Inside a doorway: invisible and safe, then pops out somewhere else
@@ -728,7 +848,8 @@ function updateRobbers(dt) {
     const rf = floorOf(r.feet);
     const sameFloor = !player.dead && !player.hidden && Math.abs(player.feet - r.feet) < 24;
     const dx = player.x - r.x;
-    const seen = sameFloor && Math.abs(dx) < 520 && Math.abs(dx) > 8;
+    const sight = r.alert > 0 ? 900 : 520;     // alerted robbers spot you anywhere
+    const seen = sameFloor && Math.abs(dx) < sight && Math.abs(dx) > 8;
 
     if (seen) {
       if (r.board) { clearClaims(r); r.board = null; }
@@ -801,7 +922,7 @@ function updateRobbers(dt) {
     if (r.wanderT <= 0) {
       r.wanderT = rand(1.5, 4);
       // Sometimes take an elevator toward the player's floor
-      if (!player.dead && pf !== rf && Math.random() < 0.45) {
+      if (!player.dead && pf !== rf && Math.random() < (r.alert > 0 ? 0.9 : 0.45)) {
         let best = null, bd = 1e9;
         for (const s of shafts) {
           const c = s.x + s.w / 2, d2 = Math.abs(c - r.x);
@@ -882,8 +1003,11 @@ function killRobber(r, o = {}) {
   const i = robbers.indexOf(r);
   if (i >= 0) robbers.splice(i, 1);
   clearClaims(r);
+  for (const q of robbers) {
+    if (Math.abs(q.feet - r.feet) < 24 && Math.abs(q.x - r.x) < 320) q.alert = 5;
+  }
   corpses.push({
-    x: r.x, feet: r.feet, dir: r.dir,
+    x: r.x, feet: r.feet, dir: r.dir, startFeet: r.feet, bonusGiven: false,
     vx: o.vx || 0,
     vy: o.squash ? 0 : -rand(150, 250),
     rot: 0,
@@ -894,9 +1018,24 @@ function killRobber(r, o = {}) {
   const pts = 100 + (onCar ? 50 : 0);
   game.score += pts;
   popups.push({ x: r.x, y: r.feet - 50, text: "+" + pts, t: 0.9 });
+  // kill combo: chained kills within 2s pay escalating bonuses
+  if (game.comboT > 0) {
+    game.comboN++;
+    const cb = game.comboN * 50;
+    game.score += cb;
+    popups.push({ x: r.x, y: r.feet - 68, text: "COMBO x" + (game.comboN + 1) + " +" + cb, t: 1 });
+  } else {
+    game.comboN = 0;
+  }
+  game.comboT = 2;
+  // smashed robbers sometimes drop equipment
+  if (Math.random() < (o.squash ? 0.65 : 0.14)) {
+    const kinds = ["rapid", "spread", "vest"];
+    pickups.push({ x: r.x, feet: r.feet, kind: kinds[randInt(0, 2)], t: 9 });
+  }
   for (let k = 0; k < 12; k++) spark(r.x, r.feet - 22, "#ff8f5e");
   sfx("die");
-  if (robbers.length === 0) {
+  if (robbers.length === 0 && waveDone) {
     exitActive = true;
     game.banner = { text: "ALL CLEAR! GET TO THE EXIT ↓", t: 2.5 };
     sfx("clear");
@@ -944,6 +1083,11 @@ function updateFx(dt) {
         const flat = c.rot >= 0 ? Math.PI / 2 : -Math.PI / 2;
         c.rot += (flat - c.rot) * Math.min(1, dt * 12);
         c.landed = true;
+        if (!c.bonusGiven && c.feet - c.startFeet > FLOOR_H * 1.2) {
+          c.bonusGiven = true;
+          game.score += 200;
+          popups.push({ x: c.x, y: c.feet - 40, text: "LONG DROP +200", t: 1.1 });
+        }
       }
     } else if (c.feet < landY - 4) {
       c.landed = false;                          // slid or was blasted off an edge
@@ -959,11 +1103,46 @@ function updateFx(dt) {
 }
 
 function update(dt) {
+  game.levelT += dt;
+  game.comboT = Math.max(0, game.comboT - dt);
+  if (game.comboT === 0) game.comboN = 0;
   updateCars(dt);
   updatePlayer(dt);
   updateRobbers(dt);
   updateBullets(dt);
   updateFx(dt);
+  updatePickups(dt);
+
+  // 1-UP every 5000 points
+  if (game.score >= game.nextLife) {
+    game.nextLife += 5000;
+    game.lives = Math.min(6, game.lives + 1);
+    popups.push({ x: player.x, y: player.feet - 70, text: "1-UP!", t: 1.4 });
+    sfx("clear");
+  }
+
+  // mid-level reinforcements burst out of the doors
+  if (!waveDone && robbers.length <= waveAt) {
+    waveDone = true;
+    const n = Math.min(4, 2 + Math.floor(game.level / 3));
+    let spawned = 0;
+    for (let i = 0; i < n; i++) {
+      const opts = doors.filter(d =>
+        !(d.f === floorOf(player.feet) && Math.abs(d.x - player.x) < 220));
+      if (!opts.length) break;
+      const d = opts[randInt(0, opts.length - 1)];
+      const r = makeRobber(d.x, d.f);
+      r.alert = 6;
+      robbers.push(r);
+      doorAnim(d.x, d.f);
+      spawned++;
+    }
+    if (spawned) {
+      game.banner = { text: "REINFORCEMENTS!", t: 1.8 };
+      game.shake = Math.max(game.shake, 0.2);
+      sfx("eshoot");
+    }
+  }
 
   // Reached the exit?
   if (exitActive && !player.dead && !player.hidden) {
@@ -972,6 +1151,14 @@ function update(dt) {
       const bonus = 500 + game.level * 100;
       game.score += bonus;
       popups.push({ x: player.x, y: player.feet - 60, text: "ESCAPE +" + bonus, t: 1.2 });
+      const par = 30 + NF * 2;
+      const tb = Math.max(0, Math.round(par - game.levelT)) * 20;
+      if (tb > 0) popups.push({ x: player.x, y: player.feet - 80, text: "TIME BONUS +" + tb, t: 1.3 });
+      game.score += tb;
+      if (lootTotal > 0 && lootGot === lootTotal) {
+        game.score += 1000;
+        popups.push({ x: player.x, y: player.feet - 100, text: "CLEAN SWEEP +1000", t: 1.4 });
+      }
       game.level++;
       buildLevel();
       sfx("clear");
@@ -982,6 +1169,32 @@ function update(dt) {
   // Camera follows player
   const target = clamp(player.feet - VIEW_H * 0.58, 0, Math.max(0, worldH - VIEW_H));
   game.camY += (target - game.camY) * Math.min(1, dt * 6);
+}
+
+function updatePickups(dt) {
+  player.rapidT = Math.max(0, (player.rapidT || 0) - dt);
+  player.spreadT = Math.max(0, (player.spreadT || 0) - dt);
+  pickups = pickups.filter(p => (p.t -= dt) > 0);
+  if (player.dead || player.hidden) return;
+  const pb = playerHitbox();
+  pickups = pickups.filter(p => {
+    if (Math.abs(p.feet - player.feet) < 24 &&
+        p.x > pb.x - 8 && p.x < pb.x + pb.w + 8) {
+      if (p.kind === "rapid") {
+        player.rapidT = 10;
+        popups.push({ x: p.x, y: p.feet - 60, text: "RAPID FIRE!", t: 1.2 });
+      } else if (p.kind === "spread") {
+        player.spreadT = 10;
+        popups.push({ x: p.x, y: p.feet - 60, text: "SPREAD SHOT!", t: 1.2 });
+      } else {
+        player.vest = true;
+        popups.push({ x: p.x, y: p.feet - 60, text: "ARMOR VEST!", t: 1.2 });
+      }
+      sfx("clear");
+      return false;
+    }
+    return true;
+  });
 }
 
 // ---------- Drawing ----------
@@ -1113,6 +1326,40 @@ function drawBuilding() {
     ctx.fillText("EXIT", e.x + 3, e.y - 6);
   }
 
+  // descending car warning: the whole column pulses faintly red
+  for (const s of shafts) {
+    if (s.car.target !== null && s.car.target > s.car.pos) {
+      ctx.fillStyle = "rgba(255,70,70," + (0.05 + 0.04 * Math.sin(performance.now() / 90)) + ")";
+      ctx.fillRect(s.x, BT, s.w, worldH - BT - 46);
+    }
+  }
+
+  // briefcases glinting behind loot doors
+  for (const d of doors) {
+    if (!d.loot) continue;
+    const sy = surfaceY(d.f);
+    const g = 0.5 + 0.5 * Math.sin(performance.now() / 280 + d.x);
+    ctx.fillStyle = "#7a5a2b";
+    ctx.fillRect(d.x - 5, sy - 11, 10, 8);
+    ctx.fillStyle = "#3d2c12";
+    ctx.fillRect(d.x - 2, sy - 13, 4, 3);
+    ctx.fillStyle = "rgba(255,224,130," + (0.25 + 0.5 * g) + ")";
+    ctx.fillRect(d.x - 1, sy - 22, 3, 6);
+  }
+
+  // dropped equipment
+  for (const p of pickups) {
+    const bob = Math.sin(performance.now() / 260 + p.x) * 2;
+    const y = p.feet - 12 + bob;
+    const blink = p.t < 2.5 && Math.floor(performance.now() / 130) % 2 === 0;
+    if (blink) continue;
+    ctx.fillStyle = p.kind === "rapid" ? "#ffd23e" : p.kind === "spread" ? "#ff8f3e" : "#4fa7f7";
+    ctx.fillRect(p.x - 7, y - 7, 14, 14);
+    ctx.fillStyle = "#10141f";
+    ctx.font = "bold 10px monospace";
+    ctx.fillText(p.kind === "rapid" ? "R" : p.kind === "spread" ? "S" : "V", p.x - 3, y + 3);
+  }
+
   // swinging doors (open, then close)
   for (const a of doorAnims) {
     const p = a.t / 0.4;
@@ -1166,6 +1413,31 @@ function drawHUD() {
     ctx.fill();
   }
   if (game.muted) { ctx.fillStyle = "#5f7ba8"; ctx.fillText("MUTE", VIEW_W - 130, 22); }
+
+  // second row: elevator position indicators + objectives
+  ctx.fillStyle = "rgba(8,12,22,0.75)";
+  ctx.fillRect(0, 34, VIEW_W, 18);
+  for (const s of shafts) {
+    const cx = s.x + s.w / 2;
+    const moving = s.car.target !== null;
+    const down = moving && s.car.target > s.car.pos;
+    ctx.fillStyle = moving ? (down ? "#ff8f5e" : "#8dffb8") : "#31405f";
+    ctx.fillRect(cx - 17, 36, 34, 14);
+    ctx.fillStyle = moving ? "#10141f" : "#8fa3c8";
+    ctx.font = "bold 11px monospace";
+    const fl = String(NF - Math.round(s.car.pos));
+    ctx.fillText((down ? "▼" : moving ? "▲" : "■") + fl, cx - 12, 47);
+  }
+  ctx.font = "bold 12px monospace";
+  ctx.fillStyle = "#ffd77a";
+  ctx.fillText("LOOT " + lootGot + "/" + lootTotal, 14, 47);
+  ctx.fillStyle = "#8fa3c8";
+  ctx.fillText(Math.floor(game.levelT) + "s", VIEW_W - 52, 47);
+  let px = VIEW_W - 100;
+  ctx.font = "bold 11px monospace";
+  if (player.vest) { ctx.fillStyle = "#4fa7f7"; ctx.fillText("VEST", px, 47); px -= 52; }
+  if (player.rapidT > 0) { ctx.fillStyle = "#ffd23e"; ctx.fillText("RPD " + Math.ceil(player.rapidT), px, 47); px -= 56; }
+  if (player.spreadT > 0) { ctx.fillStyle = "#ff8f3e"; ctx.fillText("SPR " + Math.ceil(player.spreadT), px, 47); }
 }
 
 function centerText(text, y, size, color) {
@@ -1197,7 +1469,16 @@ function draw() {
     } else if (Math.floor(performance.now() / 500) % 2 === 0) {
       centerText("PRESS FIRE / TAP TO START", 445, 20, "#2fae5f");
     }
-    if (game.hi > 0) centerText("HIGH SCORE " + game.hi, 495, 14, "#8fa3c8");
+    try {
+      const t = JSON.parse(localStorage.getItem("gcmp-em-top5") || "[]");
+      if (t.length) {
+        centerText("— BEST RUNS —", 480, 13, "#5f7ba8");
+        t.slice(0, 5).forEach((s2, i) =>
+          centerText((i + 1) + ".  " + s2, 500 + i * 16, 12, i === 0 ? "#ffd77a" : "#8fa3c8"));
+      } else if (game.hi > 0) {
+        centerText("HIGH SCORE " + game.hi, 495, 14, "#8fa3c8");
+      }
+    } catch (e) {}
     return;
   }
 
@@ -1249,10 +1530,16 @@ function draw() {
     const im = img("hero-stand");
     if (im) {
       ctx.save();
-      ctx.translate(player.x, player.feet - 8);
-      ctx.rotate(player.dir < 0 ? Math.PI / 2 : -Math.PI / 2);
+      ctx.translate(player.x, player.feet - (player.cause === "smash" ? 0 : 8));
       ctx.globalAlpha = 0.9;
-      ctx.drawImage(im, -im.width * 0.42, -im.height + 8);
+      if (player.cause === "smash") {
+        ctx.scale(1, 0.15);
+        ctx.drawImage(im, -im.width * 0.42, -im.height);
+      } else {
+        ctx.rotate(player.dir < 0 ? Math.PI / 2 : -Math.PI / 2);
+        if (player.cause === "fall") ctx.scale(1, -1);   // face-down after the plunge
+        ctx.drawImage(im, -im.width * 0.42, -im.height + 8);
+      }
       ctx.restore();
     } else {
       ctx.fillStyle = "#4f8ef7";
@@ -1277,7 +1564,25 @@ function draw() {
     ctx.fillText(p.text, p.x - 20, p.y);
     ctx.globalAlpha = 1;
   }
+  // last-robber ping
+  if (robbers.length === 1 && !robbers[0].inDoor) {
+    const r = robbers[0];
+    const bounce = Math.abs(Math.sin(performance.now() / 180)) * 6;
+    ctx.fillStyle = "#ff5d5d";
+    ctx.font = "bold 16px monospace";
+    ctx.fillText("▼", r.x - 6, r.feet - 66 - bounce);
+  }
   ctx.restore();
+
+  // off-screen last-robber arrow (screen space)
+  if (game.state === "play" && robbers.length === 1 && !robbers[0].inDoor) {
+    const r = robbers[0];
+    const sy = r.feet - game.camY;
+    ctx.fillStyle = "#ff5d5d";
+    ctx.font = "bold 18px monospace";
+    if (sy < 44) ctx.fillText("▲ LAST ONE", r.x - 10, 52);
+    else if (sy > VIEW_H - 6) ctx.fillText("▼ LAST ONE", r.x - 10, VIEW_H - 12);
+  }
 
   drawHUD();
 
@@ -1312,6 +1617,8 @@ function frame(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
   if (game.state === "play" && !game.paused) update(dt);
+  tickMusic(dt);
+  updateHum();
   draw();
   requestAnimationFrame(frame);
 }

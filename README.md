@@ -66,6 +66,25 @@ On phones and tablets, on-screen touch controls appear automatically.
   them flat (worth a +150 bonus for robbers, a lost life if it's you). The
   car spares whoever stands on its destination floor, stopping level with
   them instead, so calling the elevator to your own floor is always safe.
+- **Robbers get angry.** A bullet whizzing past or an ally dying nearby puts
+  robbers on alert: they spot you from anywhere on the floor and aggressively
+  grab elevators to hunt you down. Snipe from safety while you can.
+- **Loot the briefcases.** A few doors per level hide glinting briefcases —
+  duck inside to grab one (+500). Collect them all for a CLEAN SWEEP bonus.
+- **Reinforcements!** From level 2, thinning the robbers halfway triggers a
+  fresh squad bursting out of the doors — already alerted.
+- **Style pays.** Chained kills within 2 seconds build combos; a corpse that
+  plunges down a shaft earns LONG DROP +200; beating the level clock earns a
+  time bonus; every 5,000 points is a 1-UP (up to 6 lives).
+- **Equipment drops.** Smashed robbers usually drop gear (shot ones
+  sometimes): Rapid fire, Spread shot (a second low bullet that catches
+  crouchers), or an Armor vest that absorbs one hit.
+- **Elevator indicators** under the HUD show each car's floor and direction —
+  a red-pulsing shaft means a car is descending through it. Mind the gap.
+- When one robber is left, a red ping marks him — even off-screen.
+- A chiptune pulse and elevator hum play during runs (M mutes everything);
+  the game auto-pauses when the tab loses focus; the title screen keeps
+  your five best runs.
 - Clear every robber to activate the glowing EXIT on the ground floor.
 - **Every level is a different building**: elevator shaft positions are
   randomized each time, a fourth shaft appears from level 4, and each level
