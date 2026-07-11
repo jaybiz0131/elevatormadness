@@ -26,8 +26,7 @@ required. Original artwork lives in `art/source`; the game-ready cuts are in
 | ← / → (or A / D) | Move |
 | ↑ / ↓ (or W / S) | Ride an elevator when standing in a car |
 | ↑ beside a shaft | Call the elevator to your floor |
-| ↑ / ↓ at a numbered door | Take the stairwell one floor up / down |
-| ↑ at any other door | Hide inside (press ↑ or ↓ again to step out) |
+| ↑ at a door | Hide inside (press ↑ or ↓ again to step out) |
 | ↓ on solid floor | Crouch — ducks under enemy shots |
 | Space or J | Shoot |
 | P | Pause |
@@ -50,12 +49,13 @@ On phones and tablets, on-screen touch controls appear automatically.
   appears) to slip inside — robbers can't see or hit you. You can't shoot
   while hidden, and the exit door doesn't count.
 - Shooting a robber while riding an elevator earns bonus points.
-- Walking over an open elevator shaft with no car in it means a fall — long
-  drops stun you for a moment. The bottom of a shaft is solid ground: walk
-  out, or call the car down... but a descending car **crushes** anyone
-  standing beneath it — robbers included.
-- The numbered door on the left of each floor is the **stairwell** — press
-  ↑ or ↓ there to move one floor up or down without an elevator.
+- **Walkways cross every shaft** — you can walk over an open shaft safely,
+  but the elevators are the only way up or down.
+- **The elevator is a weapon.** A descending car slowly grinds down and
+  smashes anyone it passes through — pinning them under it as it squashes
+  them flat (worth a +150 bonus for robbers, a lost life if it's you). The
+  car spares whoever stands on its destination floor, stopping level with
+  them instead, so calling the elevator to your own floor is always safe.
 - Clear every robber to activate the glowing EXIT on the ground floor. Each
   level adds more floors, more robbers, and faster enemies.
 - Your high score is saved in the browser.

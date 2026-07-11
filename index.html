@@ -87,7 +87,7 @@
 <h1>Elevator Madness</h1>
 <div id="wrap"><canvas id="cv" width="800" height="560"></canvas></div>
 <div id="hint">
-  <span class="kb"><b>&larr;/&rarr;</b> move &nbsp; <b>&uarr;/&darr;</b> ride or call elevator &nbsp; <b>&uarr;</b> door: hide &nbsp; numbered door: stairs &uarr;&darr; &nbsp; <b>&darr;</b> crouch &nbsp; <b>Space</b> shoot &nbsp; <b>P</b> pause &nbsp; <b>M</b> mute</span>
+  <span class="kb"><b>&larr;/&rarr;</b> move &nbsp; <b>&uarr;/&darr;</b> ride elevator &nbsp; <b>&uarr;</b> call elevator / hide in a door &nbsp; <b>&darr;</b> crouch &nbsp; <b>Space</b> shoot &nbsp; <b>P</b> pause &nbsp; <b>M</b> mute</span>
   Clear every robber, then escape through the exit on the ground floor.
 </div>
 <div id="touch">
@@ -197,8 +197,7 @@ function supportAt(cx, feetY) {
   const s = shaftAt(cx);
   if (!s) return { type: "floor" };
   if (Math.abs(carFeetY(s) - feetY) < 7) return { type: "car", shaft: s };
-  if (feetY >= surfaceY(NF - 1) - 1) return { type: "floor" };  // shaft pit floor
-  return { type: "none", shaft: s };
+  return { type: "floor", shaft: s };   // walkways cross every shaft opening
 }
 function playerHitbox() {
   const h = player.crouch ? 26 : 44;
@@ -291,12 +290,6 @@ function buildDoors() {
       }
     }
   }
-  // the leftmost door on each floor is the stairwell (they align vertically)
-  for (let f = 0; f < NF; f++) {
-    let first = null;
-    for (const d of doors) if (d.f === f && (!first || d.x < first.x)) first = d;
-    if (first) first.stair = true;
-  }
 }
 
 function buildLevel() {
@@ -338,6 +331,7 @@ function buildLevel() {
       flashT: 0, lowT: 0,
       board: null, riding: null,                 // elevator-chasing state
       inDoor: null, doorCd: rand(2, 6),          // door-hopping state
+      squash: 0,                                 // flattening under a descending car
     });
   }
   game.camY = 0;
@@ -503,42 +497,24 @@ function updatePlayer(dt) {
   const car = onCar ? sup.shaft.car : null;
   const carMoving = onCar && car.target !== null;
 
-  // ▲/▼ interactions on solid floor: stairwell, hiding, calling the elevator
-  if (!onCar && (upEdge || downEdge) && player.stun === 0 && !player.crouch) {
+  // ▲ on solid floor: hide in a door, or call the elevator
+  if (!onCar && upEdge && player.stun === 0 && !player.crouch) {
     const d = nearestDoor(player.x, floorOf(player.feet));
-    if (d && d.stair) {
-      // numbered stairwell door: ▲ one floor up, ▼ one floor down
-      const tf = d.f + (upEdge ? -1 : 1);
-      if (tf >= 0 && tf < NF) {
-        let out = null;
-        for (const q of doors) if (q.stair && q.f === tf) out = q;
-        if (!out) out = { x: d.x, f: tf };
-        for (let k = 0; k < 8; k++) spark(d.x, player.feet - 24, "#c9a86a");
-        player.x = out.x;
-        player.feet = surfaceY(tf);
-        player.inv = Math.max(player.inv, 0.4);
-        for (let k = 0; k < 8; k++) spark(out.x, player.feet - 24, "#c9a86a");
-        sfx("door");
-        return;
-      }
-    } else if (d && upEdge) {
-      // ordinary door: hide inside
+    if (d) {
       player.hidden = true;
       player.x = d.x;
       sfx("door");
       return;
-    } else if (upEdge) {
-      // beside (or beneath) a shaft: call the elevator to this floor
-      const s = shaftAt(player.x, 26);
-      if (s) {
-        const myF = clamp(floorOf(player.feet), 0, NF - 1);
-        const busy = robbers.some(q => q.riding === s);
-        if (!busy && s.car.target === null && Math.round(s.car.pos) !== myF) {
-          s.car.target = myF;
-          s.car.claim = null;
-          popups.push({ x: player.x, y: player.feet - 60, text: "ELEVATOR CALLED", t: 1 });
-          sfx("ding");
-        }
+    }
+    const s = shaftAt(player.x, 26);
+    if (s) {
+      const myF = clamp(floorOf(player.feet), 0, NF - 1);
+      const busy = robbers.some(q => q.riding === s);
+      if (!busy && s.car.target === null && Math.round(s.car.pos) !== myF) {
+        s.car.target = myF;
+        s.car.claim = null;
+        popups.push({ x: player.x, y: player.feet - 60, text: "ELEVATOR CALLED", t: 1 });
+        sfx("ding");
       }
     }
   }
@@ -587,16 +563,27 @@ function hurtPlayer() {
   bullets = bullets.filter(b => b.from === "p");
 }
 
-function crushCheck(s) {
+// A descending car smashes anyone it passes through — slowly. Entities on the
+// car's destination floor are spared (the car stops level with them instead).
+function smashCheck(s) {
   const fy = carFeetY(s);
-  if (!player.dead && !player.hidden && !player.falling) {
-    if (shaftAt(player.x) === s && player.feet > fy + 2 && player.feet - fy < 46) hurtPlayer();
+  const target = s.car.target;
+  if (!player.dead && !player.hidden && shaftAt(player.x) === s &&
+      floorOf(player.feet) !== target) {
+    const gap = player.feet - fy;
+    if (gap > 0 && gap < 30) hurtPlayer();
   }
   for (const r of [...robbers]) {
-    if (r.inDoor || r.falling) continue;
-    if (shaftAt(r.x) === s && r.feet > fy + 2 && r.feet - fy < 46) {
-      popups.push({ x: r.x, y: r.feet - 50, text: "CRUSHED", t: 0.9 });
-      killRobber(r);
+    if (r.inDoor) continue;
+    if (shaftAt(r.x) !== s || floorOf(r.feet) === target) continue;
+    const gap = r.feet - fy;
+    if (gap > 0 && gap < 44) {
+      r.squash = clamp(1 - gap / 44, 0, 1);
+      if (gap < 8) {
+        popups.push({ x: r.x, y: r.feet - 50, text: "SMASHED +150", t: 0.9 });
+        game.score += 50;   // smash bonus on top of the kill
+        killRobber(r);
+      }
     }
   }
 }
@@ -606,13 +593,23 @@ function updateCars(dt) {
     const c = s.car;
     if (c.target === null) continue;
     const d = c.target - c.pos;
-    const step = (CAR_SPEED / FLOOR_H) * dt * Math.sign(d);
+    let speed = CAR_SPEED;
+    if (d > 0) {
+      // grind down slowly while smashing a robber
+      const fy = carFeetY(s);
+      for (const r of robbers) {
+        if (r.inDoor || shaftAt(r.x) !== s || floorOf(r.feet) === c.target) continue;
+        const gap = r.feet - fy;
+        if (gap > 0 && gap < 46) { speed = CAR_SPEED * 0.25; break; }
+      }
+    }
+    const step = (speed / FLOOR_H) * dt * Math.sign(d);
     if (Math.abs(step) >= Math.abs(d)) {
       c.pos = c.target; c.target = null; sfx("ding");
     } else {
       c.pos += step;
     }
-    if (step > 0) crushCheck(s);   // moving down
+    if (d > 0) smashCheck(s);   // moving down
   }
 }
 
@@ -634,6 +631,7 @@ function updateRobbers(dt) {
     r.lowT = Math.max(0, r.lowT - dt);
     r.moving = false;
     r.doorCd = Math.max(0, r.doorCd - dt);
+    r.squash = Math.max(0, r.squash - dt * 3);
 
     // Inside a doorway: invisible and safe, then pops out somewhere else
     if (r.inDoor) {
@@ -661,6 +659,7 @@ function updateRobbers(dt) {
     }
     if (sup.type === "car") r.feet = carFeetY(sup.shaft);
     if (r.stun > 0) { r.aim = -1; continue; }
+    if (r.squash > 0.15) { r.aim = -1; continue; }   // pinned under a descending car
 
     r.cool = Math.max(0, r.cool - dt);
 
@@ -723,15 +722,8 @@ function updateRobbers(dt) {
           r.x += r.dir * r.speed * dt; r.walkT += dt * 8; r.moving = true;
         }
       } else if (Math.abs(r.x - r.board.edge) > 6) {
-        const nx = r.x + Math.sign(r.board.edge - r.x) * r.speed * dt;
-        const ns = shaftAt(nx, 14);
-        if (ns && ns !== s && Math.abs(carFeetY(ns) - r.feet) > 7) {
-          if (s.car.claim === r) s.car.claim = null;
-          r.board = null;               // another open shaft is in the way
-        } else {
-          r.dir = Math.sign(r.board.edge - r.x);
-          r.x = nx; r.walkT += dt * 8; r.moving = true;
-        }
+        r.dir = Math.sign(r.board.edge - r.x);
+        r.x += r.dir * r.speed * dt; r.walkT += dt * 8; r.moving = true;
       } else {
         // waiting at the shaft edge: call the car if it's free
         if (s.car.target === null && !s.car.claim && !playerOnCarOf(s)) {
@@ -909,6 +901,7 @@ function drawActor(prefix, x, feet, dir, o) {
   ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
   ctx.translate(x, feet);
   if (dir < 0) ctx.scale(-1, 1);
+  if (o.squash) ctx.scale(1, Math.max(0.12, 1 - 0.85 * o.squash));
   if (im) {
     const ax = -im.width * 0.42;
     ctx.drawImage(im, ax, -im.height);
@@ -1010,18 +1003,6 @@ function drawBuilding() {
     ctx.fillText("EXIT", e.x + 3, e.y - 6);
   }
 
-  // stairwell number plates
-  ctx.font = "bold 10px monospace";
-  for (const d of doors) {
-    if (!d.stair) continue;
-    const sy = surfaceY(d.f);
-    ctx.fillStyle = "#c9a86a";
-    ctx.fillRect(d.x - 10, sy - 64, 20, 12);
-    ctx.fillStyle = "#1a1408";
-    const label = String(NF - d.f);
-    ctx.fillText(label, d.x - (label.length > 1 ? 6 : 3), sy - 55);
-  }
-
   // door hint: ▲ bobbing over the nearest usable door
   if (game.state === "play" && !player.dead && !player.hidden && !player.falling) {
     const d = nearestDoor(player.x, floorOf(player.feet));
@@ -1084,8 +1065,8 @@ function draw() {
     }
     centerText("Robbers have taken the tower.", 330, 16, "#c9d6ef");
     centerText("Ride the elevators. Shoot them first.", 355, 16, "#c9d6ef");
-    centerText("Hide in doors (▲) · numbered doors are stairs (▲/▼)", 380, 16, "#8fa3c8");
-    centerText("Stand beside a shaft and press ▲ to call the elevator", 404, 14, "#8fa3c8");
+    centerText("Hide in doors (▲) · call the elevator with ▲ at a shaft", 380, 16, "#8fa3c8");
+    centerText("Drop the elevator on robbers to smash them!", 404, 14, "#8fa3c8");
     if (!assetsReady) {
       centerText("LOADING…", 445, 20, "#8fa3c8");
     } else if (Math.floor(performance.now() / 500) % 2 === 0) {
@@ -1106,7 +1087,7 @@ function draw() {
     if (r.inDoor) continue;
     drawActor("rob", r.x, r.feet, r.dir, {
       moving: r.moving, walkT: r.walkT, stun: r.stun,
-      flashT: r.flashT, crouch: r.lowT > 0,
+      flashT: r.flashT, crouch: r.lowT > 0, squash: r.squash,
     });
   }
 
