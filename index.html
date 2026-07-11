@@ -169,6 +169,7 @@ let bullets = [];
 let particles = [];
 let popups = [];
 let doors = [];
+let doorAnims = [];
 let exitActive = false;
 
 const player = {
@@ -209,6 +210,10 @@ function robberHitbox(r) {
 function hits(b, box) {
   return b.x > box.x && b.x < box.x + box.w && b.y > box.y && b.y < box.y + box.h;
 }
+function doorAnim(x, f) {
+  doorAnims.push({ x, sy: surfaceY(f), t: 0 });
+}
+
 function nearestDoor(x, f) {
   let best = null, bd = 1e9;
   for (const d of doors) {
@@ -296,13 +301,30 @@ function buildLevel() {
   NF = clamp(7 + game.level, 8, 14);
   worldH = BT + NF * FLOOR_H + 50;
   exitActive = false;
-  bullets = []; particles = []; popups = [];
+  bullets = []; particles = []; popups = []; doorAnims = [];
 
-  shafts = [
-    { x: BL + 118, w: 72, car: { pos: 0, target: null, claim: null } },
-    { x: BL + 328, w: 72, car: { pos: Math.floor(NF / 2), target: null, claim: null } },
-    { x: BL + 538, w: 72, car: { pos: NF - 1, target: null, claim: null } },
-  ];
+  // Every level is a different building: shaft positions are randomized,
+  // and a fourth shaft appears from level 4.
+  const shaftCount = game.level >= 4 ? 4 : 3;
+  const minGap = shaftCount === 4 ? 140 : 175;
+  let xs = [];
+  for (let attempt = 0; attempt < 300 && xs.length < shaftCount; attempt++) {
+    xs = [];
+    for (let tries = 0; tries < 40 && xs.length < shaftCount; tries++) {
+      const x = BL + 70 + Math.random() * (BW - 215);
+      if (xs.every(v => Math.abs(v - x) >= minGap)) xs.push(x);
+    }
+  }
+  if (xs.length < shaftCount) {
+    xs = [];
+    for (let i = 0; i < shaftCount; i++) xs.push(BL + 90 + i * minGap);
+  }
+  xs.sort((a, b) => a - b);
+  const startFloors = [0, Math.floor(NF / 2), NF - 1, randInt(1, NF - 2)];
+  shafts = xs.map((x, i) => ({
+    x: Math.round(x), w: 72,
+    car: { pos: startFloors[i % 4], target: null, claim: null },
+  }));
   buildDoors();
 
   // Player starts on the roof floor, far left
@@ -480,6 +502,7 @@ function updatePlayer(dt) {
     if (upEdge || downEdge) {
       player.hidden = false;
       player.inv = Math.max(player.inv, 0.5);
+      doorAnim(player.x, floorOf(player.feet));
       sfx("door");
     }
     return;
@@ -503,6 +526,7 @@ function updatePlayer(dt) {
     if (d) {
       player.hidden = true;
       player.x = d.x;
+      doorAnim(d.x, d.f);
       sfx("door");
       return;
     }
@@ -579,6 +603,7 @@ function smashCheck(s) {
     const gap = r.feet - fy;
     if (gap > 0 && gap < 44) {
       r.squash = clamp(1 - gap / 44, 0, 1);
+      if (Math.random() < 0.3) spark(r.x + rand(-10, 10), fy + 2, "#9a8a6a");
       if (gap < 8) {
         popups.push({ x: r.x, y: r.feet - 50, text: "SMASHED +150", t: 0.9 });
         game.score += 50;   // smash bonus on top of the kill
@@ -600,7 +625,11 @@ function updateCars(dt) {
       for (const r of robbers) {
         if (r.inDoor || shaftAt(r.x) !== s || floorOf(r.feet) === c.target) continue;
         const gap = r.feet - fy;
-        if (gap > 0 && gap < 46) { speed = CAR_SPEED * 0.25; break; }
+        if (gap > 0 && gap < 46) {
+          speed = CAR_SPEED * 0.25;
+          game.shake = Math.max(game.shake, 0.12);
+          break;
+        }
       }
     }
     const step = (speed / FLOOR_H) * dt * Math.sign(d);
@@ -639,6 +668,7 @@ function updateRobbers(dt) {
       if (r.inDoor.t <= 0) {
         r.x = r.inDoor.out.x;
         r.feet = surfaceY(r.inDoor.out.f);
+        doorAnim(r.inDoor.out.x, r.inDoor.out.f);
         r.inDoor = null;
         r.pauseT = 0.35;
         r.cool = Math.max(r.cool, 0.7);   // grace beat before they can shoot
@@ -657,7 +687,8 @@ function updateRobbers(dt) {
       r.riding = null; r.board = null;
       continue;
     }
-    if (sup.type === "car") r.feet = carFeetY(sup.shaft);
+    if (sup.type === "car" && (r.riding === sup.shaft || sup.shaft.car.target === null))
+      r.feet = carFeetY(sup.shaft);
     if (r.stun > 0) { r.aim = -1; continue; }
     if (r.squash > 0.15) { r.aim = -1; continue; }   // pinned under a descending car
 
@@ -722,8 +753,15 @@ function updateRobbers(dt) {
           r.x += r.dir * r.speed * dt; r.walkT += dt * 8; r.moving = true;
         }
       } else if (Math.abs(r.x - r.board.edge) > 6) {
-        r.dir = Math.sign(r.board.edge - r.x);
-        r.x += r.dir * r.speed * dt; r.walkT += dt * 8; r.moving = true;
+        const nx = r.x + Math.sign(r.board.edge - r.x) * r.speed * dt;
+        const ns = shaftAt(nx, 14);
+        if (ns && ns !== s && Math.abs(carFeetY(ns) - r.feet) > 7) {
+          clearClaims(r);
+          r.board = null;               // an open shaft blocks the way
+        } else {
+          r.dir = Math.sign(r.board.edge - r.x);
+          r.x = nx; r.walkT += dt * 8; r.moving = true;
+        }
       } else {
         // waiting at the shaft edge: call the car if it's free
         if (s.car.target === null && !s.car.claim && !playerOnCarOf(s)) {
@@ -735,6 +773,8 @@ function updateRobbers(dt) {
     }
 
     // Patrol
+    const strand = shaftAt(r.x);
+    if (strand && Math.abs(carFeetY(strand) - r.feet) > 7) continue;  // stranded over an open shaft
     if (r.pauseT > 0) { r.pauseT -= dt; continue; }
     r.wanderT -= dt;
     if (r.wanderT <= 0) {
@@ -758,9 +798,10 @@ function updateRobbers(dt) {
       if (Math.random() < 0.4) r.dir *= -1;
     }
     const nx = r.x + r.dir * r.speed * dt;
+    const ns = shaftAt(nx, 14);
     const blocked =
       nx < BL + 16 || nx > BR - 16 ||
-      supportAt(nx, r.feet).type === "none";         // open shaft ahead
+      (ns && Math.abs(carFeetY(ns) - r.feet) > 7);   // robbers can't cross open shafts
     if (blocked) { r.dir *= -1; }
     else {
       r.x = nx; r.walkT += dt * 8; r.moving = true;
@@ -780,6 +821,7 @@ function updateRobbers(dt) {
             r.inDoor = { t: rand(1.2, 3), out: opts[randInt(0, opts.length - 1)] };
             r.doorCd = rand(6, 12);
             r.board = null;
+            doorAnim(d.x, rf);
             for (let k = 0; k < 8; k++) spark(d.x, r.feet - 24, "#c9a86a");
             sfx("door");
           }
@@ -840,6 +882,7 @@ function spark(x, y, color) {
 }
 
 function updateFx(dt) {
+  doorAnims = doorAnims.filter(a => (a.t += dt) < 0.4);
   particles = particles.filter(p => (p.t -= dt) > 0);
   for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 500 * dt; }
   popups = popups.filter(p => (p.t -= dt) > 0);
@@ -1001,6 +1044,21 @@ function drawBuilding() {
     ctx.fillStyle = exitActive ? "#8dffb8" : "#5f7ba8";
     ctx.font = "bold 11px monospace";
     ctx.fillText("EXIT", e.x + 3, e.y - 6);
+  }
+
+  // swinging doors (open, then close)
+  for (const a of doorAnims) {
+    const p = a.t / 0.4;
+    const open = p < 0.5 ? p * 2 : (1 - p) * 2;   // 0 → 1 → 0
+    const w = 26, hgt = 52;
+    const x0 = a.x - w / 2, y0 = a.sy - 56;
+    ctx.fillStyle = "rgba(10,7,5,0.92)";           // dark interior revealed
+    ctx.fillRect(x0, y0, w, hgt);
+    const pw = Math.max(3, w * (1 - open * 0.88)); // swinging panel
+    ctx.fillStyle = "#4a3026";
+    ctx.fillRect(x0, y0, pw, hgt);
+    ctx.strokeStyle = "#241812";
+    ctx.strokeRect(x0 + 0.5, y0 + 0.5, Math.max(2, pw - 1), hgt - 1);
   }
 
   // door hint: ▲ bobbing over the nearest usable door

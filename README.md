@@ -49,13 +49,18 @@ On phones and tablets, on-screen touch controls appear automatically.
   appears) to slip inside — robbers can't see or hit you. You can't shoot
   while hidden, and the exit door doesn't count.
 - Shooting a robber while riding an elevator earns bonus points.
-- **Walkways cross every shaft** — you can walk over an open shaft safely,
-  but the elevators are the only way up or down.
+- **Walkways cross every shaft — but only you can use them.** Robbers turn
+  back at an open shaft; they can only cross where a car is parked. If a
+  robber is standing on a parked car when it gets called away, he's left
+  **stranded** on the walkway — frozen and helpless. Drop the car on him.
+- Doors visibly swing open and shut whenever anyone slips in or out.
 - **The elevator is a weapon.** A descending car slowly grinds down and
   smashes anyone it passes through — pinning them under it as it squashes
   them flat (worth a +150 bonus for robbers, a lost life if it's you). The
   car spares whoever stands on its destination floor, stopping level with
   them instead, so calling the elevator to your own floor is always safe.
-- Clear every robber to activate the glowing EXIT on the ground floor. Each
-  level adds more floors, more robbers, and faster enemies.
+- Clear every robber to activate the glowing EXIT on the ground floor.
+- **Every level is a different building**: elevator shaft positions are
+  randomized each time, a fourth shaft appears from level 4, and each level
+  adds more floors and more, faster robbers.
 - Your high score is saved in the browser.
