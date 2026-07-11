@@ -54,8 +54,10 @@ On phones and tablets, on-screen touch controls appear automatically.
   bottom and it costs a life. Robbers know it too: they turn back at open
   shafts and only cross where a car is parked... so if one is mid-crossing
   when you call the car away, he plummets to a horrible death.
-- Robbers die with style: shot robbers are knocked back off their feet and
-  crumple; smashed ones stay flattened under the car.
+- Robbers die with style: shot robbers are blasted backwards off their
+  feet, tumbling and bouncing — and if the blast (or a slide) carries them
+  over an open shaft, they plunge violently all the way down. Smashed ones
+  stay flattened under the car.
 - Doors visibly swing open and shut whenever anyone slips in or out.
 - **The elevator is a weapon.** A descending car slowly grinds down and
   smashes anyone it passes through — pinning them under it as it squashes

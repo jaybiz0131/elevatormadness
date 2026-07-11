@@ -867,7 +867,7 @@ function updateBullets(dt) {
         if (r.inDoor) continue;
         if (hits(b, robberHitbox(r))) {
           dead = true;
-          killRobber(r, { vx: Math.sign(b.vx) * rand(70, 150) });
+          killRobber(r, { vx: Math.sign(b.vx) * rand(170, 290) });
           break;
         }
       }
@@ -888,11 +888,10 @@ function killRobber(r, o = {}) {
   corpses.push({
     x: r.x, feet: r.feet, dir: r.dir,
     vx: o.vx || 0,
-    vy: o.squash ? 0 : -170,
+    vy: o.squash ? 0 : -rand(150, 250),
     rot: 0,
-    rotV: (o.vx ? Math.sign(o.vx) : (Math.random() < 0.5 ? -1 : 1)) * rand(5, 9),
-    t: 1.1, squash: !!o.squash,
-    floorY: surfaceY(clamp(floorOf(r.feet), 0, NF - 1)),
+    rotV: (o.vx ? Math.sign(o.vx) : (Math.random() < 0.5 ? -1 : 1)) * rand(6, 11),
+    t: 1.1, squash: !!o.squash, landed: false,
   });
   const onCar = supportAt(player.x, player.feet).type === "car";
   const pts = 100 + (onCar ? 50 : 0);
@@ -916,19 +915,43 @@ function spark(x, y, color) {
 
 function updateFx(dt) {
   doorAnims = doorAnims.filter(a => (a.t += dt) < 0.4);
-  corpses = corpses.filter(c => (c.t -= dt) > 0);
+  corpses = corpses.filter(c => c.t > 0);
   for (const c of corpses) {
-    if (c.squash) continue;
-    c.x += c.vx * dt;
+    if (c.squash) { c.t -= dt; continue; }
+    c.x = clamp(c.x + c.vx * dt, BL + 8, BR - 8);
     c.vy += 1100 * dt;
     c.feet += c.vy * dt;
     c.rot += c.rotV * dt;
-    if (c.feet >= c.floorY) {
-      c.feet = c.floorY; c.vy = 0;
-      c.vx *= 0.82; c.rotV *= 0.7;
-      const flat = c.rot >= 0 ? Math.PI / 2 : -Math.PI / 2;
-      c.rot += (flat - c.rot) * Math.min(1, dt * 12);
+    // what's beneath the corpse right now? Over an open shaft: a long drop.
+    const s = shaftAt(c.x);
+    let landY = surfaceY(NF - 1);
+    if (s) {
+      const cf = carFeetY(s);
+      if (cf >= c.feet - 2) landY = cf;          // car top below breaks the fall
+    } else {
+      for (let f = 0; f < NF; f++) {
+        const sy = surfaceY(f);
+        if (sy >= c.feet - 2) { landY = sy; break; }
+      }
     }
+    if (c.feet >= landY && c.vy >= 0) {
+      c.feet = landY;
+      if (c.vy > 330) {
+        c.vy = -c.vy * 0.35;                     // violent bounce
+        c.vx *= 0.7;
+        for (let k = 0; k < 6; k++) spark(c.x, c.feet - 6, "#ff8f5e");
+        game.shake = Math.max(game.shake, 0.15);
+      } else {
+        c.vy = 0;
+        c.vx *= 0.82; c.rotV *= 0.7;
+        const flat = c.rot >= 0 ? Math.PI / 2 : -Math.PI / 2;
+        c.rot += (flat - c.rot) * Math.min(1, dt * 12);
+        c.landed = true;
+      }
+    } else if (c.feet < landY - 4) {
+      c.landed = false;                          // slid or was blasted off an edge
+    }
+    c.t -= c.landed ? dt : dt * 0.25;            // fade mostly after coming to rest
   }
   particles = particles.filter(p => (p.t -= dt) > 0);
   for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 500 * dt; }
