@@ -19,6 +19,21 @@ required. Original artwork lives in `art/source`; the game-ready cuts are in
   `/ (root)`, and save. A few minutes later the game is live at
   `https://jaybiz0131.github.io/elevatormadness/`.
 
+## Install it like an app (PWA)
+
+The game is a Progressive Web App: once it's live on GitHub Pages (or any
+HTTPS host), it can be installed to the home screen, launches full-screen
+with its own icon, and **works offline**.
+
+- **iPhone / iPad:** open the game URL in **Safari**, tap the **Share**
+  button, then **Add to Home Screen**.
+- **Android:** open it in Chrome and accept the "Add to home screen" /
+  "Install app" prompt.
+- **Desktop:** Chrome and Edge show an install icon in the address bar.
+
+Updates deploy automatically: the app checks for a fresh version whenever
+it's opened online, and keeps working from cache when offline.
+
 ## Controls
 
 | Input | Action |
