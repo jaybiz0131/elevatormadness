@@ -1,0 +1,649 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Moonwake look-dev</title>
+<style>
+  html, body { margin: 0; background: #000; height: 100%; overflow: hidden; }
+  #stage { position: relative; width: 390px; height: 844px; margin: 0 auto; background: #000; }
+  canvas { position: absolute; left: 0; top: 0; width: 390px; height: 844px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="gl"></canvas>
+  <canvas id="ui"></canvas>
+</div>
+
+<!--
+  Moonwake look-dev. One full-screen fragment shader draws water, land, the
+  kill-edge, the moon path, the wake and fog from a 1-D "river profile"
+  texture (centre, half-width, island centre, island half-width per 4 pt of
+  river). The 2-D overlay draws craft, props and HUD using the same
+  world→screen mapping. Everything here is meant to port to SpriteKit:
+  the shader becomes an SKShader on a full-screen sprite, the profile
+  texture becomes an SKTexture uniform, and `project()` becomes a Swift
+  function that positions sprites.
+-->
+
+<script id="vs" type="x-shader/x-vertex">
+attribute vec2 a_pos;
+varying vec2 v_uv;
+void main() { v_uv = a_pos * 0.5 + 0.5; gl_Position = vec4(a_pos, 0.0, 1.0); }
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+precision highp float;
+varying vec2 v_uv;
+
+uniform vec2  u_size;        // screen size in pt (390, 844)
+uniform float u_time;
+uniform float u_scroll;      // world y at the bottom of the screen
+uniform sampler2D u_profile; // river profile, 1 texel = PROFILE_STEP pt of river
+uniform float u_profileLen;  // texels
+uniform vec2  u_craft;       // craft world position (x pt, y pt)
+uniform float u_speed;       // 0..1 speed blend (0 slow, 0.5 cruise, 1 fast)
+uniform float u_lanternX;    // lantern glow source x (world), -1000 if none
+uniform float u_lanternY;
+uniform vec3  u_lanternCol;
+
+// lighting state
+uniform vec3  u_deep;        // deep water
+uniform vec3  u_shallow;     // shallow water near banks
+uniform vec3  u_sky;         // sky reflection tint
+uniform vec3  u_moon;        // moon / sun colour
+uniform float u_moonX;       // path column (0..1 of width)
+uniform float u_pathWidth;   // pt at the bottom of screen
+uniform float u_specPow;     // glint sharpness
+uniform float u_specAmt;
+uniform vec3  u_land;
+uniform vec3  u_landLit;
+uniform vec3  u_edge;        // kill-edge emissive
+uniform float u_edgePulse;
+uniform vec3  u_fog;
+uniform float u_fogNear;     // v where fog starts
+uniform float u_fogAmt;      // 0..1 overall haze
+
+const float PERSP_Y = 0.45;  // extra river compressed into the top of screen
+const float PERSP_X = 0.12;  // lateral convergence toward the top
+const float PROFILE_STEP = 4.0;
+
+// ---------- noise ----------
+float hash21(vec2 p) { p = fract(p * vec2(123.34, 345.45)); p += dot(p, p + 34.345); return fract(p.x * p.y); }
+vec2  hash22(vec2 p) { float n = hash21(p); return vec2(n, hash21(p + n + 7.13)); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = hash21(i), b = hash21(i + vec2(1, 0)), c = hash21(i + vec2(0, 1)), d = hash21(i + vec2(1, 1));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+float fbm(vec2 p) {
+  float v = 0.0, a = 0.5;
+  mat2 r = mat2(0.8, 0.6, -0.6, 0.8);
+  for (int i = 0; i < 4; i++) { v += a * vnoise(p); p = r * p * 2.03 + 11.7; a *= 0.5; }
+  return v;
+}
+
+// ---------- camera ----------
+// v in 0..1 (bottom..top of screen) -> world y ahead of the bottom edge
+float worldYAhead(float v) { return v * u_size.y * (1.0 + PERSP_Y * v); }
+float lateralScale(float v) { return 1.0 - PERSP_X * v; }
+
+// ---------- river profile ----------
+// Row 0: centre x, half width, island centre x, island half width.
+// Row 1: signed distance along the river to the nearest island tip
+//        (positive inside the island's y-range, negative beyond it), x, x, x.
+vec4 profileAt(float wy, float row) {
+  float t = wy / PROFILE_STEP;
+  float i0 = floor(t), f = t - i0;
+  vec4 a = texture2D(u_profile, vec2((i0 + 0.5) / u_profileLen, row));
+  vec4 b = texture2D(u_profile, vec2((i0 + 1.5) / u_profileLen, row));
+  return mix(a, b, f);
+}
+
+// signed distance to water (positive = water). Banks: lateral distance at this
+// row (their edges run mostly along y). Islands: true 2-D distance, so the
+// shallow shelf and glow wrap smoothly around the tips.
+float waterSDF(float wx, vec4 p, float tipDist) {
+  float left = p.r - p.g, right = p.r + p.g;
+  float d = min(wx - left, right - wx);
+  float lat = abs(wx - p.b) - p.a;                       // lateral distance to island edge
+  float di = (tipDist >= 0.0) ? lat : length(vec2(max(lat, 0.0), -tipDist));
+  return min(d, di);
+}
+
+void main() {
+  vec2 uv = v_uv;
+  float v = uv.y;                         // 0 bottom, 1 top
+  float sx = uv.x * u_size.x;             // screen x pt
+  float cx = u_size.x * 0.5;
+  float ls = lateralScale(v);
+  float wx = cx + (sx - cx) / ls;         // world x (undo convergence)
+  float ahead = worldYAhead(v);
+  float wy = u_scroll + ahead;            // world y
+
+  vec4 prof = profileAt(wy, 0.25);
+  float tipDist = profileAt(wy, 0.75).r;
+  float d = waterSDF(wx, prof, tipDist);
+
+  // ---------- water ----------
+  // Ripples: crests run across the channel, so the noise is stretched in x.
+  // Bigger ripples near the bottom (closer), compressed toward the top.
+  float rs = 1.0 / (1.0 + 1.4 * v);
+  vec2 aniso = vec2(0.022, 0.06);
+  vec2 wuv = vec2(wx, wy) * aniso * rs;
+  vec2 flow1 = vec2(0.0, u_time * 1.1);
+  vec2 flow2 = vec2(u_time * 0.05, u_time * 0.45);
+  #define HEIGHT(p) (fbm((p) + flow1) * 0.6 + fbm((p) * 2.1 - flow2 + 5.0) * 0.4)
+  float h = HEIGHT(wuv);
+  float n1 = h;
+  vec2 ex = vec2(0.8 * aniso.x, 0.0), ey = vec2(0.0, 0.8 * aniso.y);
+  float hx = HEIGHT(wuv + ex);
+  float hy = HEIGHT(wuv + ey);
+  vec3 n = normalize(vec3((h - hx) * 14.0, (h - hy) * 7.0, 1.0));
+
+  // depth: shallow near edges
+  float depth = clamp(d / 48.0, 0.0, 1.0);
+  depth = depth * depth * (3.0 - 2.0 * depth);
+
+  // riverbed (parallax A: scrolls slower than the surface)
+  float bedY = u_scroll * 0.85 + ahead;
+  float bed = fbm(vec2(wx, bedY) * 0.07 * rs + 3.0);
+  float caust = pow(max(0.0, 1.0 - abs(fract(bed * 3.0 + u_time * 0.15) - 0.5) * 2.0), 6.0);
+  vec3 bedCol = u_shallow * (0.5 + 0.5 * bed) + u_shallow * caust * 0.2;
+
+  vec3 water = mix(bedCol, u_deep, depth);
+  // sky reflection, stronger toward the horizon
+  float fres = 0.15 + 0.45 * v;
+  water = mix(water, u_sky, fres * 0.22 * (0.6 + 0.4 * n.z));
+  // ripple shading: crests catch a little sky, troughs go dark
+  water *= 0.82 + 0.3 * n.x + 0.16 * n.y;
+
+  // ---------- moon path ----------
+  // The camera looks straight down, so a physically placed low moon would
+  // never reflect into it. Fake the classic path: a column of light whose
+  // intensity is gated by how much each ripple facet tilts toward the moon.
+  float moonX = u_moonX * u_size.x;
+  float pw = u_pathWidth * (1.0 - 0.55 * v);
+  float dx = (sx - moonX) / pw;
+  float band = exp(-dx * dx * 1.6);
+  vec3 Lp = normalize(vec3((moonX - sx) / u_size.x * 0.35, 0.42, 0.9));
+  float facet = max(0.0, dot(n, Lp));
+  float flatF = Lp.z;                                 // facet value of flat water
+  float tilt = clamp((facet - flatF * 0.985) / (1.0 - flatF * 0.985), 0.0, 1.0);
+  float glint = smoothstep(0.55, 0.95, tilt) * (0.5 + 0.5 * smoothstep(0.3, 0.7, n1)); // crisp glitter on crests
+  float broad = pow(tilt, 1.2);                       // soft shimmer
+  float path = band * (broad * 0.35 + glint * 1.3) * u_specAmt;
+  float scatter = glint * 0.08 * u_specAmt;           // faint glints off-path
+  water += u_moon * (path + scatter) * depth;
+  water += u_moon * band * 0.045 * depth;             // soft base glow of the path
+
+  // ---------- lantern glow on water ----------
+  if (u_lanternX > -500.0) {
+    float lx = cx + (u_lanternX - cx) * ls;
+    // light on water reads as a vertical streak, broken by the ripples
+    vec2 dl = vec2((sx - lx) / 22.0, (wy - u_lanternY) / 110.0);
+    float g = exp(-dot(dl, dl) * 0.5);
+    float flick = 0.85 + 0.15 * sin(u_time * 6.0) * sin(u_time * 2.7 + 1.0);
+    water += u_lanternCol * g * 0.55 * flick * (0.35 + 1.3 * broad + 2.0 * glint) * depth;
+  }
+
+  // ---------- wake ----------
+  {
+    float behind = u_craft.y - wy;       // >0 behind the craft
+    float lateral = abs(wx - u_craft.x);
+    float spread = 0.17 + 0.08 * u_speed;
+    float halfW = 6.0 + behind * spread;
+    float decay = exp(-behind / (70.0 + 60.0 * u_speed));
+    float onArm = exp(-pow(lateral - halfW, 2.0) / (2.0 * 2.2 * 2.2));
+    float coreS = 4.0 + behind * 0.05;
+    float core = exp(-pow(lateral, 2.0) / (2.0 * coreS * coreS));
+    float foamN = fbm(vec2(wx * 0.3, wy * 0.15 - u_time * 2.5));
+    float wake = step(0.0, behind) * decay * (onArm * 0.8 + core * 0.5) * (0.4 + 0.9 * foamN);
+    water += vec3(0.75, 0.85, 0.95) * wake * 0.55;
+    // bow ripple ahead
+    float aheadC = wy - u_craft.y;
+    float bow = step(0.0, aheadC) * exp(-aheadC / 25.0) * exp(-pow(lateral, 2.0) / (2.0 * 12.0 * 12.0)) * 0.25;
+    water += vec3(0.6, 0.7, 0.8) * bow;
+  }
+
+  // ---------- land ----------
+  float landN = fbm(vec2(wx, wy) * 0.02 * rs + 20.0);
+  vec3 land = mix(u_land, u_landLit, landN * 0.6);
+  // levee: lighter strip just inside the edge
+  float levee = smoothstep(-26.0, -2.0, d) * (1.0 - smoothstep(-2.0, 0.0, d));
+  land = mix(land, u_landLit, levee * 0.55);
+  // dark extrusion below the edge (height cue)
+  float ext = (1.0 - smoothstep(-3.5, -0.5, d)) * smoothstep(-6.0, -3.5, d);
+  land *= 1.0 - ext * 0.6;
+
+  // ---------- kill-edge ----------
+  float pulse = 1.0 + u_edgePulse * 0.35 * sin(u_time * 3.0);
+  float edgeLine = 1.0 - smoothstep(0.0, 2.2, abs(d));
+  float edgeGlow = exp(-max(d, 0.0) / 14.0) * step(0.0, d) * 0.8;
+  float foam = (1.0 - smoothstep(0.0, 9.0, d)) * step(0.0, d) * (0.5 + 0.5 * fbm(vec2(wx * 0.3, wy * 0.2 - u_time * 1.5)));
+
+  vec3 col = (d > 0.0) ? water : land;
+  col += vec3(0.8, 0.9, 1.0) * foam * 0.18;
+  col += u_edge * (edgeLine * 1.4 + edgeGlow * 0.35) * pulse;
+
+  // ---------- cloud shadow (parallax B, faster than the surface) ----------
+  float cloud = fbm(vec2(wx * 0.006 + u_time * 0.01, (u_scroll * 1.25 + ahead) * 0.006));
+  col *= 0.86 + 0.2 * smoothstep(0.35, 0.75, cloud);
+
+  // ---------- fog ----------
+  float fogV = smoothstep(u_fogNear, 1.0, v);
+  float fog = clamp(u_fogAmt * 0.35 + fogV * (0.6 + 0.4 * u_fogAmt), 0.0, 1.0);
+  col = mix(col, u_fog, fog);
+
+  // ---------- grade ----------
+  float vig = 1.0 - 0.35 * pow(length((uv - 0.5) * vec2(1.0, 0.7)) * 1.5, 2.2);
+  col *= vig;
+  col = col / (col + 0.55) * 1.4;                           // soft shoulder
+  col = pow(max(col, 0.0), vec3(0.95));
+  col += (hash21(uv * u_size + u_time) - 0.5) * 0.012;    // grain
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<script>
+// ---------------- lighting states ----------------
+const STATES = {
+  night: {
+    deep: [0.015, 0.035, 0.085], shallow: [0.05, 0.16, 0.19], sky: [0.10, 0.16, 0.30],
+    moon: [0.85, 0.92, 1.0], moonX: 0.56, pathWidth: 95, specPow: 70, specAmt: 1.0,
+    land: [0.035, 0.045, 0.06], landLit: [0.09, 0.11, 0.13], edge: [0.35, 0.95, 1.0], edgePulse: 0.0,
+    fog: [0.03, 0.05, 0.10], fogNear: 0.78, fogAmt: 0.0,
+    lantern: [1.0, 0.62, 0.25], hud: '#dfe9ff', bg: '#05070d',
+  },
+  dusk: {
+    deep: [0.015, 0.04, 0.07], shallow: [0.07, 0.12, 0.11], sky: [0.28, 0.17, 0.22],
+    moon: [1.0, 0.66, 0.30], moonX: 0.5, pathWidth: 105, specPow: 50, specAmt: 1.0,
+    land: [0.06, 0.04, 0.04], landLit: [0.17, 0.11, 0.08], edge: [1.0, 0.72, 0.45], edgePulse: 0.0,
+    fog: [0.20, 0.11, 0.09], fogNear: 0.78, fogAmt: 0.08,
+    lantern: [1.0, 0.65, 0.3], hud: '#ffe9d4', bg: '#0b0708',
+  },
+  fog: {
+    deep: [0.07, 0.085, 0.10], shallow: [0.16, 0.18, 0.19], sky: [0.4, 0.43, 0.47],
+    moon: [0.8, 0.85, 0.9], moonX: 0.5, pathWidth: 200, specPow: 10, specAmt: 0.35,
+    land: [0.05, 0.055, 0.06], landLit: [0.12, 0.13, 0.14], edge: [0.55, 1.0, 1.0], edgePulse: 1.0,
+    fog: [0.42, 0.45, 0.5], fogNear: 0.45, fogAmt: 0.6,
+    lantern: [1.0, 0.7, 0.4], hud: '#eef2f6', bg: '#0c0e10',
+  },
+};
+
+// ---------------- river profile (prototype generator) ----------------
+// Mirrors the design: centre wanders, width changes smoothly, one island.
+const W = 390, H = 844, STEP = 4, LEN = 2048;
+function buildProfile(seed) {
+  let s = seed >>> 0;
+  const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  const data = new Float32Array(LEN * 4);
+  // control points every 600 pt
+  const cps = [];
+  let c = W * 0.5, w = W * 0.66;
+  for (let i = 0; i < LEN * STEP / 600 + 3; i++) {
+    cps.push({ c, w });
+    c = Math.min(Math.max(c + (rnd() * 2 - 1) * W * 0.16, W * 0.06 + w / 2), W * 0.94 - w / 2);
+    w = Math.min(Math.max(w * (0.85 + rnd() * 0.3), W * 0.42), W * 0.76);
+  }
+  const island = { y0: 1500, y1: 2300, cx: 0, w: 0 };
+  const data2 = new Float32Array(LEN * 4);
+  for (let i = 0; i < LEN; i++) {
+    const y = i * STEP, t = y / 600, k = Math.floor(t), f = t - k;
+    const sm = f * f * (3 - 2 * f);
+    const p0 = cps[Math.max(k - 1, 0)], p1 = cps[k], p2 = cps[k + 1], p3 = cps[Math.min(k + 2, cps.length - 1)];
+    // catmull-rom for centre
+    const cr = (a, b, c2, d, u) => 0.5 * ((2 * b) + (-a + c2) * u + (2 * a - 5 * b + 4 * c2 - d) * u * u + (-a + 3 * b - 3 * c2 + d) * u * u * u);
+    const cx = cr(p0.c, p1.c, p2.c, p3.c, f);
+    const hw = (p1.w + (p2.w - p1.w) * sm) / 2;
+    // "no island" is encoded as zero half-width at the channel centre so that
+    // interpolating between an island texel and a plain texel stays local
+    // (a far-away sentinel would sweep a 1-texel streak across the screen).
+    let icx = cx + hw * 0.25, ihw = 0;
+    const tipDist = Math.min(y - island.y0, island.y1 - y);   // <0 beyond the tips
+    if (tipDist > 0) {
+      const u = (y - island.y0) / (island.y1 - island.y0);
+      const taper = Math.sin(u * Math.PI);
+      ihw = hw * 0.28 * Math.pow(taper, 0.6);
+    }
+    data[i * 4 + 0] = cx; data[i * 4 + 1] = hw; data[i * 4 + 2] = icx; data[i * 4 + 3] = ihw;
+    data2[i * 4 + 0] = Math.max(tipDist, -1000);
+  }
+  const both = new Float32Array(LEN * 4 * 2);
+  both.set(data, 0); both.set(data2, LEN * 4);
+  return both;
+}
+function profileAt(data, wy) {
+  const t = wy / STEP, i0 = Math.max(0, Math.min(LEN - 2, Math.floor(t))), f = t - i0;
+  const o = (k) => data[i0 * 4 + k] * (1 - f) + data[(i0 + 1) * 4 + k] * f;
+  return { c: o(0), hw: o(1), ic: o(2), ihw: o(3) };
+}
+
+// ---------------- camera mapping shared with the overlay ----------------
+const PERSP_Y = 0.45, PERSP_X = 0.12;
+function vFromAhead(ahead) { // invert v*H*(1+PY*v) = ahead
+  const a = PERSP_Y * H, b = H, c = -ahead;
+  return (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a);
+}
+function project(wx, wy, scroll) {
+  const v = vFromAhead(wy - scroll);
+  const ls = 1 - PERSP_X * v;
+  return { x: W / 2 + (wx - W / 2) * ls, y: H - v * H, scale: ls / (1 + PERSP_Y * 2 * v) * (1 + PERSP_Y * 0) , v };
+}
+
+// ---------------- GL setup ----------------
+const params = new URLSearchParams(location.search);
+const stateName = params.get('state') || 'night';
+const T = parseFloat(params.get('t') || '4.2');
+const ST = STATES[stateName];
+const dpr = Math.min(window.devicePixelRatio || 1, 3);
+const glc = document.getElementById('gl'), ui = document.getElementById('ui');
+for (const cv of [glc, ui]) { cv.width = W * dpr; cv.height = H * dpr; }
+const gl = glc.getContext('webgl2', { antialias: false, premultipliedAlpha: false });
+function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER, document.getElementById('vs').textContent));
+gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, document.getElementById('fs').textContent));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(prog, 'a_pos'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+const profile = buildProfile(parseInt(params.get('seed') || '7'));
+const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, LEN, 2, 0, gl.RGBA, gl.FLOAT, profile);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+const U = (n) => gl.getUniformLocation(prog, n);
+const u = {};
+for (const n of ['u_size','u_time','u_scroll','u_profile','u_profileLen','u_craft','u_speed','u_lanternX','u_lanternY','u_lanternCol','u_deep','u_shallow','u_sky','u_moon','u_moonX','u_pathWidth','u_specPow','u_specAmt','u_land','u_landLit','u_edge','u_edgePulse','u_fog','u_fogNear','u_fogAmt']) u[n] = U(n);
+
+// ---------------- scene for this frame ----------------
+const cruise = 260;
+const scroll = T * cruise * 0.9 + 300;
+const craftAhead = 0.30 * H * (1 + PERSP_Y * 0.30);
+const craftY = scroll + craftAhead;
+const pc = profileAt(profile, craftY);
+const craftX = pc.c + Math.sin(T * 0.8) * pc.hw * 0.45;
+const speedBlend = 0.55;
+// props laid out ahead of the craft
+const props = [];
+{
+  const p1 = profileAt(profile, craftY + 420); props.push({ kind: 'hulk', x: p1.c - p1.hw * 0.45, y: craftY + 420, angle: 0.05 });
+  const p2 = profileAt(profile, craftY + 300); props.push({ kind: 'lantern', x: p2.c + p2.hw * 0.55, y: craftY + 300 });
+  const p3 = profileAt(profile, craftY + 700); props.push({ kind: 'teeth', x: p3.c + p3.hw * 0.1, y: craftY + 700, n: 4, rot: T * 0.3 });
+  const p4 = profileAt(profile, craftY + 560); props.push({ kind: 'dragonfly', x: p4.c - p4.hw * 0.1, y: craftY + 560 });
+  const p5 = profileAt(profile, craftY + 980); props.push({ kind: 'weir', y: craftY + 980, span: p5.c - p5.hw * 0.2, spanW: 86, prof: p5 });
+  const p6 = profileAt(profile, craftY + 150); props.push({ kind: 'pilings', x: p6.c + p6.hw - 14, y: craftY + 150 });
+  // levee lamps: every ~320 pt, alternating banks, a few pt inland
+  for (let y = Math.floor(scroll / 320) * 320; y < scroll + 1400; y += 320) {
+    const side = (Math.floor(y / 320) % 2) ? 1 : -1;
+    const pl = profileAt(profile, y);
+    props.push({ kind: 'lamp', x: pl.c + side * (pl.hw + 9), y, side });
+  }
+}
+const lantern = props.find(p => p.kind === 'lantern');
+
+function render() {
+  gl.viewport(0, 0, glc.width, glc.height);
+  gl.uniform2f(u.u_size, W, H);
+  gl.uniform1f(u.u_time, T);
+  gl.uniform1f(u.u_scroll, scroll);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(u.u_profile, 0);
+  gl.uniform1f(u.u_profileLen, LEN);
+  gl.uniform2f(u.u_craft, craftX, craftY);
+  gl.uniform1f(u.u_speed, speedBlend);
+  gl.uniform1f(u.u_lanternX, lantern ? lantern.x : -1000);
+  gl.uniform1f(u.u_lanternY, lantern ? lantern.y : 0);
+  gl.uniform3fv(u.u_lanternCol, ST.lantern);
+  gl.uniform3fv(u.u_deep, ST.deep); gl.uniform3fv(u.u_shallow, ST.shallow); gl.uniform3fv(u.u_sky, ST.sky);
+  gl.uniform3fv(u.u_moon, ST.moon); gl.uniform1f(u.u_moonX, ST.moonX); gl.uniform1f(u.u_pathWidth, ST.pathWidth);
+  gl.uniform1f(u.u_specPow, ST.specPow); gl.uniform1f(u.u_specAmt, ST.specAmt);
+  gl.uniform3fv(u.u_land, ST.land); gl.uniform3fv(u.u_landLit, ST.landLit);
+  gl.uniform3fv(u.u_edge, ST.edge); gl.uniform1f(u.u_edgePulse, ST.edgePulse);
+  gl.uniform3fv(u.u_fog, ST.fog); gl.uniform1f(u.u_fogNear, ST.fogNear); gl.uniform1f(u.u_fogAmt, ST.fogAmt);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  drawOverlay();
+}
+
+// ---------------- 2-D overlay: craft, props, HUD ----------------
+const ctx = ui.getContext('2d');
+const rgb = (c, a = 1) => `rgba(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)},${a})`;
+function glow(x, y, r, col, a) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, rgb(col, a)); g.addColorStop(1, rgb(col, 0));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+function fogAlpha(v) { // overlay objects fade into the fog like the water does
+  const fogV = Math.min(1, Math.max(0, (v - ST.fogNear) / (1 - ST.fogNear)));
+  return Math.min(1, Math.max(0, ST.fogAmt * 0.35 + fogV * fogV * (2 - fogV) * (0.6 + 0.4 * ST.fogAmt)));
+}
+function withFog(v, fn) {
+  fn();
+  // fog veil over the object: paint fog colour with the same alpha the shader used
+  // (approximation: we only veil the drawn pixels by compositing a fog rect under source-atop)
+}
+
+function drawCraft(x, y, s, lean) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(lean); ctx.scale(s, s);
+  // engine glow in the water
+  ctx.globalCompositeOperation = 'lighter';
+  glow(0, 20, 34, [0.55, 0.8, 1.0], 0.55);
+  ctx.globalCompositeOperation = 'source-over';
+  // hull: sleek dart
+  const hull = new Path2D();
+  hull.moveTo(0, -24); hull.bezierCurveTo(9, -14, 13, 2, 12, 18); hull.lineTo(7, 22); hull.lineTo(-7, 22); hull.lineTo(-12, 18); hull.bezierCurveTo(-13, 2, -9, -14, 0, -24);
+  ctx.fillStyle = '#0d1118'; ctx.fill(hull);
+  // moonlit rim on the side facing the moon
+  const rim = ctx.createLinearGradient(-12, 0, 12, 0);
+  const moonSide = ST.moonX > 0.5 ? 1 : -1;
+  rim.addColorStop(moonSide > 0 ? 0 : 1, 'rgba(255,255,255,0)'); rim.addColorStop(moonSide > 0 ? 1 : 0, rgb(ST.moon, 0.55));
+  ctx.fillStyle = rim; ctx.fill(hull);
+  // canopy
+  ctx.fillStyle = '#1b2433'; ctx.beginPath(); ctx.ellipse(0, -4, 4.5, 10, 0, 0, Math.PI * 2); ctx.fill();
+  const cg = ctx.createLinearGradient(0, -14, 0, 6); cg.addColorStop(0, rgb(ST.moon, 0.5)); cg.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = cg; ctx.beginPath(); ctx.ellipse(0, -4, 4.5, 10, 0, 0, Math.PI * 2); ctx.fill();
+  // engine slit
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = 'rgba(150,210,255,0.95)'; ctx.fillRect(-6, 19, 12, 2.5);
+  glow(0, 20, 10, [0.6, 0.85, 1.0], 0.9);
+  // spray fans
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 18; i++) {
+      const t = (i / 18 + T * 0.9) % 1, px = side * (10 + t * 16 + Math.sin(i * 7.1) * 2), py = 6 + t * 36 + Math.cos(i * 3.3) * 3;
+      ctx.fillStyle = `rgba(200,225,255,${(1 - t) * 0.55})`; ctx.beginPath(); ctx.arc(px, py, 0.8 + t * 1.6, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
+}
+function drawTracer(x, y0, y1) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,245,210,1)');
+  ctx.strokeStyle = g; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+  glow(x, y1, 8, [1, 0.9, 0.6], 0.9);
+  ctx.restore();
+}
+function drawHulk(p) {
+  const s = project(p.x, p.y, scroll); const k = s.scale;
+  ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(p.angle); ctx.scale(k, k);
+  // shadow/hull in water
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(-20, -58, 40, 118);
+  const g = ctx.createLinearGradient(-18, 0, 18, 0);
+  const ms = ST.moonX > 0.5 ? 1 : -1;
+  g.addColorStop(ms > 0 ? 0 : 1, '#0a0c10'); g.addColorStop(ms > 0 ? 1 : 0, '#232a35');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(-18, -55, 36, 110, 5); ctx.fill();
+  ctx.fillStyle = '#12161d'; ctx.fillRect(-13, -46, 26, 70);            // cargo well
+  for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#0d1016' : '#171c25'; ctx.fillRect(-13, -46 + i * 17.5, 26, 17.5); }
+  ctx.fillStyle = '#1e2530'; ctx.fillRect(-14, 30, 28, 20);              // wheelhouse
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = '#ffb067'; ctx.fillRect(-4, 36, 8, 5); glow(0, 38, 16, [1, 0.6, 0.3], 0.7);   // lit porthole
+  ctx.strokeStyle = rgb(ST.moon, 0.35); ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(-18, -55, 36, 110, 5); ctx.stroke();
+  ctx.restore();
+}
+function drawLantern(p) {
+  const s = project(p.x, p.y, scroll); const k = s.scale;
+  ctx.save(); ctx.translate(s.x, s.y); ctx.scale(k, k);
+  ctx.fillStyle = '#0c0f14'; ctx.beginPath(); ctx.roundRect(-10, -60, 20, 120, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,170,90,0.35)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const yy of [-40, 0, 40]) {
+    const fl = 0.85 + 0.15 * Math.sin(T * 6 + yy);
+    glow(0, yy, 26, ST.lantern, 0.55 * fl);
+    ctx.fillStyle = `rgba(255,230,180,${0.95 * fl})`; ctx.beginPath(); ctx.arc(0, yy, 3.2, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawTeeth(p) {
+  const s = project(p.x, p.y, scroll); const k = s.scale;
+  ctx.save(); ctx.translate(s.x, s.y); ctx.scale(k, k); ctx.rotate(p.rot);
+  const spacing = 26, n = p.n, len = spacing * (n - 1);
+  ctx.strokeStyle = 'rgba(180,220,255,0.35)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(-len / 2, 0); ctx.lineTo(len / 2, 0); ctx.stroke(); ctx.setLineDash([]);
+  for (let i = 0; i < n; i++) {
+    const x = -len / 2 + i * spacing;
+    ctx.fillStyle = '#0b0e13'; ctx.beginPath(); ctx.arc(x, 0, 8, 0, Math.PI * 2); ctx.fill();
+    for (let a = 0; a < 6; a++) { ctx.strokeStyle = '#2a3240'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + Math.cos(a) * 11, Math.sin(a) * 11); ctx.stroke(); }
+    ctx.globalCompositeOperation = 'lighter';
+    const bl = 0.5 + 0.5 * Math.sin(T * 4 + i * 1.3);
+    ctx.fillStyle = `rgba(255,70,60,${0.6 + 0.4 * bl})`; ctx.beginPath(); ctx.arc(x, 0, 1.8, 0, Math.PI * 2); ctx.fill();
+    glow(x, 0, 10, [1, 0.3, 0.25], 0.35 * bl);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  // anchor buoy
+  ctx.fillStyle = '#141a24'; ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = rgb(ST.moon, 0.5); ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.restore();
+}
+function drawDragonfly(p) {
+  const s = project(p.x, p.y, scroll); const k = s.scale;
+  ctx.save(); ctx.translate(s.x, s.y); ctx.scale(k, k);
+  // shadow on water
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(6, 14, 14, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#0f1218'; ctx.beginPath(); ctx.roundRect(-6, -14, 12, 28, 5); ctx.fill();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const side of [-1, 1]) {
+    ctx.strokeStyle = 'rgba(120,255,220,0.9)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(side * 15, 0, 11, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,255,220,0.25)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(side * 15, 0, 11, 0, Math.PI * 2); ctx.stroke();
+    // blurred rotor disc
+    ctx.fillStyle = 'rgba(160,220,230,0.08)'; ctx.beginPath(); ctx.arc(side * 15, 0, 10, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255,90,80,0.95)'; ctx.beginPath(); ctx.arc(0, -10, 1.8, 0, Math.PI * 2); ctx.fill();
+  glow(0, -10, 8, [1, 0.35, 0.3], 0.5);
+  ctx.restore();
+}
+function drawWeir(p) {
+  // wall drawn as a band across the water following the river profile at that y
+  const s = project(p.prof.c, p.y, scroll); const k = s.scale;
+  const left = project(p.prof.c - p.prof.hw, p.y, scroll).x, right = project(p.prof.c + p.prof.hw, p.y, scroll).x;
+  const sl = project(p.span - p.spanW / 2, p.y, scroll).x, sr = project(p.span + p.spanW / 2, p.y, scroll).x;
+  const h = 14 * k;
+  ctx.save();
+  ctx.fillStyle = '#0a0d12';
+  ctx.fillRect(left - 4, s.y - h / 2, sl - left + 4, h);
+  ctx.fillRect(sr, s.y - h / 2, right - sr + 4, h);
+  // top highlight from the moon
+  ctx.fillStyle = rgb(ST.moon, 0.22);
+  ctx.fillRect(left - 4, s.y - h / 2, sl - left + 4, 1.5); ctx.fillRect(sr, s.y - h / 2, right - sr + 4, 1.5);
+  // dark water shadow below wall
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(left - 4, s.y + h / 2, sl - left + 4, 5 * k); ctx.fillRect(sr, s.y + h / 2, right - sr + 4, 5 * k);
+  // posts with green lamps
+  ctx.globalCompositeOperation = 'lighter';
+  for (const px of [sl, sr]) {
+    ctx.fillStyle = '#0c1016'; ctx.fillRect(px - 2.5 * k, s.y - h, 5 * k, h * 2);
+    ctx.fillStyle = 'rgba(120,255,160,0.95)'; ctx.beginPath(); ctx.arc(px, s.y - h * 0.9, 2.2 * k, 0, Math.PI * 2); ctx.fill();
+    glow(px, s.y - h * 0.9, 16 * k, [0.4, 1, 0.6], 0.6);
+  }
+  ctx.restore();
+}
+function drawLamp(p) {
+  const s = project(p.x, p.y, scroll); const k = s.scale;
+  ctx.save(); ctx.translate(s.x, s.y); ctx.scale(k, k);
+  ctx.globalCompositeOperation = 'lighter';
+  // pool of light on the levee
+  glow(0, 0, 30, [1.0, 0.75, 0.45], 0.28);
+  // reflection streak on the water side
+  const g = ctx.createRadialGradient(-p.side * 18, 0, 0, -p.side * 18, 0, 40);
+  g.addColorStop(0, 'rgba(255,190,120,0.22)'); g.addColorStop(1, 'rgba(255,190,120,0)');
+  ctx.fillStyle = g; ctx.save(); ctx.scale(0.5, 1.6); ctx.beginPath(); ctx.arc(-p.side * 36, 0, 40, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  ctx.fillStyle = 'rgba(255,225,180,0.95)'; ctx.beginPath(); ctx.arc(0, 0, 1.8, 0, Math.PI * 2); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  // post
+  ctx.strokeStyle = '#0a0c10'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, 9); ctx.stroke();
+  ctx.restore();
+}
+function drawPilings(p) {
+  const s = project(p.x, p.y, scroll); const k = s.scale;
+  ctx.save(); ctx.translate(s.x, s.y); ctx.scale(k, k);
+  for (const [dx, dy] of [[0, 0], [10, 14], [-4, 26]]) {
+    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(dx + 3, dy + 5, 7, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0b0e12'; ctx.beginPath(); ctx.arc(dx, dy, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = rgb(ST.moon, 0.35); ctx.beginPath(); ctx.arc(dx - 1.5, dy - 1.5, 2.2, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawHUD() {
+  const col = ST.hud;
+  ctx.save();
+  ctx.font = '600 13px -apple-system, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif';
+  ctx.textBaseline = 'middle';
+  // fuel gauge: slim bar top-left with a moving tick
+  const fuel = 0.62, gx = 20, gy = 62, gw = 150, gh = 5;
+  ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.beginPath(); ctx.roundRect(gx, gy, gw, gh, 3); ctx.fill();
+  const fg = ctx.createLinearGradient(gx, 0, gx + gw, 0); fg.addColorStop(0, '#ff8a4b'); fg.addColorStop(0.35, '#ffd27a'); fg.addColorStop(1, '#eaf6ff');
+  ctx.fillStyle = fg; ctx.beginPath(); ctx.roundRect(gx, gy, gw * fuel, gh, 3); ctx.fill();
+  ctx.fillStyle = col; ctx.globalAlpha = 0.75; ctx.fillText('FUEL', gx, gy - 12);
+  ctx.globalAlpha = 1;
+  // score top-right
+  ctx.textAlign = 'right';
+  ctx.font = '700 26px -apple-system, "SF Pro Display", "Segoe UI", Helvetica, Arial, sans-serif';
+  ctx.fillStyle = col; ctx.fillText('12,480', W - 20, 60);
+  ctx.font = '600 12px -apple-system, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif';
+  ctx.globalAlpha = 0.75; ctx.fillText('CHAIN ×2.5', W - 20, 82); ctx.globalAlpha = 1;
+  // lives: three tiny darts bottom-left... top-centre keeps thumb zone clear
+  ctx.textAlign = 'left';
+  for (let i = 0; i < 3; i++) {
+    const x = 20 + i * 14, y = 88;
+    ctx.fillStyle = i < 2 ? col : 'rgba(255,255,255,0.25)';
+    ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x + 4, y + 5); ctx.lineTo(x - 4, y + 5); ctx.closePath(); ctx.fill();
+  }
+  // pause chip
+  ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.roundRect(W / 2 - 16, 54, 32, 20, 10); ctx.fill();
+  ctx.fillStyle = col; ctx.fillRect(W / 2 - 5, 59, 3, 10); ctx.fillRect(W / 2 + 2, 59, 3, 10);
+  ctx.restore();
+}
+
+function drawOverlay() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  // props back to front (far first)
+  const sorted = [...props].sort((a, b) => b.y - a.y);
+  for (const p of sorted) {
+    const v = project(p.x ?? (p.prof ? p.prof.c : 0), p.y, scroll).v;
+    ctx.save();
+    ctx.globalAlpha = 1 - fogAlpha(v) * 0.85;
+    if (p.kind === 'hulk') drawHulk(p);
+    else if (p.kind === 'lantern') drawLantern(p);
+    else if (p.kind === 'teeth') drawTeeth(p);
+    else if (p.kind === 'dragonfly') drawDragonfly(p);
+    else if (p.kind === 'weir') drawWeir(p);
+    else if (p.kind === 'pilings') drawPilings(p);
+    else if (p.kind === 'lamp') drawLamp(p);
+    ctx.restore();
+  }
+  // tracer in flight
+  const cs = project(craftX, craftY, scroll);
+  const ts = project(craftX, craftY + 260, scroll);
+  drawTracer(cs.x, cs.y - 30, ts.y);
+  drawCraft(cs.x, cs.y, 1.0, Math.sin(T * 0.8) * 0.18);
+  drawHUD();
+}
+
+render();
+document.title = 'rendered';
+</script>
+</body>
+</html>

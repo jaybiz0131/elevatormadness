@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000}canvas{display:block}</style></head>
+<body><canvas id="c" width="1024" height="1024"></canvas>
+<script>
+// App icon: a moon path on dark water with the Needle's wake. No transparency.
+const c = document.getElementById('c'), x = c.getContext('2d'), S = 1024;
+// water
+const bg = x.createLinearGradient(0, 0, 0, S); bg.addColorStop(0, '#060b1a'); bg.addColorStop(1, '#030610');
+x.fillStyle = bg; x.fillRect(0, 0, S, S);
+// seeded noise helpers
+let s = 12345; const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+// ripples: horizontal streaks
+for (let i = 0; i < 2600; i++) {
+  const y = rnd() * S, w = 20 + rnd() * 120, xx = rnd() * S;
+  x.fillStyle = `rgba(90,130,200,${0.03 + rnd() * 0.05})`;
+  x.fillRect(xx, y, w, 1.5 + rnd() * 2);
+}
+// moon path: vertical column of glitter, narrowing toward the top
+x.globalCompositeOperation = 'lighter';
+const mx = S * 0.5;
+for (let i = 0; i < 9000; i++) {
+  const v = Math.pow(rnd(), 0.6);                  // more glitter near the bottom
+  const y = S * (0.12 + 0.88 * v);
+  const half = 60 + 230 * v;
+  const dx = (rnd() * 2 - 1); const xx = mx + dx * Math.abs(dx) * half;
+  const a = (1 - Math.abs(dx)) * (0.25 + 0.75 * rnd());
+  const w = 4 + rnd() * 22 * (0.4 + v);
+  x.fillStyle = `rgba(235,242,255,${a * 0.5})`;
+  x.fillRect(xx - w / 2, y, w, 2 + rnd() * 3);
+}
+// soft column glow
+const pg = x.createLinearGradient(mx - 260, 0, mx + 260, 0);
+pg.addColorStop(0, 'rgba(120,160,255,0)'); pg.addColorStop(0.5, 'rgba(140,180,255,0.18)'); pg.addColorStop(1, 'rgba(120,160,255,0)');
+x.fillStyle = pg; x.fillRect(0, 0, S, S);
+// moon at the top
+const mg = x.createRadialGradient(mx, 60, 0, mx, 60, 260);
+mg.addColorStop(0, 'rgba(230,240,255,0.9)'); mg.addColorStop(0.12, 'rgba(230,240,255,0.5)'); mg.addColorStop(1, 'rgba(230,240,255,0)');
+x.fillStyle = mg; x.beginPath(); x.arc(mx, 60, 260, 0, Math.PI * 2); x.fill();
+x.globalCompositeOperation = 'source-over';
+// the Needle, lower third, with wake
+const cx = mx, cy = S * 0.70;
+x.save(); x.translate(cx, cy);
+// wake arms
+x.globalCompositeOperation = 'lighter';
+for (const side of [-1, 1]) {
+  const g = x.createLinearGradient(0, 0, 0, 420);
+  g.addColorStop(0, 'rgba(210,230,255,0.85)'); g.addColorStop(1, 'rgba(210,230,255,0)');
+  x.strokeStyle = g; x.lineWidth = 14; x.lineCap = 'round';
+  x.beginPath(); x.moveTo(side * 26, 60); x.quadraticCurveTo(side * 90, 240, side * 190, 440); x.stroke();
+}
+// engine glow
+const eg = x.createRadialGradient(0, 70, 0, 0, 70, 120);
+eg.addColorStop(0, 'rgba(150,210,255,0.9)'); eg.addColorStop(1, 'rgba(150,210,255,0)');
+x.fillStyle = eg; x.beginPath(); x.arc(0, 70, 120, 0, Math.PI * 2); x.fill();
+x.globalCompositeOperation = 'source-over';
+// hull
+const hull = new Path2D();
+hull.moveTo(0, -150); hull.bezierCurveTo(52, -90, 76, 10, 72, 90); hull.lineTo(44, 112); hull.lineTo(-44, 112); hull.lineTo(-72, 90); hull.bezierCurveTo(-76, 10, -52, -90, 0, -150);
+x.fillStyle = '#0a0d14'; x.fill(hull);
+const rim = x.createLinearGradient(-72, 0, 72, 0); rim.addColorStop(0, 'rgba(200,220,255,0.35)'); rim.addColorStop(0.5, 'rgba(200,220,255,0)'); rim.addColorStop(1, 'rgba(200,220,255,0.35)');
+x.fillStyle = rim; x.fill(hull);
+x.fillStyle = '#1a2436'; x.beginPath(); x.ellipse(0, -20, 26, 62, 0, 0, Math.PI * 2); x.fill();
+const cg = x.createLinearGradient(0, -80, 0, 40); cg.addColorStop(0, 'rgba(220,235,255,0.6)'); cg.addColorStop(1, 'rgba(220,235,255,0)');
+x.fillStyle = cg; x.beginPath(); x.ellipse(0, -20, 26, 62, 0, 0, Math.PI * 2); x.fill();
+x.fillStyle = 'rgba(160,215,255,1)'; x.fillRect(-36, 96, 72, 12);
+x.restore();
+// vignette
+const vg = x.createRadialGradient(S / 2, S / 2, S * 0.35, S / 2, S / 2, S * 0.75);
+vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+x.fillStyle = vg; x.fillRect(0, 0, S, S);
+document.title = 'rendered';
+</script></body></html>
