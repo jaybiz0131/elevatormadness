@@ -153,7 +153,7 @@ life is lost. There is no ending except the score.
 
 | Parameter | Band-1 value | Per Weir cleared (additive, cap at gate 15) |
 |---|---|---|
-| Cruise scroll speed | 260 pt/s | +3% of base → 373 pt/s at cap |
+| Cruise scroll speed | 260 pt/s | +3% of base → 377 pt/s at cap |
 | Slow / Fast multipliers | 0.60× / 1.60× | unchanged |
 | Steer rate (full deflection) | 300 pt/s | +2% of base → 390 pt/s at cap |
 | Speed blend acceleration | 600 pt/s² | unchanged |

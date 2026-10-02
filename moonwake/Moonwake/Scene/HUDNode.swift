@@ -157,7 +157,11 @@ final class HUDNode: SKNode {
     /// Returns the button name under a scene point, if any.
     func hit(_ p: CGPoint) -> String? {
         for node in nodes(at: convert(p, from: parent ?? self)) {
-            if let name = node.name, !node.isHidden, (node.parent?.isHidden == false) { return name }
+            guard let name = node.name else { continue }
+            var n: SKNode? = node
+            var hidden = false
+            while let cur = n, cur !== self { if cur.isHidden { hidden = true; break }; n = cur.parent }
+            if !hidden { return name }
         }
         return nil
     }

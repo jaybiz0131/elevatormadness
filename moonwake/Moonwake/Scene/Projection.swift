@@ -26,7 +26,8 @@ struct Projection {
     /// Inverse of worldAhead.
     func v(forAhead ahead: CGFloat) -> CGFloat {
         let a = Projection.perspY * screen.height, b = screen.height, c = -ahead
-        return (-b + (b * b - 4 * a * c).squareRoot()) / (2 * a)
+        let disc = max(0, b * b - 4 * a * c)      // far below the screen bottom: clamp instead of NaN
+        return (-b + disc.squareRoot()) / (2 * a)
     }
 
     /// World y of the craft lane.

@@ -32,7 +32,7 @@ final class WaterNode: SKSpriteNode {
 
     func setSampler(_ s: @escaping (Float) -> RiverProfileSample) {
         sampler = s
-        rebuild(from: 0)
+        rebuild(from: -600)
     }
 
     private func rebuild(from base: Float) {
@@ -47,8 +47,8 @@ final class WaterNode: SKSpriteNode {
         // Keep the window ahead: rebuild when the visible river nears its end.
         // Visible river spans scroll ... scroll + height * (1 + perspY), ~1.45 screens.
         let needed = scroll + Float(size.height) * 1.6
-        if needed > profile.baseY + windowSpan - 200 || scroll < profile.baseY {
-            rebuild(from: max(0, scroll - 400))
+        if needed > profile.baseY + windowSpan - 200 || scroll < profile.baseY + 100 {
+            rebuild(from: scroll - 600)
         }
         waterShader.setUniform("u_scroll", scroll)
         waterShader.setUniform("u_craft", craft)
