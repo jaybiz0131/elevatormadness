@@ -264,9 +264,9 @@ final class RulesTests: XCTestCase {
         var input = InputModel()
         input.touchBegan(at: Point(x: 200, y: 600), time: 0)
         XCTAssertEqual(input.steerCommand, 0)
-        input.touchMoved(to: Point(x: 205, y: 600), time: 0.1)
-        XCTAssertEqual(input.steerCommand, 0, "inside the 6 pt dead zone")
-        input.touchMoved(to: Point(x: 227, y: 600), time: 0.2)   // 27 pt: halfway from 6 to 48
+        input.touchMoved(to: Point(x: 208, y: 600), time: 0.1)
+        XCTAssertEqual(input.steerCommand, 0, "inside the 10 pt dead zone")
+        input.touchMoved(to: Point(x: 229, y: 600), time: 0.2)   // 29 pt: halfway from 10 to 48
         XCTAssertEqual(input.steerCommand, 0.5, accuracy: 1e-9)
         input.touchMoved(to: Point(x: 248, y: 600), time: 0.3)
         XCTAssertEqual(input.steerCommand, 1.0, accuracy: 1e-9)
@@ -285,13 +285,13 @@ final class RulesTests: XCTestCase {
         XCTAssertEqual(input.throttleTarget, 1.0)
         input.touchMoved(to: Point(x: 230, y: 620), time: 0.1)   // 20 pt down: inside ±24 → cruise
         XCTAssertEqual(input.throttleTarget, 1.0)
-        input.touchMoved(to: Point(x: 200, y: 640), time: 0.2)   // 40 pt down → slow
+        input.touchMoved(to: Point(x: 200, y: 664), time: 0.2)   // 64 pt down → slow
         XCTAssertEqual(input.throttleTarget, 0.6, accuracy: 1e-9)
-        input.touchMoved(to: Point(x: 200, y: 700), time: 0.3)   // further → still slow
+        input.touchMoved(to: Point(x: 200, y: 720), time: 0.3)   // further → still slow
         XCTAssertEqual(input.throttleTarget, 0.6, accuracy: 1e-9)
-        input.touchMoved(to: Point(x: 200, y: 560), time: 0.4)   // 40 pt up → fast
+        input.touchMoved(to: Point(x: 200, y: 536), time: 0.4)   // 64 pt up → fast
         XCTAssertEqual(input.throttleTarget, 1.6, accuracy: 1e-9)
-        input.touchMoved(to: Point(x: 200, y: 568), time: 0.5)   // 32 pt up: halfway → 1.3
+        input.touchMoved(to: Point(x: 200, y: 556), time: 0.5)   // 44 pt up: halfway from 24 to 64 → 1.3
         XCTAssertEqual(input.throttleTarget, 1.3, accuracy: 1e-9)
         input.touchMoved(to: Point(x: 200, y: 600), time: 0.6)
         input.secondFingerDown = true

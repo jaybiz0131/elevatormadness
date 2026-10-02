@@ -58,7 +58,7 @@ public struct Tuning {
     public static let craftLength: Double = 64
 
     // MARK: Steering (§2)
-    public static let steerDeadZone: Double = 6          // pt radius around anchor
+    public static let steerDeadZone: Double = 10         // pt radius around anchor (thumb jitter is ~5 pt)
     public static let steerFullDeflection: Double = 48   // pt horizontal displacement
     public static let steerRateBase: Double = 300        // pt/s at full deflection, band 1
     public static let lateralTimeConstant: Double = 0.07 // s, first-order lag
@@ -66,7 +66,7 @@ public struct Tuning {
 
     // MARK: Throttle (§2)
     public static let throttleVerticalDeadZone: Double = 24  // ±pt keeps cruise
-    public static let throttleFullDisplacement: Double = 40  // pt up/down → fast/slow
+    public static let throttleFullDisplacement: Double = 64  // pt up/down → fast/slow (40 pt band resists drift)
     public static let slowMultiplier: Double = 0.60
     public static let cruiseMultiplier: Double = 1.00
     public static let fastMultiplier: Double = 1.60
@@ -85,8 +85,8 @@ public struct Tuning {
     public static let maxReserveLives: Int = 5
     public static let firstExtraLifeScore: Int = 10_000
     public static let extraLifeInterval: Int = 25_000
-    public static let respawnDelay: Double = 0.35
-    public static let respawnFlicker: Double = 1.0
+    public static let respawnDelay: Double = 1.2       // time to feel the hit before the respawn
+    public static let respawnFlicker: Double = 1.5
     public static let hitStop: Double = 0.150
 
     // MARK: Fuel (§3)

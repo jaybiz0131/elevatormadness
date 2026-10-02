@@ -835,15 +835,21 @@ final class GameScene: SKScene {
 
     private func resume() {
         hud.hideCard()
-        hud.showCenter("GO")
-        hud.run(SKAction.sequence([SKAction.wait(forDuration: 0.5), SKAction.run { [weak self] in
+        // 3-2-1 countdown before play resumes
+        var steps: [SKAction] = []
+        for n in [3, 2, 1] {
+            steps.append(SKAction.run { [weak self] in self?.hud.showCenter("\(n)") })
+            steps.append(SKAction.wait(forDuration: 0.5))
+        }
+        steps.append(SKAction.run { [weak self] in
             guard let self else { return }
             self.hud.hideCenter()
             self.world.isPaused = false
             self.lastTime = 0
             self.input = InputModel()
             self.phase = self.pausedFrom
-        }]))
+        })
+        hud.run(SKAction.sequence(steps))
     }
 
     private func buttonTapped(_ name: String) {

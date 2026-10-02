@@ -57,7 +57,7 @@ Relative control: where the thumb lands does not matter, how far it moves does.
 | Parameter | Value |
 |---|---|
 | Anchor | Touch-down point. Re-centres on every new touch. |
-| Dead zone | 6 pt radius around the anchor. |
+| Dead zone | 10 pt radius around the anchor (thumb jitter is about 5 pt). |
 | Full deflection | 48 pt horizontal displacement from anchor. |
 | Steer rate at full deflection | 300 pt/s (band 1), see tightening. |
 | Response curve | Linear from dead zone edge to full deflection; clamped beyond. |
@@ -73,14 +73,16 @@ Never a full stop. Three speeds, blended continuously:
 
 | Input | Target speed |
 |---|---|
-| Thumb displaced ≥ 40 pt *down* from anchor | **Slow** = 0.60 × cruise |
+| Thumb displaced ≥ 64 pt *down* from anchor | **Slow** = 0.60 × cruise |
 | Within ±24 pt vertical of anchor | **Cruise** = 1.00 × cruise |
-| Thumb displaced ≥ 40 pt *up* from anchor | **Fast** = 1.60 × cruise |
+| Thumb displaced ≥ 64 pt *up* from anchor | **Fast** = 1.60 × cruise |
 | Second finger anywhere on screen (alternative) | **Fast** while held |
 
 Vertical dead zone is ±24 pt so ordinary sideways steering does not change
-speed. Speed approaches its target at 600 pt/s², so slow→fast takes about
-0.45 s and is audible in the engine before it is visible.
+speed, and the 40 pt ramp from 24 to 64 pt absorbs thumb drift; the throttle
+command is also smoothed with a 120 ms time constant. Speed approaches its
+target at 600 pt/s², so slow→fast takes about 0.45 s and is audible in the
+engine before it is visible.
 
 ### Fire (tap, or hold still)
 
@@ -144,7 +146,7 @@ life is lost. There is no ending except the score.
 | Lives at start | 3 (plus up to 5 in reserve, shown as craft icons). |
 | Death causes | Touching a bank, island, piling, Hulk, Dragonfly, mine, Weir wall, or Dragonfly tracer; fuel reaching 0. All instant. |
 | Death presentation | 150 ms hit-stop, explosion, screen desaturates over 0.3 s. |
-| Respawn (lives remain) | 0.35 s after death, at the last cleared Weir (or run start), full tank, 1.0 s damage flicker during which hazards do not collide. **Terrain always kills, even while flickering.** |
+| Respawn (lives remain) | 1.2 s after death (time to feel the hit), at the last cleared Weir (or run start), full tank, a "Gate N" card, 1.5 s damage flicker during which hazards do not collide. **Terrain always kills, even while flickering.** |
 | Run end (no lives) | Score card over the frozen wreck; RESTART under the thumb. Tap → new run begins within 0.45 s. |
 | Last mistake stays visible | A new run starts in a wide reach; the previous run's wreck drifts past, sinking, during the first 1.5 s. |
 | Extra life | At 10,000 points, then every 25,000 (35,000, 60,000, 85,000 …). Published in the how-to and on the death card. |

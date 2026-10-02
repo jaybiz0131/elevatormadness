@@ -36,6 +36,11 @@ final class HUDNode: SKNode {
         chainLabel.fontSize = 12; chainLabel.horizontalAlignmentMode = .right; chainLabel.alpha = 0.75
         pauseChip.fillColor = UIColor(white: 1, alpha: 0.12); pauseChip.strokeColor = .clear
         pauseChip.name = "pause"
+        // 44 × 44 pt touch target behind the small chip
+        let pauseHit = SKShapeNode(rectOf: CGSize(width: 44, height: 44))
+        pauseHit.fillColor = .clear; pauseHit.strokeColor = .clear
+        pauseHit.name = "pause"
+        pauseChip.addChild(pauseHit)
         for dx in [-3.5, 3.5] as [CGFloat] {
             let bar = SKShapeNode(rectOf: CGSize(width: 3, height: 10))
             bar.fillColor = .white; bar.strokeColor = .clear; bar.position = CGPoint(x: dx, y: 0)
@@ -113,9 +118,11 @@ final class HUDNode: SKNode {
         subLabel.run(SKAction.fadeOut(withDuration: 0.25))
     }
 
-    /// Full-screen white flash with hit-stop feel, used on death.
+    /// Brief white flash on death. Kept low and skipped under Reduce Motion
+    /// (photosensitivity).
     func flash() {
-        flashNode.alpha = 0.6
+        if UIAccessibility.isReduceMotionEnabled { return }
+        flashNode.alpha = 0.35
         flashNode.run(SKAction.fadeOut(withDuration: 0.3))
     }
 
