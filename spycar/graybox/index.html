@@ -1,0 +1,570 @@
+<title>Shunt Graybox</title>
+<style>
+  /* Phase 1 gray-box: plain shapes, colour means role. Portrait stage fills the viewport aspect; HUD top 15%, special button bottom right. */
+  :root {
+    --bg: #1b1d22;
+    --fg: #f2f4f8;
+    --fg-dim: rgba(242,244,248,0.7);
+    --player: #37e6ff;
+    --enemy: #ff3b3b;
+    --civ: #cfe6ff;
+    --pickup: #ffd23f;
+    --hazard: #ff9f1c;
+    --font-display: "Rajdhani", "Avenir Next Condensed", "Helvetica Neue", Arial, sans-serif;
+    --font-body: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); overflow: hidden; }
+  body { font-family: var(--font-body); -webkit-user-select: none; user-select: none; touch-action: none; overscroll-behavior: none; }
+  #frame { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+  #stage { position: relative; width: 390px; height: 844px; transform-origin: center center; background: #000; overflow: hidden; }
+  #shake { position: absolute; inset: 0; }
+  #stage canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  #ui { position: absolute; inset: 0; pointer-events: none; font-family: var(--font-display); }
+  #ui * { pointer-events: none; }
+  #ui .tap { pointer-events: auto; }
+  .callout { position: absolute; left: 24px; right: 24px; top: 24%; text-align: center; letter-spacing: 0.16em; font-weight: 700; font-size: 22px; text-transform: uppercase; text-shadow: 0 2px 10px rgba(0,0,0,0.9); transition: opacity 0.2s; }
+  .callout small { display: block; margin-top: 6px; font-size: 15px; letter-spacing: 0.08em; color: var(--fg-dim); text-transform: none; font-weight: 600; }
+  .callout.big { font-size: 64px; top: 38%; }
+  #pause { position: absolute; top: calc(18px + var(--safe-top, 0px)); right: 16px; width: 44px; height: 44px; border-radius: 22px; background: rgba(255,255,255,0.10); border: 0; color: var(--fg); font-size: 13px; }
+  #special { position: absolute; right: 22px; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); width: 72px; height: 72px; border-radius: 36px; border: 3px solid rgba(255,255,255,0.35); background: rgba(20,24,30,0.85); color: var(--fg); font-family: var(--font-display); font-weight: 700; font-size: 11px; letter-spacing: 0.08em; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+  #special.armed { border-color: var(--pickup); box-shadow: 0 0 18px rgba(255,210,63,0.55); animation: pulse 1s infinite; }
+  #special .pips { display: flex; gap: 3px; } #special .pips i { width: 7px; height: 7px; border-radius: 4px; background: var(--pickup); display: block; }
+  #special.left { right: auto; left: 22px; }
+  @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+  #card { position: absolute; inset: 0; background: rgba(0,0,0,0.55); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 32px; box-sizing: border-box; }
+  #card[hidden] { display: none; }
+  #card .title { font-size: 15px; letter-spacing: 0.2em; color: var(--fg-dim); text-transform: uppercase; }
+  #card .score { font-size: 52px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+  #card .lines { font-size: 13px; color: var(--fg-dim); letter-spacing: 0.06em; text-align: center; line-height: 1.6; }
+  #card .btn { margin-top: 20px; width: 100%; max-width: 310px; height: 56px; border-radius: 28px; border: 0; background: rgba(255,255,255,0.92); color: #07101c; font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: 0.12em; }
+  #card .row { display: flex; gap: 12px; width: 100%; max-width: 310px; }
+  #card .row .btn { margin-top: 0; height: 44px; border-radius: 22px; background: rgba(255,255,255,0.12); color: var(--fg); font-size: 13px; flex: 1; }
+  .btn:focus-visible { outline: 2px solid var(--player); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .callout { transition: none; } #special.armed { animation: none; } }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&display=swap">
+
+<div id="frame">
+  <div id="stage">
+    <div id="shake"><canvas id="cv"></canvas></div>
+    <div id="ui">
+      <div class="callout" id="callout" style="opacity:0"></div>
+      <button id="pause" class="tap" aria-label="Pause">▐▐</button>
+      <button id="special" class="tap" aria-label="Special weapon"><span id="specialName">—</span><span class="pips" id="specialPips"></span></button>
+      <div id="card" hidden>
+        <div class="title" id="cardTitle"></div>
+        <div class="score" id="cardScore">0</div>
+        <div class="lines" id="cardLines"></div>
+        <button class="btn tap" id="btnPrimary">DRIVE AGAIN</button>
+        <div class="row">
+          <button class="btn tap" id="btnSecond">NEW ROAD</button>
+          <button class="btn tap" id="btnHand">RIGHT HAND</button>
+          <button class="btn tap" id="btnSound">SOUND: ON</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+// =====================================================================
+// Shunt (working title) — Phase 1 gray-box of the spy car brawler.
+// Plain shapes only. Colour means role. Everything the criteria doc lists
+// for the gray-box gate: steer (1:1 relative drag), auto-fire, ram and
+// shunt, one enemy (Bruiser), civilians, one ramp, one supply truck.
+// Road generator, camera, scoring and chain adapted from Moonwake.
+// =====================================================================
+const REF = 195, H = 844; let SW = 390;
+const T = {
+  thumbRatio: 1.4, maxLateral: 520, ease: 0.06, lean: 10, deadZone: 3,
+  speed0: 420, speedMax: 700, speedRampMinutes: 5,
+  laneW: 62, minLanes: 3, maxLanes: 5, railW: 10,
+  fireRate: 6, bulletSpeed: 1100, gunRange: 520, gunHalfLane: 26,
+  car: { w: 34, l: 60 }, enemy: { w: 36, l: 64, hp: 4 }, civ: { w: 34, l: 58 }, truck: { w: 56, l: 110 },
+  shuntMul: 1.5, shuntMin: 220, rearHitsToWreck: 3, armor: 3,
+  bruiserTell: 0.6, bruiserSwerve: 230, bruiserHold: 0.9,
+  ramp: { every: [15, 25], warn: 2.0, air: 1.2, steerAir: 0.5, slowmo: 0.7, slowmoFor: 0.3 },
+  truckEvery: [25, 35], missiles: 6, crateDrop: 0.15,
+  combo: { window: 2.5, max: 8 },
+  score: { bruiser: 150, weak: 100, stompMul: 3, chainMul: 2, civilian: -200, crate: 250, graze: 10, truckLoad: 100, clean: 50 },
+  graceSeconds: 60,
+};
+const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+const reduceMotion = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
+const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function hashI(seed, i) { let h = (seed ^ Math.imul(i + 1, 0x9E3779B1)) >>> 0; h = Math.imul(h ^ h >>> 16, 0x85EBCA6B) >>> 0; h = Math.imul(h ^ h >>> 13, 0xC2B2AE35) >>> 0; return (h ^ h >>> 16) >>> 0; }
+const smooth = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+
+// ---------------- road ----------------
+// Reaches of 600 pt: lane count and centre change smoothly between knots.
+class Road {
+  constructor(seed) { this.seed = seed; this.reaches = []; this.knots = [{ y: -600, x: REF, lanes: 4 }, { y: 0, x: REF, lanes: 4 }]; }
+  reach(i) { while (this.reaches.length <= i) this.build(this.reaches.length); return this.reaches[i]; }
+  build(i) {
+    const rng = mulberry32(hashI(this.seed, i)); const y0 = i * 600, y1 = y0 + 600;
+    const prev = this.knots[this.knots.length - 1];
+    let lanes = prev.lanes, x = prev.x;
+    if (y0 >= 1200) {
+      if (rng() < 0.45) lanes = clamp(lanes + (rng() < 0.5 ? -1 : 1), T.minLanes, T.maxLanes);
+      const hw = lanes * T.laneW / 2 + T.railW;
+      x = clamp(prev.x + (rng() * 2 - 1) * 70, 16 + hw, 390 - 16 - hw);
+    }
+    this.knots.push({ y: y1, x, lanes });
+    const r = { i, y0, y1, fork: null };
+    this.reaches.push(r);
+    return r;
+  }
+  at(y) {   // {center, lanes(float), width}
+    const k = this.knots; let j = 0; while (j + 1 < k.length - 1 && y > k[j + 1].y) j++;
+    const p1 = k[j], p2 = k[j + 1], p0 = k[j - 1] || { y: p1.y - 600, x: p1.x, lanes: p1.lanes }, p3 = k[j + 2] || { y: p2.y + 600, x: p2.x, lanes: p2.lanes };
+    const t = clamp((y - p1.y) / (p2.y - p1.y), 0, 1), t2 = t * t, t3 = t2 * t;
+    const cr = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+    const center = cr(p0.x, p1.x, p2.x, p3.x);
+    const lanes = p1.lanes + (p2.lanes - p1.lanes) * smooth(t);
+    return { center, lanes, width: lanes * T.laneW };
+  }
+  left(y) { const a = this.at(y); return a.center - a.width / 2; }
+  right(y) { const a = this.at(y); return a.center + a.width / 2; }
+  laneX(y, i) { const a = this.at(y); const n = Math.round(a.lanes); return a.center - a.width / 2 + T.laneW * (i + 0.5) * (a.width / (n * T.laneW)); }
+  laneCount(y) { return Math.round(this.at(y).lanes); }
+}
+
+// ---------------- camera (reused from Moonwake, gentler tilt ~20°) ----------------
+const PY = 0.22, PX = 0.07, LANE = 0.30;
+const ahead = (v) => v * H * (1 + PY * v);
+function vFor(a) { const A = PY * H, B = H, C = -a; return (-B + Math.sqrt(Math.max(0, B * B - 4 * A * C))) / (2 * A); }
+let camZoom = 1;
+function project(x, y, scroll) { const v = vFor(y - scroll); const ls = (1 - PX * v) * camZoom; const sy = H - v * H; const scale = ls / (1 + 2 * PY * v) * (1 + 2 * PY * LANE) / (1 - PX * LANE); return { x: SW / 2 + (x - REF) * ls, y: H * 0.7 + (sy - H * 0.7) * camZoom, s: scale, v }; }
+
+// ---------------- audio (procedural) ----------------
+const audio = {
+  ctx: null, on: true, master: null, engine: null, engineGain: null,
+  init() { if (this.ctx) return; try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } const c = this.ctx; this.master = c.createGain(); this.master.gain.value = this.on ? 1 : 0; this.master.connect(c.destination);
+    const g = c.createGain(); g.gain.value = 0.0; const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 400; const o1 = c.createOscillator(), o2 = c.createOscillator(); o1.type = 'sawtooth'; o2.type = 'square'; o1.frequency.value = 70; o2.frequency.value = 35; o1.connect(f); o2.connect(f); f.connect(g); g.connect(this.master); o1.start(); o2.start(); this.engine = [o1, o2, f]; this.engineGain = g; },
+  resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  setEngine(speed01, running) { if (!this.ctx) return; const t = this.ctx.currentTime; this.engine[0].frequency.setTargetAtTime(60 + 90 * speed01, t, 0.1); this.engine[1].frequency.setTargetAtTime(30 + 45 * speed01, t, 0.1); this.engine[2].frequency.setTargetAtTime(300 + 900 * speed01, t, 0.1); this.engineGain.gain.setTargetAtTime(running ? 0.045 + 0.04 * speed01 : 0.015, t, 0.1); },
+  tone(type, f0, f1, dur, vol, when = 0) { if (!this.ctx) return; const c = this.ctx, t = c.currentTime + when; const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0005, t + dur); o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.02); },
+  noise(dur, vol, cutoff) { if (!this.ctx) return; const c = this.ctx, t = c.currentTime; const n = Math.floor(c.sampleRate * dur), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n); const s = c.createBufferSource(); s.buffer = buf; const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff; const g = c.createGain(); g.gain.value = vol; s.connect(f); f.connect(g); g.connect(this.master); s.start(t); },
+  shot() { this.tone('square', 1400, 500, 0.04, 0.025); },
+  ping() { this.tone('triangle', 2200, 1800, 0.05, 0.05); },
+  crunch() { this.noise(0.16, 0.7, 1800); this.tone('sawtooth', 140, 50, 0.16, 0.2); },
+  explode() { this.noise(0.5, 0.9, 1200); this.tone('sine', 110, 35, 0.45, 0.3); },
+  chain(n) { this.tone('triangle', 500 + n * 90, 500 + n * 90, 0.12, 0.12); },
+  chime() { this.tone('triangle', 660, 660, 0.1, 0.12); this.tone('triangle', 990, 990, 0.25, 0.12, 0.09); },
+  horn() { this.tone('sawtooth', 300, 220, 0.4, 0.12); },
+  damage() { this.noise(0.25, 0.9, 1500); this.tone('square', 880, 880, 0.08, 0.08, 0.05); this.tone('square', 880, 880, 0.08, 0.08, 0.2); },
+  launch() { this.noise(0.5, 0.35, 600); this.tone('sawtooth', 120, 240, 0.5, 0.1); },
+  land() { this.noise(0.12, 0.6, 500); this.tone('sine', 90, 50, 0.15, 0.25); },
+  missile() { this.noise(0.4, 0.5, 2500); this.tone('sawtooth', 400, 900, 0.4, 0.08); },
+  death() { this.noise(1.0, 1.0, 900); this.tone('sawtooth', 200, 30, 1.0, 0.25); },
+  toggle() { this.on = !this.on; if (this.master) this.master.gain.value = this.on ? 1 : 0; try { localStorage.setItem('shunt-sound', this.on ? '1' : '0'); } catch (e) {} },
+};
+try { audio.on = localStorage.getItem('shunt-sound') !== '0'; } catch (e) {}
+const buzz = (p) => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} };
+
+// ---------------- state ----------------
+const stage = document.getElementById('stage'), shakeEl = document.getElementById('shake'), cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const ui = { callout: document.getElementById('callout'), pause: document.getElementById('pause'), special: document.getElementById('special'), specialName: document.getElementById('specialName'), specialPips: document.getElementById('specialPips'), card: document.getElementById('card'), cardTitle: document.getElementById('cardTitle'), cardScore: document.getElementById('cardScore'), cardLines: document.getElementById('cardLines'), primary: document.getElementById('btnPrimary'), second: document.getElementById('btnSecond'), hand: document.getElementById('btnHand'), sound: document.getElementById('btnSound') };
+const dpr = Math.min(window.devicePixelRatio || 1, 3);
+let G, phase = 'attract', now = 0, lastT = 0, elapsed = 0, countdown = 0, pausedFrom = 'playing';
+let seed = (Math.random() * 4294967296) >>> 0, best = 0, leftHand = false, hadRun = false;
+try { best = Number(localStorage.getItem('shunt-best') || 0); leftHand = localStorage.getItem('shunt-left') === '1'; } catch (e) {}
+const fmt = (n) => n.toLocaleString('en-US');
+let calloutTimer = null;
+function callout(text, sub, ms = 1100, big = false) { ui.callout.textContent = text; if (sub) { const s = document.createElement('small'); s.textContent = sub; ui.callout.appendChild(s); } ui.callout.classList.toggle('big', big); ui.callout.style.opacity = 1; clearTimeout(calloutTimer); if (ms > 0) calloutTimer = setTimeout(() => { ui.callout.style.opacity = 0; }, ms); }
+function hideCallout() { clearTimeout(calloutTimer); ui.callout.style.opacity = 0; }
+
+function newRun(reseed) {
+  if (reseed) seed = (Math.random() * 4294967296) >>> 0;
+  const road = new Road(seed); road.reach(6);
+  G = { road, rng: mulberry32(seed ^ 0x5bd1e995), t: 0, dist: 0, speed: T.speed0, x: REF, vx: 0, targetX: REF, lean: 0,
+        armor: T.armor, score: 0, cash: 0, combo: 0, comboT: 0, comboPeak: 1, kills: 0, civHits: 0,
+        cars: [], bullets: [], missiles: [], crates: [], ramps: [], trucks: [], fx: [], pops: [], sparks: [],
+        air: 0, airTotal: 0, jumpZ: 0, slowmo: 0, hitStop: 0, shake: 0, vignette: 0, smoke: 0,
+        special: { name: null, ammo: 0 }, nextRamp: 0, nextTruck: 0, nextSpawn: 0, lastEvent: 0, scripted: true, script: 0, deadAt: 0, cause: '', boost: 0, rearHits: 0, grazeT: 0, gunCd: 0, flash: 0, ghostThumb: 0, replay: [] };
+  G.nextRamp = 40; G.nextTruck = 22;
+  input.reset();
+  ui.card.hidden = true; updateSpecialButton();
+}
+function enterAttract() { phase = 'attract'; callout('Touch to drive', isTouch ? 'slide to steer · the car goes where your thumb goes' : 'arrows or A/D steer · space fires the special', 0); }
+function startPlaying() { phase = 'playing'; hideCallout(); hadRun = true; G.t = 0; }
+
+// ---------------- input: relative drag, 1:1 scaled ----------------
+const input = {
+  id: null, anchor: null, carAnchor: 0, cur: null, keys: {}, sens: 1.0,
+  reset() { this.id = null; this.anchor = null; this.cur = null; },
+  down(id, x, y) { if (this.id !== null) return; this.id = id; this.anchor = { x, y }; this.cur = { x, y }; this.carAnchor = G.targetX; },
+  move(id, x, y) { if (id !== this.id) return; this.cur = { x, y }; },
+  up(id) { if (id === this.id) { this.id = null; this.anchor = null; this.cur = null; } },
+  target(dt) {
+    if (this.keys.left || this.keys.right) { return G.targetX + ((this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0)) * T.maxLateral * dt; }
+    if (!this.anchor) return G.targetX;
+    let dx = this.cur.x - this.anchor.x; if (Math.abs(dx) < T.deadZone) dx = 0; else dx -= Math.sign(dx) * T.deadZone;
+    return this.carAnchor + dx * T.thumbRatio * this.sens;
+  },
+};
+function stagePoint(e) { const r = stage.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * SW, y: (e.clientY - r.top) / r.height * H }; }
+stage.addEventListener('pointerdown', e => {
+  if (e.target.closest && e.target.closest('.tap')) return;
+  e.preventDefault(); audio.init(); audio.resume();
+  if (phase === 'over' || phase === 'paused' || phase === 'countdown') return;
+  if (phase === 'attract') startPlaying();
+  const p = stagePoint(e); input.down(e.pointerId, p.x, p.y);
+  try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+});
+stage.addEventListener('pointermove', e => { const p = stagePoint(e); input.move(e.pointerId, p.x, p.y); });
+const upH = e => input.up(e.pointerId);
+stage.addEventListener('pointerup', upH); stage.addEventListener('pointercancel', upH);
+const KEYS = { ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', ' ': 'fire', j: 'fire' };
+window.addEventListener('keydown', e => { const k = KEYS[e.key]; if (!k) { if (e.key === 'p' || e.key === 'Escape') togglePause(); return; } e.preventDefault(); audio.init(); audio.resume(); if (phase === 'attract') startPlaying(); if (phase === 'over' && k === 'fire') { restartAndPlay(false); return; } if (k === 'fire') { if (!input.keys.fire) fireSpecial(); } input.keys[k] = true; });
+window.addEventListener('keyup', e => { const k = KEYS[e.key]; if (k) { e.preventDefault(); input.keys[k] = false; } });
+ui.special.addEventListener('pointerdown', e => { e.preventDefault(); audio.init(); audio.resume(); if (phase === 'playing') fireSpecial(); });
+ui.pause.addEventListener('click', () => { audio.init(); togglePause(); });
+ui.primary.addEventListener('click', () => { audio.init(); audio.resume(); if (phase === 'paused') resume(); else if (phase === 'over') restartAndPlay(false); });
+ui.second.addEventListener('click', () => { audio.init(); if (phase === 'paused') { newRun(false); enterAttract(); } else if (phase === 'over') restartAndPlay(true); });
+ui.hand.addEventListener('click', () => { leftHand = !leftHand; try { localStorage.setItem('shunt-left', leftHand ? '1' : '0'); } catch (e) {} applyHand(); });
+ui.sound.addEventListener('click', () => { audio.init(); audio.toggle(); ui.sound.textContent = audio.on ? 'SOUND: ON' : 'SOUND: OFF'; });
+document.addEventListener('visibilitychange', () => { if (document.hidden && (phase === 'playing' || phase === 'attract' || phase === 'countdown')) pause(); });
+function applyHand() { ui.special.classList.toggle('left', leftHand); ui.hand.textContent = leftHand ? 'LEFT HAND' : 'RIGHT HAND'; }
+function restartAndPlay(reseed) { newRun(reseed); startPlaying(); }
+function togglePause() { if (phase === 'paused') resume(); else if (phase === 'playing' || phase === 'attract') pause(); }
+function pause() { pausedFrom = phase === 'countdown' ? 'playing' : phase; phase = 'paused'; ui.cardTitle.textContent = 'Paused'; ui.cardScore.textContent = fmt(G.score); ui.cardLines.textContent = ''; ui.primary.textContent = 'RESUME'; ui.second.textContent = 'RESTART'; ui.sound.textContent = audio.on ? 'SOUND: ON' : 'SOUND: OFF'; ui.card.hidden = false; }
+function resume() { ui.card.hidden = true; ui.primary.textContent = 'DRIVE AGAIN'; ui.second.textContent = 'NEW ROAD'; input.reset(); lastT = 0; if (pausedFrom === 'playing') { phase = 'countdown'; countdown = 3; callout('3', '', 0, true); } else { phase = pausedFrom; enterAttract(); } }
+
+// ---------------- spawning ----------------
+function laneCountAt(y) { return G.road.laneCount(y); }
+function spawnCar(kind, lane, yAhead, opts = {}) {
+  const y = G.dist + yAhead; const n = laneCountAt(y); lane = clamp(lane, 0, n - 1);
+  const c = Object.assign({ kind, lane, x: G.road.laneX(y, lane), y, vx: 0, vy: 0, alive: true, hp: kind === 'bruiser' ? T.enemy.hp : 2, state: 'approach', t: 0, tell: 0, rearHits: 0, spin: 0, wrecked: false, speedRel: 0, id: Math.random() }, opts);
+  if (kind === 'civ') { c.speedRel = -(60 + G.rng() * 60); c.tint = ['#cfe6ff', '#fff1c9', '#cdebdc', '#e9d9ff'][Math.floor(G.rng() * 4)]; }
+  if (kind === 'weak') { c.speedRel = -(40 + G.rng() * 40); c.hp = 2; }
+  if (kind === 'bruiser') { c.speedRel = opts.slow ? 40 : 90; }
+  G.cars.push(c); if (kind !== 'civ') event(); return c;   // a new threat counts for the 3-second rule
+}
+function spawnRamp(yAhead, lane, golden) { const y = G.dist + yAhead; const n = laneCountAt(y); lane = clamp(lane, 0, n - 1); G.ramps.push({ y, lane, x: G.road.laneX(y, lane), w: T.laneW * 1.6, golden, used: false, crate: golden ? { taken: false } : null }); event(); }
+function spawnTruck(yAhead, lane) { const y = G.dist + yAhead; const n = laneCountAt(y); lane = clamp(lane, 0, n - 1); G.trucks.push({ y, lane, x: G.road.laneX(y, lane), speedRel: -90, loaded: false, alive: true }); event(); }
+function freeLane(y, avoid = []) { const n = laneCountAt(y); const options = []; for (let i = 0; i < n; i++) if (!avoid.includes(i)) options.push(i); return options[Math.floor(G.rng() * options.length)]; }
+function playerLane() { const a = G.road.at(G.dist); return clamp(Math.floor((G.x - (a.center - a.width / 2)) / T.laneW), 0, Math.round(a.lanes) - 1); }
+
+// The first 60 s are scripted (criteria doc); afterwards the director keeps something happening every 3 s.
+function script(dt) {
+  const t = G.t; const s = G.script;
+  if (s === 0 && t >= 0.2) { G.script = 1; callout('Go', '', 700, true); }
+  else if (s === 1 && t >= 3) { G.script = 2; spawnCar('bruiser', playerLane() === 0 ? 1 : playerLane() - 1, 260, { slow: true, alongside: true }); G.ghostThumb = 2.5; }
+  else if (s === 2 && t >= 8) { G.script = 3; spawnCar('weak', playerLane(), 520); spawnCar('weak', playerLane(), 760); }
+  else if (s === 3 && t >= 15) { G.script = 4; const pl = playerLane(); spawnCar('civ', freeLane(G.dist + 500, [pl]), 500); spawnCar('civ', freeLane(G.dist + 700, [pl]), 700); spawnCar('civ', freeLane(G.dist + 900, [pl]), 900); callout('Spare the civilians', 'pastel cars cost points', 1800); }
+  else if (s === 4 && t >= 22) { G.script = 5; spawnTruck(560, playerLane()); callout('Supply truck ahead', 'drive up the ramp at its back', 1800); }
+  else if (s === 5 && t >= 32) { G.script = 6; spawnCar('bruiser', freeLane(G.dist + 600, []), 600); spawnCar('bruiser', freeLane(G.dist + 900, []), 900); }
+  else if (s === 6 && t >= 40) { G.script = 7; spawnRamp(700, playerLane(), true); }
+  else if (s === 7 && t >= 50) { G.script = 8; const pl = playerLane(); spawnCar('bruiser', pl, 600); spawnCar('weak', freeLane(G.dist + 800, [pl]), 800); spawnCar('civ', freeLane(G.dist + 1000, [pl]), 1000); }
+  else if (s === 8 && t >= 60) { G.script = 9; G.scripted = false; G.nextSpawn = G.t + 1.5; G.nextRamp = G.t + 12; G.nextTruck = G.t + 20; }
+  // the 3-second rule holds inside the script too: a quiet beat gets a weak car in the lane (an auto-fire kill)
+  if (t > 8 && t - G.lastEvent > 2.8) { G.fill = (G.fill || 0) + 1; if (G.fill % 3 === 0) spawnCar('civ', freeLane(G.dist + 700, [playerLane()]), 700); else spawnCar('weak', playerLane(), 650); }
+}
+function director(dt) {
+  const minute = G.t / 60;
+  const maxEnemies = minute < 1 ? 2 : minute < 3 ? 3 : minute < 5 ? 4 : 5;
+  const civShare = minute < 1 ? 0.4 : minute < 3 ? 0.35 : 0.3;
+  const enemies = G.cars.filter(c => c.alive && !c.wrecked && c.kind !== 'civ' && c.y > G.dist - 100).length;
+  if (G.t >= G.nextSpawn) {
+    G.nextSpawn = G.t + 1.6 + G.rng() * 1.6;
+    const pl = playerLane();
+    if (G.rng() < civShare) { spawnCar('civ', freeLane(G.dist + 900, [pl]), 900 + G.rng() * 300); }
+    else if (enemies < maxEnemies) { const kind = G.rng() < 0.65 ? 'bruiser' : 'weak'; spawnCar(kind, kind === 'weak' ? pl : freeLane(G.dist + 700, []), 700 + G.rng() * 400); }
+  }
+  if (G.t >= G.nextRamp) { G.nextRamp = G.t + T.ramp.every[0] + G.rng() * (T.ramp.every[1] - T.ramp.every[0]); spawnRamp(900, freeLane(G.dist + 900, []), G.rng() < 0.6); }
+  if (G.t >= G.nextTruck) { G.nextTruck = G.t + T.truckEvery[0] + G.rng() * (T.truckEvery[1] - T.truckEvery[0]); spawnTruck(900, freeLane(G.dist + 900, [])); callout('Supply truck', '', 900); }
+  // 3-second rule: if nothing has happened, push a threat now
+  if (G.t - G.lastEvent > 2.8 && G.nextSpawn > G.t + 0.2) G.nextSpawn = G.t;
+}
+function event() { G.lastEvent = G.t; }
+
+// ---------------- simulation ----------------
+function simulate(dt, playing) {
+  const slow = G.slowmo > 0 ? T.ramp.slowmo : 1; const sdt = dt * slow; if (G.slowmo > 0) G.slowmo -= dt;
+  G.t += sdt;
+  const minute = G.t / 60; G.speed = T.speed0 + (T.speedMax - T.speed0) * clamp(minute / T.speedRampMinutes, 0, 1) + G.boost; G.boost = Math.max(0, G.boost - 160 * sdt);
+  if (!playing) G.speed = T.speed0 * 0.6;
+  // steering: target position from the thumb; eased with 60 ms, capped at 520 pt/s; 50% authority in the air
+  if (playing) G.targetX = input.target(sdt);
+  const road = G.road.at(G.dist); const lim = road.width / 2 - T.car.w / 2 - 2;
+  G.targetX = clamp(G.targetX, road.center - lim - 30, road.center + lim + 30);
+  const authority = G.air > 0 ? T.ramp.steerAir : 1;
+  const want = (G.targetX - G.x) / T.ease * authority; const vx = clamp(want, -T.maxLateral * authority, T.maxLateral * authority);
+  G.vx += (vx - G.vx) * (1 - Math.exp(-sdt / 0.035)); G.x += G.vx * sdt;
+  // rails: scrape = graze, never death
+  const left = road.center - road.width / 2 + T.car.w / 2, right = road.center + road.width / 2 - T.car.w / 2;
+  let scraping = false;
+  if (G.x < left) { G.x = left; G.vx = Math.max(G.vx, 0); scraping = true; } if (G.x > right) { G.x = right; G.vx = Math.min(G.vx, 0); scraping = true; }
+  if (scraping && G.air <= 0) { G.grazeT += sdt; spark(G.x + (G.x <= left + 1 ? -T.car.w / 2 : T.car.w / 2), G.dist, 2); if (G.grazeT > 0.25) { G.grazeT = 0; addScore(T.score.graze, G.x, G.dist, true); } } else G.grazeT = 0;
+  if (!playing) G.targetX = G.x = G.x + (road.center - G.x) * Math.min(1, sdt * 2);
+  G.lean += ((G.vx / T.maxLateral) * T.lean - G.lean) * Math.min(1, sdt * 12);
+  G.dist += G.speed * sdt;
+  G.road.reach(Math.floor((G.dist + 2400) / 600));
+  // jump
+  if (G.air > 0) { G.air -= sdt; const k = 1 - G.air / G.airTotal; G.jumpZ = Math.sin(k * Math.PI); camZoom += ((1 - 0.15 * G.jumpZ) - camZoom) * Math.min(1, dt * 10); if (G.air <= 0) land(); } else camZoom += (1 - camZoom) * Math.min(1, dt * 8);
+  audio.setEngine(clamp((G.speed - 300) / 500, 0, 1) + (G.air > 0 ? 0.2 : 0), playing);
+  if (!playing) { updateWorld(sdt, false); return; }
+  if (G.scripted) script(sdt); else director(sdt);
+  if (G.ghostThumb > 0) G.ghostThumb -= dt;
+  G.comboT -= sdt; if (G.comboT <= 0 && G.combo > 0) { G.combo = 0; }
+  gun(sdt);
+  updateWorld(sdt, true);
+  if (G.armor <= 0 && phase === 'playing') die();
+}
+function updateWorld(dt, hostile) {
+  const px = G.x, py = G.dist;
+  for (const c of G.cars) {
+    if (!c.alive) continue;
+    c.t += dt;
+    if (c.wrecked) { c.y += c.vy * dt; c.x += c.vx * dt; c.vx *= 0.96; c.vy *= 0.97; c.spin += 6 * dt; if (c.y < py - 400) c.alive = false; continue; }
+    const a = G.road.at(c.y); const l = a.center - a.width / 2 + T.enemy.w / 2, r = a.center + a.width / 2 - T.enemy.w / 2;
+    if (c.kind === 'bruiser' && hostile) {
+      // approach to alongside, tell (brake lights), swerve into the player, back off, repeat
+      const targetY = py + (c.alongside ? 10 : 40);
+      if (c.state === 'approach') { c.y += (c.speedRel - (c.y > targetY ? 160 : -80)) * dt; c.x += (G.road.laneX(c.y, c.lane) - c.x) * Math.min(1, dt * 4); if (Math.abs(c.y - targetY) < 60) { c.state = 'tell'; c.tell = 0; } }
+      else if (c.state === 'tell') { c.y += (targetY - c.y) * Math.min(1, dt * 3); c.tell += dt; c.lean = (c.tell / T.bruiserTell) * (px < c.x ? -1 : 1) * 6; if (c.tell >= T.bruiserTell) { c.state = 'swerve'; c.dir = px < c.x ? -1 : 1; c.tell = 0; event(); } }
+      else if (c.state === 'swerve') { c.x += c.dir * T.bruiserSwerve * dt; c.y += (targetY - c.y) * Math.min(1, dt * 3); c.tell += dt; if (c.tell > T.bruiserHold) { c.state = 'backoff'; c.tell = 0; } }
+      else if (c.state === 'backoff') { c.y += 120 * dt; c.tell += dt; c.x += (G.road.laneX(c.y, c.lane) - c.x) * Math.min(1, dt * 2); if (c.tell > 1.4) { c.state = 'approach'; c.lane = freeLane(c.y, []); } }
+      c.x += c.vx * dt; c.vx *= Math.exp(-dt * 6);
+    } else {
+      c.y += c.speedRel * dt; c.x += (G.road.laneX(c.y, c.lane) - c.x) * Math.min(1, dt * 2.5) + c.vx * dt; c.vx *= Math.exp(-dt * 6);
+    }
+    // rail wreck for shunted cars
+    if (c.x < l || c.x > r) { if (Math.abs(c.vx) > 120 && c.kind !== 'civ') { wreck(c, 'rail'); continue; } c.x = clamp(c.x, l, r); c.vx = 0; }
+    if (c.y < py - 500 || c.y > py + 2600) c.alive = false;
+    // contact with the player
+    if (hostile && G.air <= 0 && c.alive && !c.wrecked) contact(c);
+  }
+  G.cars = G.cars.filter(c => c.alive);
+  // bullets
+  for (const b of G.bullets) { b.y += T.bulletSpeed * dt; }
+  G.bullets = G.bullets.filter(b => { if (b.y > py + 900) return false; for (const c of G.cars) { if (!c.alive || c.wrecked || c.kind === 'civ') continue; if (Math.abs(b.x - c.x) < T.enemy.w / 2 && Math.abs(b.y - c.y) < T.enemy.l / 2) { gunHit(c, b); return false; } } return true; });
+  // missiles
+  for (const m of G.missiles) { const target = G.cars.filter(c => c.alive && !c.wrecked && c.kind !== 'civ' && c.y > m.y - 20).sort((a, b) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(b.x - m.x, b.y - m.y))[0]; if (target) { m.x += (target.x - m.x) * Math.min(1, dt * 6); } m.y += 900 * dt; m.t += dt; if (target && Math.abs(m.x - target.x) < 20 && Math.abs(m.y - target.y) < 36) { wreck(target, 'missile'); m.dead = true; } if (m.y > py + 1200) m.dead = true; }
+  G.missiles = G.missiles.filter(m => !m.dead);
+  // ramps and trucks
+  for (const rp of G.ramps) { if (!rp.used && G.air <= 0 && Math.abs(py - rp.y) < 20 && Math.abs(px - rp.x) < rp.w / 2 + 4) { rp.used = true; launch(rp); } if (rp.crate && !rp.crate.taken && G.air > 0 && Math.abs(py - (rp.y + 240)) < 60 && Math.abs(px - rp.x) < 40) { rp.crate.taken = true; pickup('crate', rp.x, rp.y + 240); } }
+  G.ramps = G.ramps.filter(rp => rp.y > py - 400);
+  for (const tr of G.trucks) { tr.y += tr.speedRel * dt; if (!tr.loaded && G.air <= 0 && Math.abs(px - tr.x) < T.truck.w / 2 && py > tr.y - T.truck.l / 2 - 30 && py < tr.y - T.truck.l / 2 + 10) { tr.loaded = true; truckLoad(tr); } }
+  G.trucks = G.trucks.filter(tr => tr.y > py - 400);
+  for (const cr of G.crates) { cr.y += cr.vy * dt; cr.x += (px - cr.x) * Math.min(1, dt * 1.2); cr.t += dt; if (Math.abs(cr.x - px) < 26 && Math.abs(cr.y - py) < 40) { cr.dead = true; pickup(cr.kind, cr.x, cr.y); } }
+  G.crates = G.crates.filter(cr => !cr.dead && cr.y > py - 300);
+  for (const f of G.fx) f.t += dt; G.fx = G.fx.filter(f => f.t < f.life);
+  for (const p of G.pops) p.t += dt; G.pops = G.pops.filter(p => p.t < 1.0);
+  for (const s of G.sparks) { s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; } G.sparks = G.sparks.filter(s => s.t < 0.4);
+  if (G.smoke > 0) G.smoke -= dt;
+}
+function contact(c) {
+  const dx = c.x - G.x, dy = c.y - G.dist; const hw = (T.car.w + (c.kind === 'civ' ? T.civ.w : T.enemy.w)) / 2, hl = (T.car.l + T.enemy.l) / 2;
+  if (Math.abs(dx) >= hw || Math.abs(dy) >= hl) return;
+  const side = Math.abs(dx) / hw > Math.abs(dy) / hl;
+  if (c.kind === 'civ') { // never kills: bump, penalty, combo breaks
+    c.vx = Math.sign(dx || 1) * 180; c.hit = (c.hit || 0) + 1; G.x -= Math.sign(dx || 1) * 6; G.vx = -Math.sign(dx || 1) * 120;
+    if (!c.penalised) { c.penalised = true; G.civHits++; addScore(T.score.civilian, c.x, c.y); G.combo = 0; audio.horn(); buzz([15, 40, 15]); callout('Civilian', '-200 · combo lost', 800); }
+    return;
+  }
+  if (side) {
+    // shunt: enemy knocked sideways at 1.5x the player's lateral speed; player feels it
+    const push = Math.sign(dx || 1) * Math.max(T.shuntMin, Math.abs(G.vx) * T.shuntMul);
+    c.vx = push; c.x += Math.sign(dx || 1) * 4; G.x -= Math.sign(dx || 1) * 4; G.vx *= -0.3;
+    spark(G.x + Math.sign(dx) * T.car.w / 2, G.dist, 8); audio.crunch(); buzz(30); G.shake = Math.max(G.shake, 0.12);
+    if (c.state === 'swerve') { damage(0.5, c); }   // being swerved into hurts a little even when you push back
+    event();
+  } else if (dy > 0) {
+    // rear-ending at speed
+    c.rearHits++; c.y += 30; c.vy = 0; G.speed *= 0.97; spark(G.x, G.dist + T.car.l / 2, 6); audio.crunch(); buzz(25); G.shake = Math.max(G.shake, 0.1); event();
+    if (c.rearHits >= T.rearHitsToWreck) wreck(c, 'ram'); else damage(0.5, c, true);
+  } else {
+    // enemy rear-ends the player
+    c.y -= 30; damage(1, c); G.speed *= 1.02;
+  }
+}
+function damage(amount, by, light) {
+  if (G.t < T.graceSeconds) amount *= 0.5;
+  G.damageAcc = (G.damageAcc || 0) + amount;
+  if (G.damageAcc >= 1) { G.damageAcc -= 1; G.armor--; G.shake = Math.max(G.shake, 0.3); G.vignette = 1; G.smoke = 2.5; audio.damage(); buzz([60, 30, 60]); G.cause = by ? (by.kind === 'bruiser' ? 'Rammed by a Bruiser' : 'Hit by a car') : 'Crashed'; callout(G.armor > 0 ? 'Armor ' + G.armor : '', '', 700); if (G.armor <= 0) G.cause += ' · armor gone'; }
+}
+function gun(dt) {
+  G.gunCd -= dt; const target = G.cars.find(c => c.alive && !c.wrecked && c.kind !== 'civ' && c.y > G.dist + 40 && c.y < G.dist + T.gunRange && Math.abs(c.x - G.x) < T.gunHalfLane);
+  if (target && G.gunCd <= 0 && G.air <= 0) { G.gunCd = 1 / T.fireRate; const side = (G.shots = (G.shots || 0) + 1) % 2 ? -1 : 1; G.bullets.push({ x: G.x + side * 9, y: G.dist + T.car.l / 2 }); G.flash = 0.05; audio.shot(); }
+}
+function gunHit(c, b) { c.hp--; c.hitFlash = 0.08; spark(b.x, b.y, 3); audio.ping(); if (c.hp <= 0) wreck(c, 'gun'); }
+function wreck(c, how) {
+  if (c.wrecked) return;
+  c.wrecked = true; c.vy = -G.speed * 0.3 + (c.vy || 0); c.vx = (c.vx || 0) + (G.rng() * 2 - 1) * 60; c.spin = 0;
+  const base = c.kind === 'bruiser' ? T.score.bruiser : T.score.weak;
+  let mul = 1, label = '';
+  if (how === 'stomp') { mul = T.score.stompMul; label = 'STOMP'; }
+  if (how === 'chain') { mul = T.score.chainMul; label = 'CHAIN WRECK'; }
+  G.kills++;
+  G.combo = Math.min(T.combo.max, G.combo + 1); G.comboT = T.combo.window; G.comboPeak = Math.max(G.comboPeak, G.combo);
+  addScore(base * mul, c.x, c.y, false, label);
+  G.fx.push({ x: c.x, y: c.y, t: 0, life: 0.6, big: true });
+  G.hitStop = 0.06; G.shake = Math.max(G.shake, 0.18); audio.explode(); if (G.combo > 1) audio.chain(G.combo); buzz(how === 'chain' ? [30, 30, 30] : 45);
+  if (how === 'chain') G.slowmo = Math.max(G.slowmo, 0.3);
+  event();
+  // wreck knocks into other enemies: chain wreck
+  for (const o of G.cars) { if (o === c || !o.alive || o.wrecked || o.kind === 'civ') continue; if (Math.abs(o.x - c.x) < 50 && Math.abs(o.y - c.y) < 90) setTimeout(() => { if (o.alive && !o.wrecked) wreck(o, 'chain'); }, 120); }
+  if (G.rng() < T.crateDrop) G.crates.push({ x: c.x, y: c.y, vy: -G.speed * 0.25, t: 0, kind: G.rng() < 0.5 ? 'armor' : 'ammo' });
+}
+function addScore(base, x, y, quiet, label) {
+  const mul = quiet ? 1 : Math.max(1, G.combo);
+  const p = Math.round(base * mul); G.score = Math.max(0, G.score + p);
+  if (x !== undefined && !quiet) G.pops.push({ x, y, text: (p < 0 ? '' : '+') + fmt(p) + (label ? ' ' + label : ''), t: 0, bad: p < 0 });
+  else if (x !== undefined) G.pops.push({ x, y, text: '+' + p, t: 0, small: true });
+}
+function spark(x, y, n) { for (let i = 0; i < n; i++) G.sparks.push({ x, y, vx: (G.rng() * 2 - 1) * 260, vy: -G.speed * 0.5 + (G.rng() * 2 - 1) * 120, t: 0 }); }
+function launch(rp) { G.air = T.ramp.air; G.airTotal = T.ramp.air; G.slowmo = T.ramp.slowmoFor; G.launchX = G.x; audio.launch(); buzz([10, 20, 20, 20, 30]); callout('', '', 0); event(); }
+function land() {
+  G.jumpZ = 0; G.shake = Math.max(G.shake, 0.15); audio.land(); buzz(35); G.fx.push({ x: G.x, y: G.dist, t: 0, life: 0.4, ring: true });
+  let stomped = false, clean = true;
+  for (const c of G.cars) { if (!c.alive || c.wrecked) continue; if (Math.abs(c.x - G.x) < 30 && Math.abs(c.y - G.dist) < 50) { if (c.kind === 'civ') { c.penalised = true; G.civHits++; addScore(T.score.civilian, c.x, c.y); G.combo = 0; audio.horn(); clean = false; } else { wreck(c, 'stomp'); stomped = true; } } }
+  if (!stomped && clean && Math.abs(G.vx) < 150) { G.boost = 120; addScore(T.score.clean, G.x, G.dist, false, 'CLEAN'); callout('Clean!', '', 700); }
+  event();
+}
+function truckLoad(tr) { G.special = { name: 'MISSILES', ammo: T.missiles }; G.slowmo = 0.8; G.hitStop = 0; audio.chime(); buzz([20, 40, 60]); addScore(T.score.truckLoad, tr.x, tr.y - 40, false, 'LOADED'); updateSpecialButton(); ui.special.classList.add('armed'); callout('Homing missiles', 'tap the button to fire', 1500); event(); }
+function pickup(kind, x, y) { audio.chime(); buzz([15, 30, 40]); if (kind === 'crate') addScore(T.score.crate, x, y, false, 'CRATE'); if (kind === 'armor') { G.armor = Math.min(T.armor, G.armor + 1); G.pops.push({ x, y, text: 'ARMOR +1', t: 0 }); } if (kind === 'ammo') { if (!G.special.name) G.special = { name: 'MISSILES', ammo: 0 }; G.special.ammo = Math.min(9, G.special.ammo + 3); G.pops.push({ x, y, text: 'AMMO +3', t: 0 }); updateSpecialButton(); } G.fx.push({ x, y, t: 0, life: 0.4, burst: true }); event(); }
+function fireSpecial() { if (!G || !G.special.name || G.special.ammo <= 0 || phase !== 'playing') return; G.special.ammo--; G.missiles.push({ x: G.x, y: G.dist + 30, t: 0 }); audio.missile(); buzz(20); ui.special.classList.remove('armed'); updateSpecialButton(); }
+function updateSpecialButton() { ui.specialName.textContent = G && G.special.name ? G.special.name : 'NO SPECIAL'; ui.specialPips.innerHTML = ''; if (G && G.special.name) for (let i = 0; i < Math.min(G.special.ammo, 9); i++) ui.specialPips.appendChild(document.createElement('i')); if (G && (!G.special.name || G.special.ammo <= 0)) ui.special.classList.remove('armed'); }
+function die() {
+  phase = 'dying'; G.deadAt = now; G.slowmo = 1.2; audio.death(); buzz([80, 40, 80, 40, 120]); G.shake = reduceMotion ? 0 : 0.5; G.fx.push({ x: G.x, y: G.dist, t: 0, life: 1.2, big: true, player: true });
+  setTimeout(() => { if (phase !== 'dying') return; phase = 'over'; best = Math.max(best, G.score); try { localStorage.setItem('shunt-best', String(best)); } catch (e) {}
+    ui.cardTitle.textContent = G.cause || 'Wrecked'; ui.cardScore.textContent = fmt(G.score);
+    ui.cardLines.innerHTML = 'BEST ' + fmt(best) + ' &nbsp;·&nbsp; WRECKS ' + G.kills + ' &nbsp;·&nbsp; COMBO ×' + G.comboPeak + ' &nbsp;·&nbsp; ' + Math.round(G.t) + ' s' + (G.civHits ? '<br>' + G.civHits + ' civilian' + (G.civHits > 1 ? 's' : '') + ' hit' : '');
+    ui.primary.textContent = 'DRIVE AGAIN'; ui.second.textContent = 'NEW ROAD'; ui.sound.textContent = audio.on ? 'SOUND: ON' : 'SOUND: OFF'; ui.card.hidden = false; }, 1200);
+}
+
+// ---------------- rendering: plain shapes, colour means role ----------------
+const C = { road: '#3a3d45', roadDark: '#33363d', shoulder: '#262a31', rail: '#9aa3b2', railPost: '#5d6675', lane: 'rgba(255,255,255,0.55)', player: '#37e6ff', playerDark: '#0d7a8c', enemy: '#1a1b1f', enemyAccent: '#ff3b3b', civ: '#cfe6ff', truck: '#2fd36a', pickup: '#ffd23f', hazard: '#ff9f1c', ramp: '#f4f6f8' };
+function rrect(x, y, w, h, r, fill, stroke) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } }
+function shadow(p, w, l) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(p.x + 4 * p.s, p.y + 6 * p.s, w * 0.55 * p.s, l * 0.5 * p.s, 0, 0, Math.PI * 2); ctx.fill(); }
+function drawRoad(scroll) {
+  ctx.fillStyle = C.shoulder; ctx.fillRect(0, 0, SW, H);
+  // road body as horizontal slices, bottom to top
+  const step = 10;
+  for (let sy = H; sy > -step; sy -= step) {
+    const v = 1 - sy / H; const a = G.road.at(scroll + ahead(v)); const ls = (1 - PX * v) * camZoom;
+    const l = SW / 2 + (a.center - a.width / 2 - REF) * ls, r = SW / 2 + (a.center + a.width / 2 - REF) * ls;
+    const yy = H * 0.7 + (sy - H * 0.7) * camZoom;
+    ctx.fillStyle = (Math.floor((scroll + ahead(v)) / 300) % 2) ? C.road : C.roadDark; ctx.fillRect(l, yy - step * camZoom - 1, r - l, step * camZoom + 2);
+    // rails
+    ctx.fillStyle = C.rail; ctx.fillRect(l - 6 * ls, yy - step * camZoom - 1, 4 * ls, step * camZoom + 2); ctx.fillRect(r + 2 * ls, yy - step * camZoom - 1, 4 * ls, step * camZoom + 2);
+    // lane markings: dashed, scrolling
+    const n = Math.round(a.lanes); const wy = scroll + ahead(v);
+    if (Math.floor(wy / 40) % 2 === 0) for (let i = 1; i < n; i++) { const lx = SW / 2 + (a.center - a.width / 2 + a.width * i / n - REF) * ls; ctx.fillStyle = C.lane; ctx.fillRect(lx - 1.5 * ls, yy - step * camZoom - 1, 3 * ls, step * camZoom + 2); }
+    if (Math.floor(wy / 60) % 2 === 0) { ctx.fillStyle = C.railPost; ctx.fillRect(l - 10 * ls, yy - 4, 6 * ls, 4); ctx.fillRect(r + 4 * ls, yy - 4, 6 * ls, 4); }
+  }
+}
+function drawRamp(rp, scroll) {
+  const p = project(rp.x, rp.y, scroll);
+  // warning chevrons 2 s ahead of the ramp (2 s of travel ≈ 2 × speed)
+  const warnY = rp.y - G.speed * T.ramp.warn; if (warnY > scroll) { const w = project(rp.x, warnY, scroll); ctx.save(); ctx.translate(w.x, w.y); ctx.scale(w.s, w.s); ctx.fillStyle = C.ramp; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-18, 12 + i * 14); ctx.lineTo(0, -2 + i * 14); ctx.lineTo(18, 12 + i * 14); ctx.lineTo(18, 18 + i * 14); ctx.lineTo(0, 4 + i * 14); ctx.lineTo(-18, 18 + i * 14); ctx.closePath(); ctx.fill(); } ctx.restore(); }
+  ctx.save(); ctx.translate(p.x, p.y); ctx.scale(p.s, p.s);
+  const w = rp.w;
+  const g = ctx.createLinearGradient(0, 40, 0, -60); g.addColorStop(0, '#6b7280'); g.addColorStop(1, '#f4f6f8'); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-w / 2, 40); ctx.lineTo(w / 2, 40); ctx.lineTo(w / 2 - 6, -60); ctx.lineTo(-w / 2 + 6, -60); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = C.pickup; ctx.lineWidth = 3; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-w / 2 + 12, 20 - i * 28); ctx.lineTo(0, 2 - i * 28); ctx.lineTo(w / 2 - 12, 20 - i * 28); ctx.stroke(); }
+  ctx.restore();
+  if (rp.crate && !rp.crate.taken) { const cpos = project(rp.x, rp.y + 240, scroll); ctx.save(); ctx.translate(cpos.x, cpos.y - 70 * cpos.s - Math.sin(elapsed * 4) * 4); ctx.scale(cpos.s * 1.4, cpos.s * 1.4); ctx.globalAlpha = 0.9; rrect(-12, -12, 24, 24, 4, C.pickup, '#fff'); ctx.fillStyle = 'rgba(255,210,63,0.25)'; ctx.beginPath(); ctx.arc(0, 0, 26, 0, Math.PI * 2); ctx.fill(); ctx.restore(); ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(cpos.x, cpos.y, 14 * cpos.s, 7 * cpos.s, 0, 0, Math.PI * 2); ctx.fill(); }
+}
+function drawTruck(tr, scroll) {
+  const p = project(tr.x, tr.y, scroll); shadow(p, T.truck.w, T.truck.l);
+  ctx.save(); ctx.translate(p.x, p.y); ctx.scale(p.s, p.s);
+  rrect(-T.truck.w / 2, -T.truck.l / 2, T.truck.w, T.truck.l, 6, C.truck, '#eafff0');
+  if (!tr.loaded) { const g = ctx.createLinearGradient(0, T.truck.l / 2 + 30, 0, T.truck.l / 2 - 30); g.addColorStop(0, '#1f8f48'); g.addColorStop(1, '#bfffd6'); ctx.fillStyle = g; ctx.fillRect(-T.truck.w / 2 + 6, T.truck.l / 2 - 30, T.truck.w - 12, 60); ctx.strokeStyle = C.pickup; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-12, T.truck.l / 2 + 14); ctx.lineTo(0, T.truck.l / 2 - 2); ctx.lineTo(12, T.truck.l / 2 + 14); ctx.stroke(); }
+  ctx.fillStyle = '#1c2a22'; ctx.fillRect(-T.truck.w / 2 + 8, -T.truck.l / 2 + 8, T.truck.w - 16, 22);
+  ctx.fillStyle = 'rgba(255,210,63,' + (0.4 + 0.4 * Math.sin(elapsed * 6)) + ')'; ctx.beginPath(); ctx.arc(0, -T.truck.l / 2 - 10, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function drawCar(c, scroll) {
+  const p = project(c.x, c.y, scroll); const isCiv = c.kind === 'civ'; const w = isCiv ? T.civ.w : T.enemy.w, l = isCiv ? T.civ.l : T.enemy.l;
+  shadow(p, w, l);
+  ctx.save(); ctx.translate(p.x, p.y); ctx.scale(p.s, p.s); ctx.rotate(c.wrecked ? c.spin : (c.lean || 0) * Math.PI / 180);
+  if (c.wrecked) { ctx.globalAlpha = 0.85; rrect(-w / 2, -l / 2, w, l, 4, '#3a2a2a', '#111'); ctx.fillStyle = 'rgba(255,120,40,0.7)'; ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI * 2); ctx.fill(); ctx.restore(); return; }
+  if (isCiv) { rrect(-w / 2, -l / 2, w, l, 10, c.tint, 'rgba(255,255,255,0.8)'); ctx.fillStyle = 'rgba(60,70,90,0.5)'; rrect(-w / 2 + 6, -l / 2 + 12, w - 12, 16, 4, 'rgba(60,70,90,0.5)'); }
+  else {
+    const body = new Path2D(); body.moveTo(-w / 2, l / 2); body.lineTo(w / 2, l / 2); body.lineTo(w / 2, -l / 2 + 10); body.lineTo(w / 2 - 8, -l / 2); body.lineTo(-w / 2 + 8, -l / 2); body.lineTo(-w / 2, -l / 2 + 10); body.closePath();
+    ctx.fillStyle = c.hitFlash > 0 ? '#ffffff' : (c.kind === 'weak' ? '#2a2c33' : C.enemy); ctx.fill(body); ctx.strokeStyle = C.enemyAccent; ctx.lineWidth = 2; ctx.stroke(body);
+    ctx.fillStyle = C.enemyAccent; ctx.fillRect(-w / 2 + 4, -l / 2 + 3, 6, 4); ctx.fillRect(w / 2 - 10, -l / 2 + 3, 6, 4);   // red headlights
+    const brake = c.state === 'tell' && Math.floor(c.tell * 12) % 2 === 0; ctx.fillStyle = brake ? '#ff6a6a' : '#7a1b1b'; ctx.fillRect(-w / 2 + 3, l / 2 - 7, 9, 4); ctx.fillRect(w / 2 - 12, l / 2 - 7, 9, 4);   // brake lights flash = tell
+    if (c.kind === 'bruiser') { ctx.fillStyle = '#444'; ctx.fillRect(-w / 2 - 3, -6, 3, 12); ctx.fillRect(w / 2, -6, 3, 12); }   // side rams: visible weapon
+    if (c.hitFlash > 0) c.hitFlash -= 1 / 60;
+  }
+  ctx.restore();
+}
+function drawPlayer(scroll) {
+  const p = project(G.x, G.dist, scroll); const z = G.jumpZ; const lift = z * 90;
+  // shadow stays on the road
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(p.x + 4, p.y + 6, T.car.w * 0.6 * p.s * (1 - z * 0.2), T.car.l * 0.5 * p.s * (1 - z * 0.2), 0, 0, Math.PI * 2); ctx.fill();
+  if (G.smoke > 0) { ctx.fillStyle = 'rgba(80,80,80,' + Math.min(0.5, G.smoke * 0.3) + ')'; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(p.x - 6 + Math.sin(elapsed * 9 + i) * 6, p.y + 30 + i * 12, 6 + i * 2.5, 0, Math.PI * 2); ctx.fill(); } }
+  ctx.save(); ctx.translate(p.x, p.y - lift); ctx.scale(p.s * (1 + z * 0.25), p.s * (1 + z * 0.25)); ctx.rotate(G.lean * Math.PI / 180);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(55,230,255,0.28)'; ctx.beginPath(); ctx.ellipse(0, 4, T.car.w * 0.9, T.car.l * 0.7, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();   // glowing underlight
+  const body = new Path2D(); body.moveTo(-T.car.w / 2, T.car.l / 2 - 4); body.lineTo(T.car.w / 2, T.car.l / 2 - 4); body.lineTo(T.car.w / 2 - 2, -T.car.l / 2 + 14); body.lineTo(0, -T.car.l / 2); body.lineTo(-T.car.w / 2 + 2, -T.car.l / 2 + 14); body.closePath();
+  ctx.fillStyle = C.player; ctx.fill(body); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke(body);
+  ctx.fillStyle = C.playerDark; rrect(-10, -14, 20, 22, 5, C.playerDark);
+  if (G.flash > 0) { ctx.fillStyle = '#fff6c8'; ctx.fillRect(-12, -T.car.l / 2 - 6, 5, 8); ctx.fillRect(7, -T.car.l / 2 - 6, 5, 8); G.flash -= 1 / 60; }
+  ctx.restore();
+}
+function drawHUD() {
+  const top = 14 + (window.safeTop || 0);
+  ctx.save(); ctx.textBaseline = 'middle';
+  ctx.font = '700 30px Rajdhani, "Avenir Next Condensed", sans-serif'; ctx.fillStyle = C.ramp; ctx.textAlign = 'left'; ctx.fillText(fmt(G.score), 18, top + 18);
+  for (let i = 0; i < T.armor; i++) { rrect(18 + i * 22, top + 40, 18, 8, 3, i < G.armor ? C.player : 'rgba(255,255,255,0.15)'); }
+  if (G.combo > 1) { const k = clamp(G.comboT / T.combo.window, 0, 1); ctx.textAlign = 'center'; const size = 34 + G.combo * 3; ctx.font = '700 ' + size + 'px Rajdhani, "Avenir Next Condensed", sans-serif'; ctx.fillStyle = C.pickup; ctx.fillText('×' + G.combo, SW / 2, top + 22); rrect(SW / 2 - 40, top + 50, 80, 5, 2, 'rgba(255,255,255,0.15)'); rrect(SW / 2 - 40, top + 50, 80 * k, 5, 2, C.pickup); }
+  if (G.vignette > 0) { const g = ctx.createRadialGradient(SW / 2, H / 2, H * 0.3, SW / 2, H / 2, H * 0.75); g.addColorStop(0, 'rgba(255,0,0,0)'); g.addColorStop(1, 'rgba(255,30,30,' + G.vignette * 0.45 + ')'); ctx.fillStyle = g; ctx.fillRect(0, 0, SW, H); }
+  if (G.ghostThumb > 0 && isTouch) { const k = (elapsed * 1.2) % 1; ctx.globalAlpha = 0.6 * Math.sin(k * Math.PI); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(SW / 2 - 60 + k * 120, H * 0.86, 22, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; ctx.font = '700 17px Rajdhani, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('SLIDE', SW / 2, H * 0.86 + 44); }
+  ctx.restore();
+}
+function render(dt) {
+  const scroll = G.dist - ahead(LANE);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawRoad(scroll);
+  const items = [];
+  for (const rp of G.ramps) items.push({ y: rp.y, d: () => drawRamp(rp, scroll) });
+  for (const tr of G.trucks) items.push({ y: tr.y, d: () => drawTruck(tr, scroll) });
+  for (const c of G.cars) items.push({ y: c.y, d: () => drawCar(c, scroll) });
+  for (const cr of G.crates) items.push({ y: cr.y, d: () => { const p = project(cr.x, cr.y, scroll); ctx.save(); ctx.translate(p.x, p.y - Math.sin(cr.t * 5) * 4); ctx.scale(p.s, p.s); rrect(-10, -10, 20, 20, 4, cr.kind === 'armor' ? C.player : C.pickup, '#fff'); ctx.restore(); } });
+  items.sort((a, b) => b.y - a.y);
+  for (const it of items) { if (it.y < scroll - 100 || it.y > scroll + ahead(1.2)) continue; it.d(); }
+  for (const b of G.bullets) { const p = project(b.x, b.y, scroll); ctx.fillStyle = '#fff2a8'; ctx.fillRect(p.x - 1.5, p.y - 10 * p.s, 3, 14 * p.s); }
+  for (const m of G.missiles) { const p = project(m.x, m.y, scroll); ctx.fillStyle = C.pickup; ctx.fillRect(p.x - 3, p.y - 12 * p.s, 6, 18 * p.s); ctx.fillStyle = 'rgba(255,160,60,0.6)'; ctx.beginPath(); ctx.arc(p.x, p.y + 10 * p.s, 5, 0, Math.PI * 2); ctx.fill(); }
+  for (const s of G.sparks) { const p = project(s.x, s.y, scroll); ctx.fillStyle = `rgba(255,220,120,${1 - s.t / 0.4})`; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+  for (const f of G.fx) { const p = project(f.x, f.y, scroll); const k = f.t / f.life; ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (f.ring) { ctx.strokeStyle = `rgba(200,200,200,${1 - k})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(p.x, p.y, 20 + 50 * k, 10 + 25 * k, 0, 0, Math.PI * 2); ctx.stroke(); } else if (f.burst) { ctx.strokeStyle = `rgba(255,220,100,${1 - k})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, 10 + 30 * k, 0, Math.PI * 2); ctx.stroke(); } else { const R = (f.player ? 90 : 60) * p.s; const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, R * (0.5 + k)); g.addColorStop(0, `rgba(255,240,200,${(1 - k)})`); g.addColorStop(0.4, `rgba(255,140,40,${(1 - k) * 0.8})`); g.addColorStop(1, 'rgba(255,80,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, R * (0.5 + k), 0, Math.PI * 2); ctx.fill(); for (let i = 0; i < 10; i++) { const a = i * 2.4 + f.x; const d = 70 * p.s * k; ctx.fillStyle = `rgba(255,170,60,${1 - k})`; ctx.fillRect(p.x + Math.cos(a) * d - 2, p.y + Math.sin(a) * d * 0.7 - 2, 4, 4); } } ctx.restore(); }
+  if (phase !== 'over') drawPlayer(scroll);
+  ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; for (const p of G.pops) { const s = project(p.x, p.y, scroll); const k = p.t; ctx.globalAlpha = 1 - k * k; ctx.font = '700 ' + (p.small ? 15 : 21) + 'px Rajdhani, "Avenir Next Condensed", sans-serif'; ctx.fillStyle = p.bad ? '#b8bcc6' : C.pickup; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; ctx.fillText(p.text, s.x, s.y - 24 - k * 40); } ctx.restore();
+  if (G.vignette > 0) G.vignette = Math.max(0, G.vignette - dt * 2);
+  if (G.shake > 0 && !reduceMotion) { G.shake = Math.max(0, G.shake - dt); const a = G.shake * 20; shakeEl.style.transform = `translate(${(Math.random() * 2 - 1) * a}px, ${(Math.random() * 2 - 1) * a}px)`; } else if (shakeEl.style.transform) shakeEl.style.transform = '';
+  drawHUD();
+}
+
+// ---------------- loop ----------------
+function frame(t) {
+  const ts = t / 1000; if (!lastT) lastT = ts; const dt = Math.min(Math.max(ts - lastT, 0), 1 / 20); lastT = ts; now = ts;
+  if (phase !== 'paused') {
+    elapsed += dt;
+    if (phase === 'countdown') { countdown -= dt; const n = Math.ceil(countdown); if (n <= 0) { phase = 'playing'; hideCallout(); ui.callout.classList.remove('big'); } else callout(String(n), '', 0, true); }
+    else if (G.hitStop > 0) G.hitStop -= dt;
+    else if (phase === 'attract') simulate(dt, false);
+    else if (phase === 'playing') simulate(dt, true);
+    else if (phase === 'dying') { simulate(dt * 0.3, false); }
+    render(dt);
+  }
+  requestAnimationFrame(frame);
+}
+function fit() {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  SW = Math.round(clamp(H * vw / vh, 390, 600)); const s = Math.min(vw / SW, vh / H);
+  stage.style.width = SW + 'px'; stage.style.transform = `scale(${s})`;
+  cv.width = SW * dpr; cv.height = H * dpr;
+  try { const pad = parseFloat(getComputedStyle(document.documentElement).paddingTop) || 0; window.safeTop = Math.max(0, pad) / s; document.documentElement.style.setProperty('--safe-top', window.safeTop + 'px'); } catch (e) { window.safeTop = 0; }
+}
+window.addEventListener('resize', fit);
+function start() { fit(); applyHand(); newRun(false); enterAttract(); ui.sound.textContent = audio.on ? 'SOUND: ON' : 'SOUND: OFF'; requestAnimationFrame(frame); }
+if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start); else start();
+window.__shunt = { get phase() { return phase; }, get G() { return G; }, input, fireSpecial };
+})();
+</script>
