@@ -80,6 +80,8 @@ bindInput({
 });
 for (const [id, key] of [['sSound', 'sound'], ['sMusic', 'music'], ['sHaptics', 'haptics'], ['sShake', 'shake'], ['sMotion', 'motion'], ['sHand', 'left'], ['sTapSlam', 'tapSlam'], ['sAutoDrift', 'autoDrift']]) $(id).addEventListener('click', () => { S[key] = !S[key]; saveSettings(); audio.apply(); refreshSettings(); });
 $('sSens').addEventListener('input', e => { S.sens = parseFloat(e.target.value); saveSettings(); refreshSettings(); });
+$('sBench').addEventListener('click', () => { ui.card.hidden = true; perf.startBench('1', loadReplay); });
+$('sPerf').addEventListener('click', () => { $('sPerf').classList.toggle('on', perf.togglePerf()); });
 ui.primary.addEventListener('click', () => { audio.init(); audio.resume(); if (screen() === 'title') { freshRun(false); startPlaying(); } else if (screen() === 'pause') resume(); else if (screen() === 'over') restartAndPlay(false); else if (screen() === 'settings') { if (settingsFrom() === 'pause') showCard('pause', app); else if (settingsFrom() === 'over') showCard('over', app); else enterTitle(); } });
 ui.a.addEventListener('click', () => { audio.init(); if (screen() === 'title') { dailyMode = !dailyMode; freshRun(true); showCard('title', app); } else if (screen() === 'pause') { freshRun(false); startPlaying(); phase = 'playing'; } else if (screen() === 'over') restartAndPlay(true); });
 ui.b.addEventListener('click', () => { audio.init(); if (screen() === 'title' || screen() === 'pause') { setSettingsFrom(screen()); showCard('settings', app); } else if (screen() === 'over') { freshRun(false); enterTitle(); } });

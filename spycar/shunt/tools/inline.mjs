@@ -11,4 +11,5 @@ fs.writeFileSync(new URL('shunt.html', dist), html);
 const i = html.indexOf('<title>'); const j = html.indexOf('</head>');
 const art = html.slice(i, j) + html.slice(html.indexOf('<body>') + 6, html.lastIndexOf('</body>'));
 fs.writeFileSync(new URL('artifact.html', dist), art.trim() + '\n');
-console.log('dist/shunt.html', (html.length / 1024).toFixed(0), 'KB; dist/artifact.html', (art.length / 1024).toFixed(0), 'KB');
+fs.mkdirSync(new URL('../play/', import.meta.url), { recursive: true }); fs.writeFileSync(new URL('../play/index.html', import.meta.url), html);
+console.log('play/index.html (for GitHub Pages);', 'dist/shunt.html', (html.length / 1024).toFixed(0), 'KB; dist/artifact.html', (art.length / 1024).toFixed(0), 'KB');

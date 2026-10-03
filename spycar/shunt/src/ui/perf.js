@@ -3,8 +3,9 @@
 // first minute against last. ?shots=1 plays the same run for the postcard tool. Headless numbers are not iPhone numbers.
 import bench from '../../replays/beauty.json';
 export function createPerf(Q, renderer, hud) {
-  const mode = Q.get('bench'); const show = Q.get('perf') === '1' || !!mode; const shots = Q.get('shots') === '1';
-  let el = null; if (show) { el = document.createElement('div'); el.style.cssText = 'position:absolute;left:12px;top:calc(110px + var(--safe-top,0px));font:600 13px/1.4 monospace;color:#9fe;background:rgba(0,0,0,0.55);padding:6px 8px;border-radius:6px;pointer-events:none;white-space:pre;z-index:5'; document.getElementById('ui').appendChild(el); }
+  let mode = Q.get('bench'); let show = Q.get('perf') === '1' || !!mode; const shots = Q.get('shots') === '1';
+  let el = null; function overlay() { if (el) return; el = document.createElement('div'); el.style.cssText = 'position:absolute;left:12px;top:calc(110px + var(--safe-top,0px));font:600 13px/1.4 monospace;color:#9fe;background:rgba(0,0,0,0.55);padding:6px 8px;border-radius:6px;pointer-events:none;white-space:pre;z-index:5'; document.getElementById('ui').appendChild(el); }
+  if (show) overlay();
   const frames = []; let t = 0, acc = 0, n = 0, worst = 0, running = false, results = null, soakStart = 0, loops = 0, lastPerf = 0, minutesDone = false; const minutes = [];
   function frame(dt, st) {
     if (!show && !shots) return; const ms = dt * 1000; acc += ms; n++; worst = Math.max(worst, ms); if (running) frames.push(ms);
@@ -26,5 +27,8 @@ export function createPerf(Q, renderer, hud) {
     const card = document.createElement('div'); card.id = 'benchCard'; card.style.cssText = 'position:absolute;left:24px;right:24px;top:40%;background:rgba(0,0,0,0.8);color:#fff;font:700 17px/1.5 monospace;padding:16px;border-radius:12px;white-space:pre;z-index:6;pointer-events:none'; card.textContent = results; document.getElementById('ui').appendChild(card);
   }
   function start(loadReplay) { if (!mode && !shots) return; running = true; soakStart = performance.now() / 1000; frames.length = 0; loadReplay(bench); if (el) el.textContent = 'bench running…'; }
-  return { frame, start, get results() { return window.__shunt.bench; }, mode };
+  // from the Settings card: run the benchmark, or toggle the frame counter, without a URL parameter
+  function startBench(m, loadReplay) { mode = m; show = true; overlay(); const old = document.getElementById('benchCard'); if (old) old.remove(); results = null; start(loadReplay); }
+  function togglePerf() { show = !show; if (show) overlay(); else if (el) { el.remove(); el = null; } return show; }
+  return { frame, start, startBench, togglePerf, get results() { return window.__shunt.bench; }, get mode() { return mode; } };
 }
