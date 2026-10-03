@@ -55,4 +55,4 @@ export function exportReplay(bot) { const R = G.rec; return { version: 1, seed: 
 export function startRecording(bot) { G.rec = { runs: [], last: null }; G.recBot = bot; }
 export function attachReplay(r) { G.rep = { runs: r.runs, i: 0, n: 0, ended: false }; G.expect = r.hashes; }
 // runs N steps synchronously (no rendering, no frame clock): the fast replay check
-export function runSteps(n) { for (let k = 0; k < n; k++) { if (G.rep && G.rep.ended) break; simStep(G.playing); } return G.hashes.slice(); }
+export function runSteps(n, playing = true) { for (let k = 0; k < n; k++) { if (G.rep && G.rep.ended) break; simStep(G.rep ? G.playing : playing); } return G.hashes.slice(); }

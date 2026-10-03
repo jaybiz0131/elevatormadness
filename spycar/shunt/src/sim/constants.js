@@ -29,7 +29,7 @@ export const T = {
            civilian: -100, crate: 250, graze: 10, grazeCap: 3, truckLoad: 100, clean: 120, closeCall: 25, shuntEnemy: 100, barrelDouble: 150, distancePer: 100 },
   graceSeconds: 30,   // damage halved for the first 30 s only; no free pip; armor comes from the supply truck only
   // the barrier hit (step 6): fires over 1.15x the grip budget, keeps 45% of the speed, costs half an armor pip
-  wall: { over: 1.15, keep: 0.45, damage: 0.5 },
+  wall: { over: 1.02, wideFor: 0.3, keep: 0.45, stun: 0.8, damage: 0.5 },   // stun: seconds the car grinds the rail at minimum speed
   sizes: { player: [34, 60, 1.0], civ: [34, 58, 0.8], weak: [30, 52, 0.8], bruiser: [40, 70, 1.2], gunner: [40, 76, 1.3], armored: [120, 150, 3.0], truck: [56, 110, 3.0] },
 };
 export const clamp = (v, a, b) => Math.min(Math.max(v, a), b);

@@ -112,7 +112,7 @@ window.__shunt = {
   get phase() { return phase; }, get G() { return G; }, get T() { return T; }, get S() { return S; }, input, slamTarget,
   fireSpecial: () => input.requestFire(), trySlam: (d) => input.requestSlam(d),
   startPlaying: () => { freshRun(false); startPlaying(); },
-  record: (bot) => startRecording(bot), exportReplay, loadReplay, runSteps: (n) => { syncRun = true; return runSteps(n); }, hashState, STEP: STEP_LEN,
+  record: (bot) => startRecording(bot), exportReplay, loadReplay, runSteps: (n) => { syncRun = true; return runSteps(n, phase === 'playing'); }, hashState, STEP: STEP_LEN,
   renderer: () => renderer, perf, get phaseName() { return phase; },
 };
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start); else start();

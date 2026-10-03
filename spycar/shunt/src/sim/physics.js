@@ -27,10 +27,14 @@ export function physics(dt, playing) {
   G.scraping = scraping && G.air <= 0 && playing; if (G.scraping && G.drifting) G.driftDirty = true;
   // Hairpins must matter (Sprint 3D step 6, behind G.cfg.hairpinWall): a car that reaches the outside rail of a hard corner well over grip
   // speed, neither braking nor drifting, hits the barrier: a hard hit, a big speed loss, sparks, some damage. Once per corner.
-  if (G.cfg.hairpinWall && scraping && playing && G.air <= 0) { const cnw = G.road.at(G.dist).corner; if (cnw && cnw.hard && !cnw.wallHit && Math.sign(G.x - rc) === -cnw.dir && !G.drifting && !G.braking && G.speed * G.speed * Math.abs(cnw.k) > T.drive.grip * T.wall.over) {
-    cnw.wallHit = true; G.wallHits++; const o = -cnw.dir; G.speed = Math.max(T.drive.minSpeed, G.speed * T.wall.keep); G.boost = 0; G.slideVx = 0; G.vx = -o * 140; G.x -= o * 14; G.heading = G.phi = 0; G.targetX = G.x; emit({ k: 'rebase', d: -o * 14 });
+  // Over grip for wideFor seconds (accumulated) runs the car wide: it is put against the outer rail and takes the hit there.
+  if (G.cfg.hairpinWall && playing && G.air <= 0) { const cnw = G.road.at(G.dist).corner; const over = cnw && cnw.hard && !cnw.wallHit && !G.drifting && !G.braking && G.speed * G.speed * Math.abs(cnw.k) > T.drive.grip * T.wall.over;
+    if (over) G.wideT += dt; else G.wideT = 0;
+    if (over && G.wideT >= T.wall.wideFor) {
+    cnw.wallHit = true; G.wallHits++; G.wideT = 0; G.wallT = T.wall.stun; const o = -cnw.dir; G.speed = Math.max(T.drive.minSpeed, G.speed * T.wall.keep); G.boost = 0; G.slideVx = 0; G.vx = -o * 140; G.x = (o < 0 ? left : right) - o * 14; G.heading = G.phi = 0; const dTarget = G.x - G.targetX; G.targetX = G.x; emit({ k: 'rebase', d: dTarget });
     damage(T.wall.damage, null, 'Hit the barrier'); spark(G.x + o * 17, G.dist, 18); sfx.crunch(true); hap([40, 30, 60]); kickShake(o * 10, 0, 0.8); G.hitStop = Math.max(G.hitStop, 0.08); G.sq = 0.88; say('Too fast', 'brake or drift', 900); event();
-    if (G.cornerLog.length) G.cornerLog[G.cornerLog.length - 1].wall = true; } }
+    const row = cornerRow(cnw); if (row) row.wall = true; } }
+  else G.wideT = 0;
   if (scraping && G.air <= 0 && playing) { G.grazeT += dt; spark(G.x + (G.x <= left + 0.5 ? -17 : 17), G.dist, 1); G.boost = Math.max(G.boost - 40 * dt, -40); if (G.grazeT > 0.25 && G.grazePaid < T.score.grazeCap) { G.grazeT = 0; G.grazePaid++; addScore(T.score.graze, G.x, G.dist, true); } } else { G.grazeT = 0; if (!scraping) G.grazePaid = 0; }
   // median / barrier for the player
   for (const m of G.medians) if (G.dist > m.y0 - 30 && G.dist < m.y1 + 30) { const mx0 = G.road.laneX(G.dist, m.lane0) - 6, mx1 = G.road.laneX(G.dist, m.lane0 + m.lanes - 1) + 6; const hw = T.sizes.player[0] / 2; if (G.x + hw > mx0 && G.x - hw < mx1) { if (G.x < (mx0 + mx1) / 2) G.x = mx0 - hw; else G.x = mx1 + hw; G.vx = 0; if (G.slamT > 0) G.slamT = 0; spark(G.x, G.dist, 2); } }
@@ -49,9 +53,10 @@ export function physics(dt, playing) {
   // rumble strip on the inside of a corner: a buzz and a light judder
   { const rc0 = G.road.at(G.dist); const cn = rc0.corner; if (cn && playing && G.air <= 0) { const inside = REF + cn.dir * (rc0.width / 2 - 17); if (Math.abs(G.x - inside) < 9) { G.rumbleT -= dt; if (G.rumbleT <= 0) { G.rumbleT = T.corner.rumbleEvery; G.kick.y += 2; hap(5); sfx.tone('square', 90, 90, 0.03, 0.04); } } }
     // corner callouts for the first hairpins and hard corners, 2 s ahead, four words at most
-    const ca = G.road.cornerAhead(G.dist, T.corner.warn * G.speed); if (ca && ca.hard && ca.called !== true && G.dist >= ca.warnS) { ca.called = true; event(); if (G.cornerCalls < 3) { G.cornerCalls++; say(ca.type === 'hairpin' ? 'Hairpin' : 'Hard corner', ca.type === 'hairpin' ? 'brake or drift' : 'lift or drift', 1100); } if (ca.type === 'hairpin') G.hairpins++; G.cornerLog.push({ type: ca.type, vmax: Math.round(ca.vmax), entry: 0, apexSpeed: 0, drift: false, scraped: false }); }
-    if (cn && G.cornerLog.length) { const L = G.cornerLog[G.cornerLog.length - 1]; if (cn.hard && Math.abs(G.dist - cn.apex) < 30 && !L.apexSpeed) L.apexSpeed = Math.round(G.speed); if (G.drifting) L.drift = true; if (G.scraping) L.scraped = true; if (L.enterT === undefined) { L.enterT = G.t; L.s0 = cn.s0; L.s1 = cn.s1; } if (G.braking) L.braked = true; }
-    if (G.cornerLog.length) { const L = G.cornerLog[G.cornerLog.length - 1]; if (L.enterT !== undefined && L.exitT === undefined && G.dist > L.s1 + 100) L.exitT = G.t; } }
+    const ca = G.road.cornerAhead(G.dist, T.corner.warn * G.speed); if (ca && ca.hard && ca.called !== true && G.dist >= ca.warnS) { ca.called = true; event(); if (G.cornerCalls < 3) { G.cornerCalls++; say(ca.type === 'hairpin' ? 'Hairpin' : 'Hard corner', ca.type === 'hairpin' ? 'brake or drift' : 'lift or drift', 1100); } if (ca.type === 'hairpin') G.hairpins++; G.cornerLog.push({ type: ca.type, index: ca.index, vmax: Math.round(ca.vmax), entry: 0, apexSpeed: 0, drift: false, scraped: false }); }
+    // the log row for the corner the car is in (the next corner is announced before this one's apex, so never "the last row")
+    if (cn) { const L = cornerRow(cn); if (L) { if (cn.hard && Math.abs(G.dist - cn.apex) < 30 && !L.apexSpeed) L.apexSpeed = Math.round(G.speed); if (G.drifting) L.drift = true; if (G.scraping) L.scraped = true; if (L.enterT === undefined) { L.enterT = G.t; L.s0 = cn.s0; L.s1 = cn.s1; } if (G.braking) L.braked = true; } }
+    for (let i = G.cornerLog.length - 1; i >= 0 && i >= G.cornerLog.length - 4; i--) { const L = G.cornerLog[i]; if (L.enterT !== undefined && L.exitT === undefined && G.dist > L.s1 + 500) L.exitT = G.t; } }   // the window includes 500 pt of exit, where a hit costs its time
   if (G.invuln > 0) G.invuln -= dt;
   // --- cars
   for (const c of G.cars) {
@@ -121,6 +126,7 @@ export function physics(dt, playing) {
   if (playing) recordReplay(dt);   // last 1.5 s at 30 Hz into the pre-allocated ring, shown on the death card
 }
 export const isAlive = c => c.alive;
+function cornerRow(cn) { for (let i = G.cornerLog.length - 1; i >= 0; i--) if (G.cornerLog[i].index === cn.index) return G.cornerLog[i]; return null; }
 export function creditCar(c, how) { c.credit = true; c.how = how; c.creditT = 1.5; }
 // pools for the short-lived particles so a busy second does not allocate thousands of throwaway objects
 export const pool = { sparks: [], debris: [], marks: [], puffs: [], ribbons: [] };
@@ -140,6 +146,7 @@ export function driveSpeed(dt, playing) {
   if (G.nitro > 0) { G.nitro -= dt; target = D.nitro; if (G.nitro <= 0) G.popT = 0.5; }
   if (G.detour > 0) { G.detour -= dt; target *= 0.8; }
   target = Math.min(target, G.nitro > 0 ? D.nitro : D.top);
+  if (G.wallT > 0) { G.wallT -= dt; target = D.minSpeed; G.turboT = 0; G.slipBoostT = 0; }   // grinding the rail after a barrier hit: no throttle until the stun ends
   const braking = G.in.brake && !G.drifting && G.air <= 0;
   if (braking) { if (!G.braking) sfx.brake(); G.braking = true; G.speed = Math.max(D.minSpeed, G.speed - D.brake * dt); }
   else { G.braking = false; const accel = D.top / D.throttle; if (G.speed < target) G.speed = Math.min(target, G.speed + accel * dt); else G.speed += (target - G.speed) * Math.min(1, dt * 1.5); }

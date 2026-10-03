@@ -15,20 +15,20 @@ async function runBot(style) {
     await page.goto('file://' + pageFile + '?r=canvas&seed=' + seed + '&wall=' + wall); await page.waitForTimeout(400);
     await page.evaluate(() => window.__shunt.startPlaying());
     const t0 = Date.now();
-    while (Date.now() - t0 < 240000) {
+    while (Date.now() - t0 < 600000) {
       const s = await page.evaluate((style) => {
         const sh = window.__shunt, g = sh.G, inp = sh.input; if (sh.phase !== 'playing') return { phase: sh.phase };
         g.armor = 3; g.damageAcc = 0;   // harness: keep the run alive so the hairpins come
         const near = g.cars.filter(c => c.alive && !c.wrecked && c.y > g.dist - 60 && c.y < g.dist + 420); const road = g.road.at(g.dist); const center = road.center, width = road.width;
         let want = g.x; for (const c of near) if (Math.abs(c.x - g.x) < 44 && c.y > g.dist) want = c.x + (c.x < center ? 70 : -70);
         let drift = 0, brake = false; const cn = g.road.cornerAhead(g.dist, 2.2 * g.speed);
-        if (cn && cn.hard) { const inCorner = g.dist >= cn.s0 - 60 && g.dist <= cn.s1; if (inCorner) { want = 195 + cn.dir * (width / 2 - 40); if (style === 'brake' && g.speed > cn.vmax * 0.9 && !g.drifting) drift = cn.dir; else if (g.drifting) drift = g.driftDir; } else if (style === 'brake' && g.speed > cn.vmax * 1.05) brake = true; }
+        if (cn && cn.hard) { const inCorner = g.dist >= cn.s0 - 120 && g.dist <= cn.s1; if (inCorner) { want = 195 + cn.dir * (width / 2 - 40); if (style === 'brake' && g.speed > cn.vmax * 0.85 && !g.drifting) drift = cn.dir; else if (g.drifting) drift = g.driftDir; } else if (style === 'brake' && g.speed > cn.vmax * 0.95) brake = true; }
         if (inp.id === null) inp.down(1, 200, 700, performance.now()); inp.anchor = { x: 200, y: 700 }; inp.carAnchor = g.targetX - center;
         if (style === 'brake' && drift) { inp.brake = true; inp.cur = { x: 200 + drift * 60, y: 700 }; } else { inp.brake = style === 'brake' && brake; const dx = (want - g.targetX) / 1.4; inp.cur = { x: 200 + Math.max(-70, Math.min(70, dx)), y: 700 }; }
         return { phase: sh.phase, t: g.t, log: g.cornerLog.filter(c => c.type === 'hairpin' && c.exitT !== undefined).map(c => ({ dt: c.exitT - c.enterT, wall: !!c.wall, drift: c.drift, braked: !!c.braked, apex: c.apexSpeed, vmax: c.vmax })) };
       }, style);
       if (s.phase !== 'playing') break; if (s.log && s.log.length + log.length >= need) break; if (s.t > 200) break;
-      await page.waitForTimeout(100);
+      await page.evaluate(() => window.__shunt.runSteps(12));   // 0.1 s of sim per bot tick, as fast as the round trip allows
     }
     const done = await page.evaluate(() => window.__shunt.G.cornerLog.filter(c => c.type === 'hairpin' && c.exitT !== undefined).map(c => ({ dt: c.exitT - c.enterT, wall: !!c.wall, drift: c.drift, braked: !!c.braked, apex: c.apexSpeed, vmax: c.vmax })));
     if (errors.length) console.log('errors', errors.slice(0, 3));
