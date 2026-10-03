@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1b1d22">
+<title>Shunt</title>
+<style>
+  /* Gray-box, sprint 1-4 build plus the audit's Sprint A (design/spy-car-audit-2.pdf). Plain shapes, colour means role. Portrait stage fills the viewport aspect; HUD top 15%, special button bottom corner. */
+  :root {
+    --bg: #1b1d22; --fg: #f2f4f8; --fg-dim: rgba(242,244,248,0.7);
+    --player: #37e6ff; --enemy: #ff3b3b; --civ: #cfe6ff; --pickup: #ffd23f; --hazard: #ff9f1c;
+    --font-display: "Rajdhani", "Avenir Next Condensed", "Helvetica Neue", Arial, sans-serif;
+    --font-body: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); overflow: hidden; }
+  body { font-family: var(--font-body); -webkit-user-select: none; user-select: none; touch-action: none; overscroll-behavior: none; }
+  #frame { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+  #stage { position: relative; flex-shrink: 0; width: 390px; height: 844px; transform-origin: center center; background: #000; overflow: hidden; }
+  #shake { position: absolute; inset: 0; }
+  #stage canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  #ui { position: absolute; inset: 0; pointer-events: none; font-family: var(--font-display); }
+  #ui * { pointer-events: none; }
+  #ui .tap { pointer-events: auto; }
+  /* callouts live in a slim band under the HUD so they never cover what they describe (audit, UI section) */
+  .callout { position: absolute; left: 24px; right: 24px; top: calc(86px + var(--safe-top, 0px)); text-align: center; letter-spacing: 0.16em; font-weight: 700; font-size: 19px; line-height: 1.1; text-transform: uppercase; text-shadow: 0 2px 10px rgba(0,0,0,0.9); transition: opacity 0.2s; }
+  .callout small { display: block; margin-top: 2px; font-size: 13px; letter-spacing: 0.08em; color: var(--fg-dim); text-transform: none; font-weight: 600; }
+  .callout.big { font-size: 64px; top: 38%; }
+  #pause { position: absolute; top: calc(18px + var(--safe-top, 0px)); right: 16px; width: 44px; height: 44px; border-radius: 22px; background: rgba(255,255,255,0.10); border: 0; color: var(--fg); font-size: 13px; }
+  /* pedal pad bottom right (brake; hold while steering = drift), special button above it; both mirror with the handedness setting */
+  #pad { position: absolute; right: 18px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); width: 100px; height: 100px; border-radius: 50px; border: 3px solid rgba(255,255,255,0.28); background: rgba(20,24,30,0.78); color: var(--fg-dim); font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.14em; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  #pad.held { background: rgba(55,230,255,0.22); border-color: var(--player); color: var(--fg); }
+  #pad.left { right: auto; left: 18px; }
+  #pad[hidden] { display: none; }
+  #special { position: absolute; right: 30px; bottom: calc(140px + env(safe-area-inset-bottom, 0px)); width: 76px; height: 76px; border-radius: 38px; border: 3px solid rgba(255,255,255,0.35); background: rgba(20,24,30,0.88); color: var(--fg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; transition: transform 0.3s, opacity 0.3s; }
+  #special[hidden] { display: flex; opacity: 0; transform: translateY(40px) scale(0.6); }
+  #special.armed { border-color: var(--pickup); box-shadow: 0 0 18px rgba(255,210,63,0.55); }
+  #special.pulse { animation: pulse 0.6s 2; }
+  #special svg { width: 32px; height: 32px; }
+  #special .pips { display: flex; gap: 3px; } #special .pips i { width: 7px; height: 7px; border-radius: 4px; background: var(--pickup); display: block; }
+  #special.left { right: auto; left: 30px; }
+  @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+  #card { position: absolute; inset: 0; background: rgba(0,0,0,0.6); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 28px; box-sizing: border-box; }
+  #card[hidden] { display: none; }
+  #card .logo { font-size: 54px; font-weight: 700; letter-spacing: 0.3em; color: var(--player); text-shadow: 0 0 24px rgba(55,230,255,0.5); }
+  #card .title { font-size: 15px; letter-spacing: 0.2em; color: var(--fg-dim); text-transform: uppercase; text-align: center; }
+  #card .score { font-size: 52px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+  #card .newbest { font-size: 18px; letter-spacing: 0.2em; color: var(--pickup); font-weight: 700; }
+  #card .lines { font-size: 13px; color: var(--fg-dim); letter-spacing: 0.06em; text-align: center; line-height: 1.6; }
+  #card .btn { width: 100%; max-width: 310px; height: 56px; border-radius: 28px; border: 0; background: rgba(255,255,255,0.92); color: #07101c; font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: 0.12em; }
+  #card .row { display: flex; gap: 10px; width: 100%; max-width: 310px; flex-wrap: wrap; }
+  #card .row .btn { height: 44px; border-radius: 22px; background: rgba(255,255,255,0.12); color: var(--fg); font-size: 13px; flex: 1; min-width: 90px; }
+  #card .row .btn.on { background: rgba(55,230,255,0.25); }
+  #card .bar { width: 100%; max-width: 310px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.12); overflow: hidden; }
+  #card .bar i { display: block; height: 100%; background: var(--pickup); }
+  /* settings: standard rows, a 17 pt label on the left and a switch on the right, grouped (audit, UI section) */
+  #settings { width: 100%; max-width: 310px; display: flex; flex-direction: column; gap: 6px; }
+  #settings[hidden] { display: none; }
+  #settings .grp { font-size: 12px; letter-spacing: 0.16em; color: var(--fg-dim); text-transform: uppercase; margin-top: 10px; }
+  #settings label { font-family: var(--font-body); font-size: 17px; color: var(--fg); display: flex; justify-content: space-between; align-items: center; min-height: 36px; }
+  #settings label b { font-weight: 600; color: var(--fg-dim); margin-left: 6px; }
+  #settings input[type=range] { pointer-events: auto; width: 140px; accent-color: var(--player); }
+  .sw { width: 51px; height: 31px; border-radius: 16px; border: 0; background: rgba(255,255,255,0.22); position: relative; padding: 0; flex-shrink: 0; }
+  .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; transition: left 0.15s; }
+  .sw.on { background: var(--player); } .sw.on::after { left: 22px; }
+  .sw.seg { width: auto; padding: 0 14px; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.1em; color: var(--fg); background: rgba(255,255,255,0.14); } .sw.seg::after { display: none; }
+  /* the death card sits low so the replay plays in the top half behind it */
+  #card.over { justify-content: flex-end; padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.2) 38%, rgba(0,0,0,0.82) 52%); }
+  .btn:focus-visible { outline: 2px solid var(--player); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .callout { transition: none; } #special.pulse { animation: none; } }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&display=swap">
+</head>
+<body>
+<div id="frame">
+  <div id="stage">
+    <div id="shake"><canvas id="cv"></canvas></div>
+    <div id="ui">
+      <div class="callout" id="callout" style="opacity:0"></div>
+      <button id="pause" class="tap" aria-label="Pause"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect x="4" y="3" width="4" height="14" rx="1" fill="currentColor"/><rect x="12" y="3" width="4" height="14" rx="1" fill="currentColor"/></svg></button>
+      <button id="special" class="tap" aria-label="Special weapon" hidden><span id="specialIcon"></span><span class="pips" id="specialPips"></span></button>
+      <button id="pad" class="tap" aria-label="Brake, hold while steering to drift" hidden>BRAKE</button>
+      <div id="card" hidden>
+        <div class="logo" id="cardLogo" hidden>SHUNT</div>
+        <div class="title" id="cardTitle"></div>
+        <div class="score" id="cardScore">0</div>
+        <div class="newbest" id="cardNewBest" hidden>NEW BEST</div>
+        <div class="lines" id="cardLines"></div>
+        <div class="bar" id="cardBar" hidden><i id="cardBarFill" style="width:0%"></i></div>
+        <div id="settings" hidden>
+          <div class="grp">Audio</div>
+          <label><span>Sound</span><button class="sw tap" id="sSound" role="switch" aria-label="Sound"></button></label>
+          <label><span>Music</span><button class="sw tap" id="sMusic" role="switch" aria-label="Music"></button></label>
+          <div class="grp">Controls</div>
+          <label><span>Special button side</span><button class="sw seg tap" id="sHand">RIGHT</button></label>
+          <label><span>Sensitivity <b id="sSensVal">1.0×</b></span><input id="sSens" type="range" min="0.7" max="1.6" step="0.1" value="1" aria-label="Sensitivity"></label>
+          <label><span>Tap half to Slam</span><button class="sw tap" id="sTapSlam" role="switch" aria-label="Tap half to Slam"></button></label>
+          <label><span>Auto-drift <b>hard turns drift by themselves</b></span><button class="sw tap" id="sAutoDrift" role="switch" aria-label="Auto-drift"></button></label>
+          <div class="grp">Accessibility</div>
+          <label><span>Haptics</span><button class="sw tap" id="sHaptics" role="switch" aria-label="Haptics"></button></label>
+          <label><span>Screen shake</span><button class="sw tap" id="sShake" role="switch" aria-label="Screen shake"></button></label>
+          <label><span>Reduce motion</span><button class="sw tap" id="sMotion" role="switch" aria-label="Reduce motion"></button></label>
+        </div>
+        <button class="btn tap" id="btnPrimary">DRIVE AGAIN</button>
+        <div class="row" id="cardRow">
+          <button class="btn tap" id="btnA">NEW ROAD</button>
+          <button class="btn tap" id="btnB">DAILY RUN</button>
+          <button class="btn tap" id="btnC">SETTINGS</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

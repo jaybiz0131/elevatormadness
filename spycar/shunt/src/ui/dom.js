@@ -1,0 +1,12 @@
+// DOM handles, the callout band and the special button. Everything here is presentation.
+export const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+export const view = { SW: 390, safeTop: 0, dpr: Math.min(window.devicePixelRatio || 1, 3) };
+export const stage = document.getElementById('stage'), shakeEl = document.getElementById('shake'), cv = document.getElementById('cv');
+export const $ = (id) => document.getElementById(id);
+export const ui = { callout: $('callout'), pause: $('pause'), special: $('special'), pad: $('pad'), specialIcon: $('specialIcon'), specialPips: $('specialPips'), card: $('card'), logo: $('cardLogo'), title: $('cardTitle'), score: $('cardScore'), newBest: $('cardNewBest'), lines: $('cardLines'), bar: $('cardBar'), barFill: $('cardBarFill'), settings: $('settings'), primary: $('btnPrimary'), a: $('btnA'), b: $('btnB'), c: $('btnC'), row: $('cardRow') };
+export let calloutTimer = null;
+export function callout(text, sub, ms = 1000, big = false) { if (Array.isArray(sub)) sub = sub[isTouch ? 0 : 1]; ui.callout.textContent = text; if (sub) { const s = document.createElement('small'); s.textContent = sub; ui.callout.appendChild(s); } ui.callout.classList.toggle('big', !!big); ui.callout.style.opacity = 1; clearTimeout(calloutTimer); if (ms > 0) calloutTimer = setTimeout(() => { ui.callout.style.opacity = 0; }, ms); }
+export function hideCallout() { clearTimeout(calloutTimer); ui.callout.style.opacity = 0; }
+export const ICONS = { missiles: '<svg viewBox="0 0 32 32"><path d="M16 2l5 10v12l-5 6-5-6V12z" fill="#ffd23f"/><path d="M11 20l-5 5 5-1zM21 20l5 5-5-1z" fill="#ffd23f"/></svg>', oil: '<svg viewBox="0 0 32 32"><path d="M16 3c5 7 9 11 9 17a9 9 0 0 1-18 0c0-6 4-10 9-17z" fill="#ffd23f"/></svg>', nitro: '<svg viewBox="0 0 32 32"><path d="M18 2L6 18h8l-2 12 14-18h-8z" fill="#ffd23f"/></svg>' };
+export function updateSpecial(G) { if (!G || !G.special) { ui.specialIcon.innerHTML = ''; ui.specialPips.innerHTML = ''; return; } ui.specialIcon.innerHTML = ICONS[G.special.kind]; ui.specialPips.innerHTML = ''; for (let i = 0; i < Math.min(G.special.ammo, 9); i++) ui.specialPips.appendChild(document.createElement('i')); if (G.special.ammo <= 0) ui.special.classList.remove('armed'); }
+export function pulseSpecial() { ui.special.classList.add('pulse'); setTimeout(() => ui.special.classList.remove('pulse'), 1300); }
