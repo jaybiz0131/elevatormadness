@@ -20,8 +20,10 @@ node tools/bench.mjs [soak] [look]; node tools/check.mjs <out> [look]; node tool
 ```
 Headless numbers are SwiftShader numbers, not iPhone numbers.
 
+- Step 7: all 12 replays match (sync; one live in 3D), zoo frame 135 calls / 18k tris, context loss restored, warning time logged, postcards in `design/postcards/`, soak and bench numbers in the Stop Point 1 report. 3D link republished.
+
 ## Next
-See the bottom of the brief: Step 7 checks, publish, report, Stop Point 1 questions.
+Stop Point 1: waiting on Jack's answers (look choice, iPhone ?bench=1 screenshot, 10-minute playtest, canvas comparison). Then: apply the chosen look; hero car concepts and model; enemy class models; bring in the drops work (ecb7983) and the arsenal work (98bf28b) one at a time with determinism applied and replays recorded at each; drop chase camera; first mission.
 
 ## Headless lessons (this container, 4 cores)
 - Only one SwiftShader (3D) browser at a time; two or more starve each other and the sim falls to 1/10 pace. Canvas pages are cheap.
