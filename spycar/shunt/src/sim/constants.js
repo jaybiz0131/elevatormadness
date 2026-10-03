@@ -28,6 +28,8 @@ export const T = {
   score: { weak: 100, bruiser: 250, gunner: 250, armored: 400, cause: { gun: 1, missile: 1, slam: 3, shunt: 3, ram: 3, rail: 3, wall: 3, oil: 3, stomp: 3, chain: 2, barrel: 2 },
            civilian: -100, crate: 250, graze: 10, grazeCap: 3, truckLoad: 100, clean: 120, closeCall: 25, shuntEnemy: 100, barrelDouble: 150, distancePer: 100 },
   graceSeconds: 30,   // damage halved for the first 30 s only; no free pip; armor comes from the supply truck only
+  // the barrier hit (step 6): fires over 1.15x the grip budget, keeps 45% of the speed, costs half an armor pip
+  wall: { over: 1.15, keep: 0.45, damage: 0.5 },
   sizes: { player: [34, 60, 1.0], civ: [34, 58, 0.8], weak: [30, 52, 0.8], bruiser: [40, 70, 1.2], gunner: [40, 76, 1.3], armored: [120, 150, 3.0], truck: [56, 110, 3.0] },
 };
 export const clamp = (v, a, b) => Math.min(Math.max(v, a), b);

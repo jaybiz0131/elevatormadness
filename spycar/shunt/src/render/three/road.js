@@ -3,7 +3,7 @@
 // corners, the red and white rumble strip on the inside of every corner. One merged geometry and one draw call per chunk; chunks
 // are recycled as the player moves on. Vertex colours carry the look so the material can change without rebuilding.
 import { BufferGeometry, BufferAttribute, Mesh, MeshStandardMaterial, Color, Group, PlaneGeometry, DoubleSide } from 'three';
-import { REF, T } from '../../sim/constants.js';
+import { REF, T, hashI } from '../../sim/constants.js';
 import { DISTRICTS } from '../../sim/road.js';
 import { M, toWorld } from './scale.js';
 export const CHUNK = 400, SAMPLE = 10;
@@ -11,13 +11,17 @@ const col = (hex) => new Color(hex);
 const PAL = DISTRICTS.map(d => ({ road: col(d.road), dark: col(d.dark), shoulder: col(d.shoulder), rail: col(d.rail) }));
 export const ROAD_COL = { walk: col('#3c3f4a'), lane: col('#d8dce4'), tyre: col('#2b2d31'), rumbleR: col('#d93a3a'), rumbleW: col('#f2f2f2'), railPost: col('#5d6675') };
 const tmp = { x: 0, y: 0, z: 0 }, tmp2 = { x: 0, y: 0, z: 0 }, tmpc = new Color();
+// smooth value noise over (x, s) from the road seed: the puddle mask is its upper band
+let noiseSeed = 0;
+function vnoise(x, s) { const gx = x / 60, gs = s / 90; const ix = Math.floor(gx), is = Math.floor(gs); const fx = gx - ix, fs = gs - is; const h = (a, b) => hashI(noiseSeed, a * 7919 + b * 104729 + 12345) / 4294967296; const u = fx * fx * (3 - 2 * fx), v = fs * fs * (3 - 2 * fs); return (h(ix, is) * (1 - u) + h(ix + 1, is) * u) * (1 - v) + (h(ix, is + 1) * (1 - u) + h(ix + 1, is + 1) * u) * v; }
+const puddle = (x, s) => { const n = vnoise(x, s); return n < 0.56 ? 0 : Math.min(1, (n - 0.56) / 0.14); };
 class Builder {
-  constructor() { this.pos = []; this.col = []; this.nrm = []; this.idx = []; this.n = 0; }
-  vert(p, c, nx, ny, nz) { this.pos.push(p.x, p.y, p.z); this.col.push(c.r, c.g, c.b); this.nrm.push(nx, ny, nz); return this.n++; }
+  constructor() { this.pos = []; this.col = []; this.nrm = []; this.wet = []; this.idx = []; this.n = 0; this.wetOn = false; }
+  vert(p, c, nx, ny, nz, w = 0) { this.pos.push(p.x, p.y, p.z); this.col.push(c.r, c.g, c.b); this.nrm.push(nx, ny, nz); this.wet.push(w); return this.n++; }
   // a quad between road-space lateral offsets [a0,a1] at s0 and [b0,b1] at s1, lifted by h metres; flat, facing up
   strip(road, a0, a1, s0, b0, b1, s1, c, h = 0, c2) {
-    const i0 = this.vert(lift(toWorld(road, a0, s0, tmp), h), c, 0, 1, 0), i1 = this.vert(lift(toWorld(road, a1, s0, tmp), h), c, 0, 1, 0);
-    const i2 = this.vert(lift(toWorld(road, b1, s1, tmp), h), c2 || c, 0, 1, 0), i3 = this.vert(lift(toWorld(road, b0, s1, tmp), h), c2 || c, 0, 1, 0);
+    const W = this.wetOn; const i0 = this.vert(lift(toWorld(road, a0, s0, tmp), h), c, 0, 1, 0, W ? puddle(a0, s0) : 0), i1 = this.vert(lift(toWorld(road, a1, s0, tmp), h), c, 0, 1, 0, W ? puddle(a1, s0) : 0);
+    const i2 = this.vert(lift(toWorld(road, b1, s1, tmp), h), c2 || c, 0, 1, 0, W ? puddle(b1, s1) : 0), i3 = this.vert(lift(toWorld(road, b0, s1, tmp), h), c2 || c, 0, 1, 0, W ? puddle(b0, s1) : 0);
     this.idx.push(i0, i1, i2, i0, i2, i3);   // counter-clockwise seen from above: the face points up
   }
   // a vertical face along the road at lateral offset x, from height h0 to h1, normal toward the road centre
@@ -26,17 +30,17 @@ class Builder {
     const i2 = this.vert(lift(toWorld(road, x1, s1, tmp), h1), c, n, 0, 0), i3 = this.vert(lift(toWorld(road, x1, s1, tmp), h0), c, n, 0, 0);
     if (inward < 0) this.idx.push(i0, i1, i2, i0, i2, i3); else this.idx.push(i0, i2, i1, i0, i3, i2);
   }
-  geometry() { const g = new BufferGeometry(); g.setAttribute('position', new BufferAttribute(new Float32Array(this.pos), 3)); g.setAttribute('color', new BufferAttribute(new Float32Array(this.col), 3)); g.setAttribute('normal', new BufferAttribute(new Float32Array(this.nrm), 3)); g.setIndex(this.idx); g.computeBoundingSphere(); return g; }
+  geometry() { const g = new BufferGeometry(); g.setAttribute('position', new BufferAttribute(new Float32Array(this.pos), 3)); g.setAttribute('color', new BufferAttribute(new Float32Array(this.col), 3)); g.setAttribute('normal', new BufferAttribute(new Float32Array(this.nrm), 3)); g.setAttribute('wet', new BufferAttribute(new Float32Array(this.wet), 1)); g.setIndex(this.idx); g.computeBoundingSphere(); return g; }
 }
 function lift(p, h) { p.y += h; return p; }
 export function buildChunk(G, k, material) {
-  const road = G.road; const b = new Builder(); const s0 = k * CHUNK;
+  const road = G.road; const b = new Builder(); const s0 = k * CHUNK; noiseSeed = road.seed;
   for (let s = s0; s < s0 + CHUNK; s += SAMPLE) {
     const s1 = s + SAMPLE; const a = road.at(s); const w0 = a.width, n0 = Math.round(a.lanes), cn = a.corner, crest = a.elev > 0.5 ? a.slope : 0; const a1 = road.at(s1); const w1 = a1.width, n1 = Math.round(a1.lanes);
     const di = s >= G.nextDistrictY ? (G.district + 1) % 4 : G.district; const P = PAL[di];
     const dark = Math.floor(s / 320) % 2 === 0; tmpc.copy(dark ? P.dark : P.road);
     if (crest > 0) tmpc.lerp(ROAD_COL.rumbleW, Math.min(0.12, crest * 0.4)); else if (crest < 0) tmpc.multiplyScalar(1 - Math.min(0.25, -crest * 0.8));
-    b.strip(road, REF - w0 / 2, REF + w0 / 2, s, REF - w1 / 2, REF + w1 / 2, s1, tmpc);
+    b.wetOn = true; for (let q = 0; q < 4; q++) { const x0 = REF - w0 / 2 + w0 * q / 4, x1 = REF - w0 / 2 + w0 * (q + 1) / 4, y0 = REF - w1 / 2 + w1 * q / 4, y1 = REF - w1 / 2 + w1 * (q + 1) / 4; b.strip(road, x0, x1, s, y0, y1, s1, tmpc); } b.wetOn = false;   // asphalt in four strips so the puddle mask has lateral resolution
     if (Math.floor(s / 40) % 2 === 0 && n0 === n1) for (let j = 1; j < n0; j++) { const x0 = REF - w0 / 2 + w0 * j / n0, x1 = REF - w1 / 2 + w1 * j / n1; b.strip(road, x0 - 1.5, x0 + 1.5, s, x1 - 1.5, x1 + 1.5, s1, ROAD_COL.lane, 0.01); }
     // rails: a 0.5 m kerb wall with a lit top, both sides; tyre walls outside hard corners; rumble strip inside every corner
     for (const side of [-1, 1]) { const o0 = REF + side * (w0 / 2 + 2), o1 = REF + side * (w1 / 2 + 2), q0 = REF + side * (w0 / 2 + 6), q1 = REF + side * (w1 / 2 + 6);
@@ -51,6 +55,9 @@ export class RoadMesh {
   constructor(scene) {
     this.group = new Group(); scene.add(this.group); this.chunks = new Map();
     this.material = new MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0.0, side: DoubleSide });
+    // puddles: the wet attribute lowers roughness and darkens the asphalt, scaled by the look's wet value
+    this.wetUniform = { value: 1 };
+    this.material.onBeforeCompile = (sh) => { sh.uniforms.uWet = this.wetUniform; sh.vertexShader = 'attribute float wet; varying float vWet;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vWet = wet;'); sh.fragmentShader = 'varying float vWet; uniform float uWet;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n float puddleK = vWet * uWet; roughnessFactor = mix(roughnessFactor, 0.06, puddleK); diffuseColor.rgb *= 1.0 - 0.5 * puddleK;'); };
     // the shoulder: one big ground plane that follows the camera, in the district's shoulder colour
     this.ground = new Mesh(new PlaneGeometry(2400, 2400), new MeshStandardMaterial({ color: PAL[0].shoulder, roughness: 1 })); this.ground.rotation.x = -Math.PI / 2; this.ground.position.y = -0.02; this.ground.receiveShadow = true; scene.add(this.ground);
   }
@@ -60,6 +67,6 @@ export class RoadMesh {
     for (const [k, m] of this.chunks) if (k < k0 - 1 || k > k1 + 1) { this.group.remove(m); m.geometry.dispose(); this.chunks.delete(k); }
     this.ground.position.x = camPos.x; this.ground.position.z = camPos.z; this.ground.material.color.copy(PAL[G.district].shoulder);
   }
-  setLook(P) { this.material.roughness = 0.92 - 0.55 * P.wet; this.material.metalness = 0.05 * P.wet; this.material.envMapIntensity = 0.3 + 0.9 * P.wet; }
+  setLook(P) { this.material.roughness = 0.92 - 0.35 * P.wet; this.material.metalness = 0.05 * P.wet; this.material.envMapIntensity = 0.3 + 0.9 * P.wet; this.wetUniform.value = P.wet; }
   reset() { for (const [, m] of this.chunks) { this.group.remove(m); m.geometry.dispose(); } this.chunks.clear(); }
 }

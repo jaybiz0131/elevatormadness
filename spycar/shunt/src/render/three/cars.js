@@ -25,7 +25,7 @@ function carGeometry(kind) {
 }
 export class CarSystem {
   constructor(scene) {
-    this.scene = scene; this.geo = {}; this.mat = {}; this.free = {}; this.live = []; this.pos = new Vector3(); this.meshOf = new Map();
+    this.scene = scene; this.geo = {}; this.mat = {}; this.free = {}; this.live = []; this.pos = new Vector3(); this.meshOf = new Map(); this.stamp = 0;
     for (const k of ['player', 'civ', 'weak', 'bruiser', 'gunner', 'armored', 'truck']) { this.geo[k] = carGeometry(k); this.free[k] = []; }
     for (const [k, c] of Object.entries(KIND_COL)) this.mat[k] = new MeshStandardMaterial({ color: new Color(c), vertexColors: true, roughness: 0.55, metalness: 0.25 });
     for (let i = 0; i < CIV_TINTS.length; i++) this.mat['civ' + i] = new MeshStandardMaterial({ color: new Color(CIV_TINTS[i]), vertexColors: true, roughness: 0.6, metalness: 0.2 });
@@ -38,10 +38,10 @@ export class CarSystem {
   place(mesh, G, x, s, yaw, lift) { toWorld(G.road, x, s, this.pos); mesh.position.copy(this.pos); mesh.position.y += lift; mesh.rotation.set(0, -(G.road.frame(s).psi + yaw), 0, 'YXZ'); }
   // cars that exist this frame get a mesh; the rest go back to the pool. c.mesh is render-side only (the hash never reads it).
   update(G, alpha, fx, elapsed) {
-    const seen = new Set();
+    const stamp = ++this.stamp;   // no per-frame allocation: meshes seen this frame carry the stamp
     for (const c of G.cars) {
       if (!c.alive) continue; let m = this.meshOf.get(c); if (!m) { m = this.acquire(c.kind); m.userData.kind = c.kind; this.meshOf.set(c, m); }
-      seen.add(m); const cx = lerp(c.px, c.x, alpha), cy = lerp(c.py, c.y, alpha); const w = c.w * M, l = c.l * M;
+      m.userData.stamp = stamp; const cx = lerp(c.px, c.x, alpha), cy = lerp(c.py, c.y, alpha); const w = c.w * M, l = c.l * M;
       if (c.wrecked) { m.material = this.mat.wreck; this.place(m, G, cx, cy, c.spin, 0); m.rotation.z = Math.sin(c.flip * Math.PI * 2) * 0.5; m.rotation.x = Math.sin(c.flip * Math.PI) * 0.2; if (c.debrisT > 0.5) fx.glow(m.position.x, m.position.y + 1, m.position.z, 2.5, 1, 0.5, 0.15, (c.debrisT - 0.5)); fx.shadow(m.position, w, l); continue; }
       m.material = c.kind === 'civ' ? this.mat['civ' + Math.max(0, CIV_TINTS.indexOf(c.tint))] : this.mat[c.kind]; m.rotation.z = 0; m.rotation.x = 0;
       this.place(m, G, cx, cy, (c.lean || 0) * Math.PI / 180 + (c.spin || 0), 0); fx.shadow(m.position, w, l);
@@ -57,7 +57,7 @@ export class CarSystem {
       if (c.state === 'tell') { const dir = G.x < c.x ? -1 : 1; fx.marker(G, cx + dir * 36, cy, 'arrow', dir, 0.5 + 0.5 * Math.sin(elapsed * 20)); }
       if (c.kind === 'gunner' && c.state === 'sight') fx.sightLine(G, c.sightX, c.y, c.sightX, c.y + 700, 0.5 + 0.5 * Math.sin(elapsed * 30));
     }
-    for (const [c, m] of this.meshOf) if (!seen.has(m)) { this.release(m); this.meshOf.delete(c); }
+    for (const [c, m] of this.meshOf) if (m.userData.stamp !== stamp) { this.release(m); this.meshOf.delete(c); }
   }
   updatePlayer(G, rx, rdist, fx, st, elapsed) {
     const m = this.player; const z = G.jumpZ; const lift = z * 3.5; const lean = (st.lean !== undefined ? st.lean : G.lean) * Math.PI / 180;

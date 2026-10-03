@@ -57,8 +57,8 @@ export class City {
       let s = s0; let i = 0;
       while (s < s0 + CHUNK - 40) {
         const h1 = hash(seed, Math.round(s) + side * 7, 1), h2 = hash(seed, Math.round(s) + side * 7, 2), h3 = hash(seed, Math.round(s) + side * 7, 3);
-        const len = 120 + h1 * 160; const depth = 10 + h2 * 10; const height = h3 < 0.15 ? 6 + h3 * 20 : h3 < 0.7 ? 12 + h3 * 30 : 30 + h3 * 45;
-        const a = road.at(s + len / 2); const w = a.width; const x = REF + side * (w / 2 + 70 + depth / 2 / M + 20 * h2);
+        const len = 120 + h1 * 160; const tower = h3 > 0.72; const depth = tower ? 16 + h2 * 12 : 8 + h2 * 6; const height = tower ? 24 + (h3 - 0.72) * 70 : 5 + h3 * 12;
+        const a = road.at(s + len / 2); const w = a.width; const x = REF + side * (w / 2 + (tower ? 330 + 120 * h2 : 66) + depth / 2 / M);
         toWorld(road, x, s + len / 2, V); const yaw = -(road.frame(s + len / 2).psi);
         tint.setHSL(0.6 + h2 * 0.15, 0.25, 0.09 + h1 * 0.06);
         const g = building(len * M * 0.92, height, depth, 0, 0, 0, tint, Math.floor(h3 * 8) / 8); g.rotateY(yaw); g.translate(V.x, 0, V.z); parts.push(g);
@@ -93,10 +93,10 @@ export class City {
     const sA = Math.floor((rdist - 300) / 20) * 20, sB = rdist + 1400;
     for (let s = sA; s <= sB; s += 20) {
       const a = road.at(s); const w = a.width; const h = hash(road.seed, s / 20, 9);
-      if (s % 160 === 80) for (const side of [-1, 1]) { const x = REF + side * (w / 2 + 34); this.fx.pool(G, x, s, 1.0, 0.82, 0.5, 0.35 * (1 - 0.4 * (1 - neonOn)) + 0.2, 7); this.fx.reflect(G, x, s, LAMP_COL, 0.3 * this.wet, 5); }   // lamp light pools (the posts come from props)
+      if (s % 160 === 80) for (const side of [-1, 1]) { const x = REF + side * (w / 2 + 34); this.fx.pool(G, x, s, 1.0, 0.72, 0.38, 0.14 + 0.08 * neonOn, 3.6); this.fx.reflect(G, x, s, LAMP_COL, 0.18 * this.wet, 4); }   // lamp light pools (the posts come from props)
       if (s % 20 === 0 && !(a.corner && a.corner.hard)) { const side = h < 0.5 ? -1 : 1; const kind = Math.floor(h * 977) % 5; const x = REF + side * (w / 2 + 44 + (h * 31 % 1) * 20);
         if (kind === 0) this.put(this.bollard, road, x, s, 0); else if (kind === 1 && s % 40 === 0) this.put(this.bench, road, x, s, side > 0 ? Math.PI / 2 : -Math.PI / 2); else if (kind === 2 && s % 60 === 0) this.put(this.vending, road, x + side * 20, s, side > 0 ? -Math.PI / 2 : Math.PI / 2); else if (kind === 3 && s % 40 === 0) this.put(this.hydrant, road, x, s, 0); }
-      if (s % 3200 === 1600 && !(a.corner)) { for (const side of [-1, 1]) this.put(this.pillar, road, REF + side * (w / 2 + 26), s, 0); this.put(this.beam, road, REF, s, 0, (w + 90) * M, 1.4, 4); }   // overpass
+      if (s % 3200 === 1600 && !(a.corner)) { for (const side of [-1, 1]) this.put(this.pillar, road, REF + side * (w / 2 + 26), s, 0); this.put(this.beam, road, REF, s, 0, (w + 90) * M, 1.4, 4, 7); }   // overpass
       if (s % 1200 === 600) { const side = h < 0.5 ? -1 : 1; const x = REF + side * (w / 2 + 24); this.put(this.vent, road, x, s, 0); const n = 6; for (let j = 0; j < n; j++) { const ph = ((elapsed * 0.35 + j / n + h) % 1); toWorld(road, x + (ph * 10 - 2) * side, s + 10, V); this.fx.puff(V.x, V.y + 0.3 + ph * 4.5, V.z, 0.5 + ph * 1.6, (1 - ph) * 0.35 * this.steam, 0.75, 0.78, 0.84); } }
     }
     for (const p of this.props) if (p.count) p.instanceMatrix.needsUpdate = true;

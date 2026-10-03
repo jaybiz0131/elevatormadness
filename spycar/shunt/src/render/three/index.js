@@ -2,7 +2,7 @@
 // with a shadow box fitted around the player and snapped to texels; hemisphere fill; a small pre-filtered environment map; every
 // other light is emissive or additive. Dynamic resolution between 1.25 and the capped device pixel ratio (never above 2). Handles
 // context loss. Everything three.js lives under render/three so the backend can change later.
-import { WebGLRenderer, Scene, Color, DirectionalLight, HemisphereLight, Vector3, PCFSoftShadowMap, Mesh, PlaneGeometry, MeshBasicMaterial, CanvasTexture, AdditiveBlending, RepeatWrapping, SRGBColorSpace } from 'three';
+import { WebGLRenderer, Scene, Color, DirectionalLight, HemisphereLight, Vector3, PCFShadowMap, Mesh, PlaneGeometry, MeshBasicMaterial, CanvasTexture, AdditiveBlending, RepeatWrapping, SRGBColorSpace } from 'three';
 import { REF, H, T, clamp, lerp } from '../../sim/constants.js';
 import { S } from '../../settings.js';
 import { view } from '../../ui/dom.js';
@@ -20,7 +20,7 @@ const V = new Vector3(), V2 = new Vector3(), SUN = new Vector3();
 function rainTexture() { const c = document.createElement('canvas'); c.width = 256; c.height = 256; const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 256, 256); let a = 7; const rng = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 1; for (let i = 0; i < 90; i++) { const px = rng() * 256, py = rng() * 256, l = 14 + rng() * 26; x.globalAlpha = 0.3 + rng() * 0.6; x.beginPath(); x.moveTo(px, py); x.lineTo(px + 2, py + l); x.stroke(); } const t = new CanvasTexture(c); t.wrapS = t.wrapT = RepeatWrapping; t.colorSpace = SRGBColorSpace; return t; }
 export function createThreeRenderer(canvas, opts = {}) {
   const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, alpha: false });
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = PCFSoftShadowMap; renderer.toneMapping = 0; renderer.autoClear = true; renderer.info.autoReset = false;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = PCFShadowMap; renderer.toneMapping = 0; renderer.autoClear = true; renderer.info.autoReset = false;
   const scene = new Scene();
   const roadCam = new RoadCamera(view.SW / H); const camera = roadCam.cam;
   const key = new DirectionalLight(0xffffff, 1); key.castShadow = true; key.shadow.mapSize.set(opts.shadowMap || 2048, opts.shadowMap || 2048); key.shadow.camera.near = 1; key.shadow.camera.far = 500; key.shadow.bias = -0.0006; key.shadow.normalBias = 0.25;

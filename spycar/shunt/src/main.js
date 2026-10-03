@@ -30,7 +30,7 @@ if (hud) hud.lookToggle([{ key: 'night', label: 'NIGHT' }, { key: 'dusk', label:
 // ---------------- runs and phases ----------------
 function freshRun(reseed) {
   if (reseed) seed = dailyMode ? fnv1a(localDate()) : (Math.random() * 4294967296) >>> 0;
-  newRun(seed, { sens: S.sens, autoDrift: S.autoDrift });
+  newRun(seed, { sens: S.sens, autoDrift: S.autoDrift, hairpinWall: Q.get('wall') !== '0' });
   if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.pad.hidden = true; updateSpecial(G);
 }
 function enterTitle() { phase = 'title'; showCard('title', app); }
@@ -107,7 +107,7 @@ window.addEventListener('resize', fit);
 async function start() { fit(); refreshSettings(); freshRun(false); enterTitle(); try { localStorage.setItem('shunt-runs', String(Number(localStorage.getItem('shunt-runs') || 0) + 1)); } catch (e) {} if (renderer.prewarm) await renderer.prewarm(); requestAnimationFrame(frame); perf.start(loadReplay); }
 
 // ---------------- hooks for bots and replays ----------------
-function loadReplay(r) { seed = r.seed >>> 0; dailyMode = false; S.sens = r.cfg.sens; S.autoDrift = r.cfg.autoDrift; freshRun(false); attachReplay(r); startPlaying(); return G; }
+function loadReplay(r) { seed = r.seed >>> 0; dailyMode = false; S.sens = r.cfg.sens; S.autoDrift = r.cfg.autoDrift; newRun(seed, { sens: r.cfg.sens, autoDrift: r.cfg.autoDrift, hairpinWall: !!r.cfg.hairpinWall }); if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.pad.hidden = true; updateSpecial(G); attachReplay(r); startPlaying(); return G; }
 window.__shunt = {
   get phase() { return phase; }, get G() { return G; }, get T() { return T; }, get S() { return S; }, input, slamTarget,
   fireSpecial: () => input.requestFire(), trySlam: (d) => input.requestSlam(d),
