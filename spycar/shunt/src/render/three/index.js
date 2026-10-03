@@ -33,7 +33,7 @@ export function createThreeRenderer(canvas, opts = {}) {
   const SB = 80; key.shadow.camera.left = -SB; key.shadow.camera.right = SB; key.shadow.camera.top = SB; key.shadow.camera.bottom = -SB; scene.add(key); scene.add(key.target);
   const hemi = new HemisphereLight(0x8899ff, 0x202020, 0.6); scene.add(hemi);
   const sky = new Sky(scene, renderer);
-  const road = new RoadMesh(scene), cars = new CarSystem(scene), props = new Props(scene), fx = new FX(scene), city = new City(scene, fx);
+  const road = new RoadMesh(scene), cars = new CarSystem(scene), props = new Props(scene), fx = new FX(scene), city = new City(scene, fx); roadCam.setOccluders(city.group);
   // rain streaks (a ?tune=1 option): a scrolling streak quad in front of the camera
   const rain = new Mesh(new PlaneGeometry(2, 2), new MeshBasicMaterial({ map: rainTexture(), transparent: true, opacity: 0, blending: AdditiveBlending, depthTest: false, depthWrite: false })); rain.renderOrder = 20; rain.frustumCulled = false; camera.add(rain); rain.position.set(0, 0, -1.2); scene.add(camera);
   let look = lookFor(opts.look || 'night'), P = Object.assign({}, LOOKS[look]); if (IS_IOS) P.msaa = 2;
@@ -71,7 +71,7 @@ export function createThreeRenderer(canvas, opts = {}) {
     else { rx = lerp(G.px, G.x, alpha); rdist = lerp(G.pdist, G.dist, alpha); }   // rx is road-space x (centre 195)
     const shakeOn = S.shake && !S.motion && st.phase !== 'over';
     state.fovKick += (((G.turboT > 0 || G.nitro > 0) ? (G.nitro > 0 ? 10 : 6) : 0) - state.fovKick) * Math.min(1, dt * 6);
-    roadCam.update(G, rdist, 0, dt, st.elapsed, shakeOn, state.fovKick); sky.update(roadCam.pos);
+    roadCam.update(G, rdist, 0, dt, st.elapsed, shakeOn, state.fovKick, rx); sky.update(roadCam.pos);
     road.update(G, rdist, roadCam.pos); placeKey(roadCam.anchor);
     const scroll = rdist - 270, yTop = rdist + 1500;
     fx.begin(); props.update(G, scroll, yTop, st.elapsed); city.update(G, rdist, st.elapsed, P);

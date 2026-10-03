@@ -30,7 +30,8 @@ export class CarSystem {
     for (const k of ['player', 'civ', 'weak', 'bruiser', 'gunner', 'armored', 'truck']) { this.geo[k] = carGeometry(k); this.free[k] = []; }
     for (const [k, c] of Object.entries(KIND_COL)) this.mat[k] = new MeshStandardMaterial({ color: new Color(c), vertexColors: true, roughness: 0.55, metalness: 0.25 });
     for (let i = 0; i < CIV_TINTS.length; i++) this.mat['civ' + i] = new MeshStandardMaterial({ color: new Color(CIV_TINTS[i]), vertexColors: true, roughness: 0.6, metalness: 0.2 });
-    this.player = buildHero({ paint: '#f4f6fa' }); this.player.traverse(o => { o.frustumCulled = false; }); scene.add(this.player);
+    // in-game the paint carries a little cyan self-light so the white reads under the night key light, where a flat white goes slate
+    this.player = buildHero({ paint: '#f4f6fa', emissive: '#bfeeff', emissiveIntensity: 0.22, envMapIntensity: 2.2, metalness: 0.25 }); this.player.traverse(o => { o.frustumCulled = false; }); scene.add(this.player);
     // readability: a cyan silhouette drawn only where the depth test fails, so the player shows through whatever covers it
     const outline = new Mesh(this.geo.player, new MeshStandardMaterial({ color: CYAN, emissive: CYAN, emissiveIntensity: 1.5, transparent: true, opacity: 0.55, depthFunc: 4 /* GreaterDepth */, depthWrite: false })); outline.renderOrder = 30; outline.position.y = -0.35; this.player.add(outline);
   }

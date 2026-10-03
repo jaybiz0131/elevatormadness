@@ -22,7 +22,7 @@ export function buildHero(opts = {}) {
   const L = HERO.length, W = HERO.width, hw = W / 2; const z = (u) => -L / 2 + u * L;
   const paintColor = new Color(opts.paint || '#f4f6fa'); const accent = new Color(opts.accent || '#37e6ff');
   const M = {
-    paint: new MeshStandardMaterial({ color: paintColor, roughness: opts.roughness ?? 0.32, metalness: opts.metalness ?? 0.35, envMapIntensity: 1.3 }),
+    paint: new MeshStandardMaterial({ color: paintColor, roughness: opts.roughness ?? 0.32, metalness: opts.metalness ?? 0.35, envMapIntensity: opts.envMapIntensity ?? 1.3, emissive: new Color(opts.emissive || '#000000'), emissiveIntensity: opts.emissiveIntensity ?? 1 }),
     paint2: new MeshStandardMaterial({ color: new Color(opts.paint2 || opts.paint || '#f4f6fa'), roughness: 0.32, metalness: 0.35, envMapIntensity: 1.3 }),
     glass: new MeshStandardMaterial({ color: new Color('#16243a'), roughness: 0.1, metalness: 0.5, envMapIntensity: 2.0 }),
     trim: new MeshStandardMaterial({ color: new Color('#15181f'), roughness: 0.55, metalness: 0.4 }),
