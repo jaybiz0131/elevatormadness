@@ -22,3 +22,10 @@ Headless numbers are SwiftShader numbers, not iPhone numbers.
 
 ## Next
 See the bottom of the brief: Step 7 checks, publish, report, Stop Point 1 questions.
+
+## Headless lessons (this container, 4 cores)
+- Only one SwiftShader (3D) browser at a time; two or more starve each other and the sim falls to 1/10 pace. Canvas pages are cheap.
+- Bot screenshots wait for web fonts; the Google Fonts link does not load behind the proxy, so use `--noshots` for timing runs.
+- `tools/pipeline` pattern: run recordings, replays, hairpins, postcards, bench, check, soak sequentially from one shell script.
+- Replays: `graybox/replays/base-*.json` (flag off, Sprint C baselines) and `shunt/replays/wall-*.json` (flag on, step 6 baselines)
+  must both match on every build; `replays/beauty.json` is the bench and postcard run (seed 3, flag off, 90 s).
