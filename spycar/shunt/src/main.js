@@ -13,12 +13,15 @@ import { createCanvasRenderer } from './render/canvas.js';
 import { createThreeRenderer } from './render/three/index.js';
 import { createHud } from './ui/hud.js';
 import { createPerf } from './ui/perf.js';
+import { createStudio } from './render/three/studio.js';
 
 let syncRun = false, phase = 'title', now = 0, lastT = 0, elapsed = 0, countdown = 0, pausedFrom = 'playing';
 const Q = new URLSearchParams(location.search);
 let seed = Q.get('seed') !== null ? (Number(Q.get('seed')) >>> 0) : (Math.random() * 4294967296) >>> 0, dailyMode = false, best = 0, bestDaily = 0, cash = 0, hadRun = false;
 try { best = Number(localStorage.getItem('shunt-best') || 0); bestDaily = Number(localStorage.getItem('shunt-best-' + localDate()) || 0); cash = Number(localStorage.getItem('shunt-cash') || 0); } catch (e) {}
 const app = { get G() { return G; }, get dailyMode() { return dailyMode; }, get best() { return best; }, get bestDaily() { return bestDaily; }, get cash() { return cash; } };
+// ?concepts=1: the hero-car concept studio instead of the game (tools/concepts.mjs drives it)
+if (Q.get('concepts') === '1') { document.getElementById('ui').hidden = true; const studio = createStudio(cv, { look: Q.get('look') || 'night' }); const fitStudio = () => { view.SW = Math.round(clamp(H * window.innerWidth / window.innerHeight, 390, 1800)); const s = Math.min(window.innerWidth / view.SW, window.innerHeight / H); stage.style.width = view.SW + 'px'; stage.style.transform = `scale(${s})`; studio.resize(view.SW, H); }; fitStudio(); window.addEventListener('resize', fitStudio); let kind = Q.get('view') || 'front'; studio.view(kind); const loop = () => { studio.render(); requestAnimationFrame(loop); }; loop(); window.__studio = { setView(k) { kind = k; studio.view(k); }, focus(i, k) { studio.focus(i, k); }, studio }; throw new Error('studio mode'); }
 // ?r=canvas keeps the Sprint C canvas renderer (the parity fallback); everything else renders in three.js. ?look= picks the look.
 const useCanvas = Q.get('r') === 'canvas';
 const renderer = useCanvas ? createCanvasRenderer(cv) : createThreeRenderer(cv, { look: Q.get('look') || 'night' });
