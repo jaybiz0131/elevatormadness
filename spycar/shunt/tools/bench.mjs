@@ -10,7 +10,7 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 }, devi
 const errors = []; page.on('pageerror', e => errors.push(e.message));
 await page.goto('file://' + pageFile + '?bench=' + mode + '&look=' + look);
 const t0 = Date.now();
-await page.waitForFunction(() => window.__shunt && window.__shunt.bench, null, { timeout: mode === 'soak' ? 3600000 : 900000, polling: 500 });
+await page.waitForFunction(() => window.__shunt && window.__shunt.bench, null, { timeout: mode === 'soak' ? 3600000 : 2700000, polling: 500 });
 const r = await page.evaluate(() => window.__shunt.bench); const s = await page.evaluate(() => window.__shunt.renderer().stats());
 console.log(JSON.stringify(Object.assign(r, { wallSeconds: Math.round((Date.now() - t0) / 1000), textures: s.textures, geometries: s.geometries, programs: s.programs }), null, 1));
 await page.screenshot({ path: path.join(here, '..', 'dist', 'bench-' + mode + '.png') });
