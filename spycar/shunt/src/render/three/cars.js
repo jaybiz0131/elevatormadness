@@ -5,6 +5,7 @@ import { BoxGeometry, Mesh, MeshStandardMaterial, Color, Vector3, Float32BufferA
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { T, REF, lerp } from '../../sim/constants.js';
 import { M, toWorld } from './scale.js';
+import { buildHero } from './hero.js';
 const KIND_COL = { player: '#37e6ff', civ: '#cfe6ff', weak: '#3a3d46', bruiser: '#1a1b1f', gunner: '#1a1b1f', armored: '#20242b', truck: '#2fd36a', wreck: '#3a2a2a' };
 const CIV_TINTS = ['#cfe6ff', '#fff1c9', '#cdebdc', '#e9d9ff'];
 const RED = new Color('#ff3b3b'), WHITE = new Color('#ffffff'), DARK = new Color('#14161a'), GLASS = new Color('#1c2634'), GREY = new Color('#6a6f7a'), CYAN = new Color('#37e6ff');
@@ -29,9 +30,9 @@ export class CarSystem {
     for (const k of ['player', 'civ', 'weak', 'bruiser', 'gunner', 'armored', 'truck']) { this.geo[k] = carGeometry(k); this.free[k] = []; }
     for (const [k, c] of Object.entries(KIND_COL)) this.mat[k] = new MeshStandardMaterial({ color: new Color(c), vertexColors: true, roughness: 0.55, metalness: 0.25 });
     for (let i = 0; i < CIV_TINTS.length; i++) this.mat['civ' + i] = new MeshStandardMaterial({ color: new Color(CIV_TINTS[i]), vertexColors: true, roughness: 0.6, metalness: 0.2 });
-    this.player = new Mesh(this.geo.player, this.mat.player); this.player.castShadow = true; scene.add(this.player);
+    this.player = buildHero({ paint: '#f4f6fa' }); this.player.traverse(o => { o.frustumCulled = false; }); scene.add(this.player);
     // readability: a cyan silhouette drawn only where the depth test fails, so the player shows through whatever covers it
-    const outline = new Mesh(this.geo.player, new MeshStandardMaterial({ color: CYAN, emissive: CYAN, emissiveIntensity: 1.5, transparent: true, opacity: 0.55, depthFunc: 4 /* GreaterDepth */, depthWrite: false })); outline.renderOrder = 30; this.player.add(outline);
+    const outline = new Mesh(this.geo.player, new MeshStandardMaterial({ color: CYAN, emissive: CYAN, emissiveIntensity: 1.5, transparent: true, opacity: 0.55, depthFunc: 4 /* GreaterDepth */, depthWrite: false })); outline.renderOrder = 30; outline.position.y = -0.35; this.player.add(outline);
   }
   acquire(kind) { let m = this.free[kind].pop(); if (!m) { m = new Mesh(this.geo[kind], this.mat[kind]); m.castShadow = true; m.frustumCulled = false; } this.scene.add(m); return m; }
   release(m) { this.scene.remove(m); this.free[m.userData.kind].push(m); }
@@ -62,11 +63,13 @@ export class CarSystem {
   updatePlayer(G, rx, rdist, fx, st, elapsed) {
     const m = this.player; const z = G.jumpZ; const lift = z * 3.5; const lean = (st.lean !== undefined ? st.lean : G.lean) * Math.PI / 180;
     this.place(m, G, rx, rdist, lean, lift); m.scale.set((2 - G.sq), G.sq, 1 + z * 0.1);
+    // the rotary pods slide out as the barrels spin up; the barrels turn with the spin; a muzzle flash at the tips when a round leaves
+    const spin = G.gunSpin || 0; for (const pd of m.userData.pods) { pd.pod.position.x = pd.home + pd.sx * 0.16 * spin; pd.barrel.rotation.z += spin * 0.9; }
     m.visible = !(st.phase === 'playing' && G.flashT > 0 && Math.floor(elapsed * 16) % 2 === 0);
     const p = m.position; fx.shadow(p, 34 * M * (1 - z * 0.2), 60 * M * (1 - z * 0.2), p.y - lift);
     const fx_ = Math.sin(-m.rotation.y), fz_ = -Math.cos(-m.rotation.y); const rx_ = Math.cos(-m.rotation.y), rz_ = Math.sin(-m.rotation.y); const w = 34 * M, l = 60 * M;
     // headlights (warm), brighter when the gun fires; tail lights, bright under braking; the cyan body glow that keeps the player readable
-    for (const sx of [-1, 1]) { fx.glow(p.x + fx_ * l * 0.5 + rx_ * sx * w * 0.35, p.y + 0.7, p.z + fz_ * l * 0.5 + rz_ * sx * w * 0.35, G.flashT2 > 0 ? 1.6 : 1.0, 1, 0.97, 0.8, G.flashT2 > 0 ? 1 : 0.8); fx.glow(p.x - fx_ * l * 0.5 + rx_ * sx * w * 0.35, p.y + 0.8, p.z - fz_ * l * 0.5 + rz_ * sx * w * 0.35, G.braking ? 1.2 : 0.6, 1, 0.3, 0.3, G.braking ? 1 : 0.6); }
+    for (const sx of [-1, 1]) { if (G.flashT2 > 0) fx.glow(p.x + fx_ * l * 0.42 + rx_ * sx * w * 0.5, p.y + 0.6, p.z + fz_ * l * 0.42 + rz_ * sx * w * 0.5, 2.4, 1, 0.85, 0.5, 1); fx.glow(p.x + fx_ * l * 0.5 + rx_ * sx * w * 0.35, p.y + 0.7, p.z + fz_ * l * 0.5 + rz_ * sx * w * 0.35, 1.0, 0.3, 0.95, 1, 0.8); fx.glow(p.x - fx_ * l * 0.5 + rx_ * sx * w * 0.35, p.y + 0.8, p.z - fz_ * l * 0.5 + rz_ * sx * w * 0.35, G.braking ? 1.2 : 0.6, 1, 0.3, 0.3, G.braking ? 1 : 0.6); }
     fx.glow(p.x, p.y + 0.8, p.z, 4.0, G.nitro > 0 ? 1 : 0.22, G.nitro > 0 ? 0.82 : 0.9, G.nitro > 0 ? 0.25 : 1, G.nitro > 0 ? 0.5 : 0.3);
     fx.poolAt(p.x + fx_ * 9, p.y - lift, p.z + fz_ * 9, 1, 0.95, 0.75, 0.22, 6, -m.rotation.y, 2.4);   // headlight pool on the road ahead
     if (G.drifting && st.phase === 'playing') fx.ring(p.x, p.y - lift + 0.03, p.z, 36 * M, G.driftTier >= 3 ? 0xff7a2a : G.driftTier === 2 ? 0xffd23f : 0xffffff, 0.8, Math.min(1, G.driftCharge / T.drift.tiers[2]));

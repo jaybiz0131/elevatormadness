@@ -4,7 +4,7 @@
 import { PerspectiveCamera, Vector3, Quaternion, Euler } from 'three';
 import { clamp } from '../../sim/constants.js';
 import { M } from './scale.js';
-export const CAM = { fov: 40, pitch: 55, dist: 90, fovSpeed: 8, distSpeed: 10, lowerThird: 1 / 3, leadS: 0.4, leadCap: 0.44, spring: 14, roll: 5, shakeM: 1.2, shakeDeg: 2, look: 1.5 };
+export const CAM = { fov: 40, pitch: 55, dist: 90, fovSpeed: 12, distSpeed: 28, lowerThird: 1 / 3, leadS: 0.4, leadCap: 0.44, spring: 14, roll: 5, shakeM: 1.2, shakeDeg: 2, look: 1.5 };
 const noise1 = (t) => Math.sin(t) * 0.6 + Math.sin(t * 2.3 + 1.3) * 0.4;
 export class RoadCamera {
   constructor(aspect) {
@@ -17,11 +17,11 @@ export class RoadCamera {
   // the camera sits behind road-space (REF, s) at the road's own heading; `dist` is the slant distance to the player
   update(G, rs, rx, dt, elapsed, shakeOn, fovKick) {
     const road = G.road;
-    const here = road.frame(rs).psi; const lead = road.frame(rs + CAM.leadS * G.speed).psi; const target = here + clamp(lead - here, -CAM.leadCap, CAM.leadCap);
+    const here = road.frame(rs).psi; const lead = road.frame(rs + CAM.leadS * Math.max(0, G.speed)).psi; const target = here + clamp(lead - here, -CAM.leadCap, CAM.leadCap);
     if (!this.psiInit) { this.psi = target; this.psiInit = true; }
     // critically damped spring on the heading
     const w = CAM.spring; const a = -2 * w * this.psiV - w * w * (this.psi - target); this.psiV += a * dt; this.psi += this.psiV * dt;
-    const speedK = clamp((G.speed - 480) / 420, 0, 1);
+    const speedK = clamp((G.speed - 480) / 820, 0, 1);   // pulls back and widens from cruise up to top speed (Sprint 4: 1,300 pt/s)
     const zoomT = (G.air > 0 ? 0.6 * G.jumpZ : speedK) + (G.punch > 0 ? -0.2 : 0) + (G.drifting ? 0.25 : 0); this.zoom += (zoomT - this.zoom) * Math.min(1, dt * 6);
     const rollT = G.drifting ? -G.driftDir * CAM.roll : 0; this.roll += (rollT - this.roll) * Math.min(1, dt * 5);
     this.look += (clamp(G.vx / 520, -1, 1) * CAM.look - this.look) * Math.min(1, dt * 4);

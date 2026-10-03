@@ -5,13 +5,13 @@ import { G } from '../sim/state.js';
 import { stage, ui, view } from '../ui/dom.js';
 export const TRAIL = 24;   // ring of recent thumb samples {x, t(ms, event timeStamp)}
 export const input = {
-  playing: false, allowIdleTouch: true, now: 0, id: null, anchor: null, carAnchor: 0, cur: null, keys: {}, trail: [], trailN: 0, flickT: -1e9, lastKeyTap: { k: null, t: -9 }, brake: false, padId: null, slamReq: 0, fireReq: false, flickN: 0,
-  reset() { this.id = null; this.anchor = null; this.cur = null; this.trailN = 0; this.brake = false; this.padId = null; this.slamReq = 0; this.fireReq = false; this.flickN = 0; ui.pad.classList.remove('held'); },
-  requestSlam(dir) { this.slamReq = dir; }, requestFire() { this.fireReq = true; },
+  playing: false, allowIdleTouch: true, now: 0, id: null, anchor: null, carAnchor: 0, cur: null, keys: {}, trail: [], trailN: 0, flickT: -1e9, lastKeyTap: { k: null, t: -9 }, brake: false, padId: null, gas: false, gasId: null, fireHeld: false, fireId: null, slamReq: 0, specialReq: false, flickN: 0,
+  reset() { this.id = null; this.anchor = null; this.cur = null; this.trailN = 0; this.brake = false; this.padId = null; this.gas = false; this.gasId = null; this.fireHeld = false; this.fireId = null; this.slamReq = 0; this.specialReq = false; this.flickN = 0; ui.pad.classList.remove('held'); ui.gas.classList.remove('held'); ui.fire.classList.remove('held'); },
+  requestSlam(dir) { this.slamReq = dir; }, requestSpecial() { this.specialReq = true; },
   // one snapshot per fixed step: everything the simulation may read from the player. The keyboard moves the anchor here, in step time.
   // a frozen (hit-stop) step could not use these requests: hold them for the next live step
-  relatch(i) { if (i.slam) this.slamReq = i.slam; if (i.fire) this.fireReq = true; this.flickN += i.flicks; },
-  snapshot(out, playing) { if (this.keys.left || this.keys.right) this.carAnchor += ((this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0)) * T.maxLateral * S.sens * STEP; let off = this.carAnchor; if (this.anchor && !(this.keys.left || this.keys.right)) { let dx = this.cur.x - this.anchor.x; if (Math.abs(dx) < T.deadZone) dx = 0; else dx -= Math.sign(dx) * T.deadZone; off += dx * T.thumbRatio * S.sens; } out.off = off; out.brake = this.brake; out.slam = this.slamReq; out.fire = this.fireReq; out.flicks = this.flickN; out.p = playing ? 1 : 0; this.slamReq = 0; this.fireReq = false; this.flickN = 0; return out; },
+  relatch(i) { if (i.slam) this.slamReq = i.slam; if (i.special) this.specialReq = true; this.flickN += i.flicks; },
+  snapshot(out, playing) { if (this.keys.left || this.keys.right) this.carAnchor += ((this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0)) * T.maxLateral * S.sens * STEP; let off = this.carAnchor; if (this.anchor && !(this.keys.left || this.keys.right)) { let dx = this.cur.x - this.anchor.x; if (Math.abs(dx) < T.deadZone) dx = 0; else dx -= Math.sign(dx) * T.deadZone; off += dx * T.thumbRatio * S.sens; } out.off = off; out.brake = this.brake; out.gas = this.gas || !!this.keys.gas; out.fire = this.fireHeld || !!this.keys.fire; out.special = this.specialReq; out.slam = this.slamReq; out.flicks = this.flickN; out.p = playing ? 1 : 0; this.slamReq = 0; this.specialReq = false; this.flickN = 0; return out; },
   push(x, t) { if (this.trail.length < TRAIL) this.trail.push({ x, t }); const i = this.trailN % TRAIL; this.trail[i].x = x; this.trail[i].t = t; this.trailN++; },
   sample(back) { return this.trail[(this.trailN - 1 - back + TRAIL * 2) % TRAIL]; },   // back = 0 is the newest
   // carAnchor is the car's target as an offset from the road centre, so no input means holding the lane while the road wanders
@@ -50,14 +50,16 @@ stage.addEventListener('pointerdown', e => {
 stage.addEventListener('pointermove', e => { const list = e.getCoalescedEvents ? e.getCoalescedEvents() : null; if (list && list.length) { for (const ce of list) { const p = stagePoint(ce); input.move(ce.pointerId, p.x, p.y, ce.timeStamp || e.timeStamp); } } else { const p = stagePoint(e); input.move(e.pointerId, p.x, p.y, e.timeStamp); } });
 const upH = e => input.up(e.pointerId);
 stage.addEventListener('pointerup', upH); stage.addEventListener('pointercancel', upH);
-const KEYS = { ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', ' ': 'fire', j: 'fire', q: 'slamL', e: 'slamR', Shift: 'brake', s: 'brake', ArrowDown: 'brake' };
-window.addEventListener('keydown', e => { const k = KEYS[e.key]; if (!k) { if (e.key === 'p' || e.key === 'Escape') app.onPause(); return; } e.preventDefault(); app.onTouch(); if (e.repeat) return; app.onStart(); if (app.onRestartKey && k === 'fire' && app.onRestartKey()) return; if (k === 'fire') input.requestFire(); else input.key(k); input.keys[k] = true; if (k === 'brake') { input.brake = true; ui.pad.classList.add('held'); } });
-window.addEventListener('keyup', e => { const k = KEYS[e.key]; if (k) { e.preventDefault(); input.keys[k] = false; if (k === 'brake') { input.brake = false; ui.pad.classList.remove('held'); } } });
+const KEYS = { ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', ' ': 'fire', j: 'fire', f: 'fire', k: 'special', x: 'special', q: 'slamL', e: 'slamR', Shift: 'brake', s: 'brake', ArrowDown: 'brake', ArrowUp: 'gas', w: 'gas' };
+window.addEventListener('keydown', e => { const k = KEYS[e.key]; if (!k) { if (e.key === 'p' || e.key === 'Escape') app.onPause(); return; } e.preventDefault(); app.onTouch(); if (e.repeat) return; app.onStart(); if (app.onRestartKey && k === 'fire' && app.onRestartKey()) return; if (k === 'special') input.requestSpecial(); else input.key(k); input.keys[k] = true; if (k === 'brake') { input.brake = true; ui.pad.classList.add('held'); } if (k === 'gas') ui.gas.classList.add('held'); if (k === 'fire') ui.fire.classList.add('held'); });
+window.addEventListener('keyup', e => { const k = KEYS[e.key]; if (k) { e.preventDefault(); input.keys[k] = false; if (k === 'brake') { input.brake = false; ui.pad.classList.remove('held'); } if (k === 'gas') ui.gas.classList.remove('held'); if (k === 'fire') ui.fire.classList.remove('held'); } });
+// gas and fire: hold buttons like the pedal pad
+for (const [el, field, idField] of [[ui.gas, 'gas', 'gasId'], [ui.fire, 'fireHeld', 'fireId']]) { el.addEventListener('pointerdown', e => { e.preventDefault(); app.onTouch(); input[field] = true; input[idField] = e.pointerId; el.classList.add('held'); try { el.setPointerCapture(e.pointerId); } catch (err) {} }); const up = e => { if (e.pointerId === input[idField]) { input[field] = false; input[idField] = null; el.classList.remove('held'); } }; el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); window.addEventListener('pointerup', up); }
 // pedal pad: hold to brake; hold while steering to drift; release after a drift for the mini-turbo
 ui.pad.addEventListener('pointerdown', e => { e.preventDefault(); app.onTouch(); input.brake = true; input.padId = e.pointerId; ui.pad.classList.add('held'); try { ui.pad.setPointerCapture(e.pointerId); } catch (err) {} });
 const padUp = e => { if (e.pointerId === input.padId) { input.brake = false; input.padId = null; ui.pad.classList.remove('held'); } };
 ui.pad.addEventListener('pointerup', padUp); ui.pad.addEventListener('pointercancel', padUp); window.addEventListener('pointerup', padUp);
-ui.special.addEventListener('pointerdown', e => { e.preventDefault(); app.onTouch(); if (input.playing) input.requestFire(); });
+ui.special.addEventListener('pointerdown', e => { e.preventDefault(); app.onTouch(); if (input.playing) input.requestSpecial(); });
 ui.pause.addEventListener('click', () => { app.onTouch(); app.onPause(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) app.onHide(); });
 }

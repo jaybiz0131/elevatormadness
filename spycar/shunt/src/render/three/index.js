@@ -22,7 +22,9 @@ const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform
 export function createThreeRenderer(canvas, opts = {}) {
   if (IS_IOS && !opts.shadowMap) opts.shadowMap = 1024;   // iPhone memory is the tight budget; 1024 is the brief's fallback
   const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, alpha: false });
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = PCFShadowMap; renderer.toneMapping = 0; renderer.autoClear = true; renderer.info.autoReset = false;
+  // ?lite=1: half resolution, no shadows, no post: for headless bots on software GL, where the sim must run at pace
+  const LITE = new URLSearchParams(location.search).get('lite') === '1';
+  renderer.shadowMap.enabled = !LITE; renderer.shadowMap.type = PCFShadowMap; renderer.toneMapping = 0; renderer.autoClear = true; renderer.info.autoReset = false;
   const scene = new Scene();
   const roadCam = new RoadCamera(view.SW / H); const camera = roadCam.cam;
   const key = new DirectionalLight(0xffffff, 1); key.castShadow = true; key.shadow.mapSize.set(opts.shadowMap || 2048, opts.shadowMap || 2048); key.shadow.camera.near = 1; key.shadow.camera.far = 500; key.shadow.bias = -0.0006; key.shadow.normalBias = 0.25;
@@ -46,7 +48,7 @@ export function createThreeRenderer(canvas, opts = {}) {
   // dynamic resolution: the backing store is the stage size x scale; the cap is the device pixel ratio after the stage's CSS scale, never above 2
   function setScale(k) { state.scale = k; renderer.setPixelRatio(k); renderer.setSize(view.SW, H, false); post.composer.setSize(view.SW, H); }
   function resize() {
-    const cssScale = Math.min(window.innerWidth / view.SW, window.innerHeight / H); state.cap = Math.min(2, (window.devicePixelRatio || 1) * cssScale); setScale(Math.min(state.cap, Math.max(state.scale, Math.min(1.25, state.cap))));
+    const cssScale = Math.min(window.innerWidth / view.SW, window.innerHeight / H); state.cap = LITE ? 0.5 : Math.min(2, (window.devicePixelRatio || 1) * cssScale); setScale(Math.min(state.cap, Math.max(state.scale, Math.min(1.25, state.cap))));
     camera.aspect = view.SW / H; camera.updateProjectionMatrix(); const a = Math.tan(camera.fov / 2 * Math.PI / 180) * 1.2 * 2; rain.scale.set(a * camera.aspect, a, 1);
   }
   function adapt(dt) {
@@ -78,7 +80,7 @@ export function createThreeRenderer(canvas, opts = {}) {
     if (P.rain > 0) rain.material.map.offset.y -= dt * 2.2;
     renderer.info.reset();
     // post can fail on a device this container cannot test; the game then renders without it rather than going black
-    if (state.postError) renderer.render(scene, camera); else { try { post.composer.render(dt); } catch (e) { state.postError = String(e && e.message || e).slice(0, 120); renderer.render(scene, camera); } }
+    if (LITE || state.postError) renderer.render(scene, camera); else { try { post.composer.render(dt); } catch (e) { state.postError = String(e && e.message || e).slice(0, 120); renderer.render(scene, camera); } }
     if (state.frames++ < 3) { const gl = renderer.getContext(); const err = gl.getError(); if (err !== gl.NO_ERROR && !state.glError) state.glError = 'GL error 0x' + err.toString(16); }
     adapt(dt);
   }

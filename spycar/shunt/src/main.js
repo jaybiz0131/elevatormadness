@@ -34,16 +34,17 @@ if (hud) hud.lookToggle([{ key: 'night', label: 'NIGHT' }, { key: 'dusk', label:
 function freshRun(reseed) {
   if (reseed) seed = dailyMode ? fnv1a(localDate()) : (Math.random() * 4294967296) >>> 0;
   newRun(seed, { sens: S.sens, autoDrift: S.autoDrift, hairpinWall: Q.get('wall') !== '0' });
-  if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.pad.hidden = true; updateSpecial(G);
+  if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; updateSpecial(G);
 }
 function enterTitle() { phase = 'title'; showCard('title', app); }
-function startPlaying() { phase = 'playing'; hideCallout(); hadRun = true; ui.card.hidden = true; ui.pad.hidden = false; beginRun(); }
+function startPlaying() { phase = 'playing'; hideCallout(); hadRun = true; ui.card.hidden = true; ui.pad.hidden = false; ui.gas.hidden = false; ui.fire.hidden = false; lookBar(false); beginRun(); }
+function lookBar(show) { const b = document.querySelector('#hud .look'); if (b) { if (show) b.removeAttribute('hidden'); else b.setAttribute('hidden', ''); } }
 function restartAndPlay(reseed) { freshRun(reseed); startPlaying(); }
 function togglePause() { if (phase === 'paused') resume(); else if (phase === 'playing') pause(); }
 function pause() { pausedFrom = phase === 'countdown' ? 'playing' : phase; phase = 'paused'; input.reset(); showCard('pause', app); }
 function resume() { ui.card.hidden = true; input.reset(); lastT = 0; phase = 'countdown'; countdown = 3; callout('3', '', 0, true); }
 function finishDeath() {
-  phase = 'over'; const isDaily = dailyMode; const prev = isDaily ? bestDaily : best; const earned = Math.round(G.score * 0.1); cash += earned;
+  phase = 'over'; lookBar(true); const isDaily = dailyMode; const prev = isDaily ? bestDaily : best; const earned = Math.round(G.score * 0.1); cash += earned;
   try { if (G.score > prev) { if (isDaily) { bestDaily = G.score; localStorage.setItem('shunt-best-' + localDate(), String(bestDaily)); } else { best = G.score; localStorage.setItem('shunt-best', String(best)); } } localStorage.setItem('shunt-cash', String(cash)); } catch (e) {}
   showCard('over', app); if (G.score > prev) { ui.newBest.hidden = false; audio.chime(); }
 }
@@ -56,7 +57,7 @@ setSink((ev) => {
     else if (e.k === 'buzz') buzz(e.p);
     else if (e.k === 'say') { if (e.text === null) hideCallout(); else callout(e.text, e.sub, e.ms, e.big); }
     else if (e.k === 'rebase') input.carAnchor += e.d;
-    else if (e.k === 'died') { phase = 'dying'; ui.special.hidden = true; ui.pad.hidden = true; input.reset(); }
+    else if (e.k === 'died') { phase = 'dying'; ui.special.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; input.reset(); }
     else if (e.k === 'special') { if (e.show) { const first = ui.special.hidden; ui.special.hidden = false; if (first) pulseSpecial(); } updateSpecial(G); ui.special.classList.toggle('armed', !!e.armed && !!(G.special && G.special.ammo > 0)); }
     else if (e.k === 'pulse') pulseSpecial();
   }
@@ -64,7 +65,7 @@ setSink((ev) => {
 function simulate(dt, playing) {
   advance(dt, playing);
   const minute = G.t / 60;
-  audio.setEngine(clamp((G.speed - 300) / 600, 0, 1) + (G.air > 0 ? 0.2 : 0) + (G.burnout > 0 ? 0.6 : 0), playing);
+  audio.setEngine(clamp((Math.abs(G.speed) - 300) / 1000, 0, 1) + (G.air > 0 ? 0.2 : 0) + (G.burnout > 0 ? 0.6 : 0) + (G.in.gas && playing ? 0.15 : 0), playing); audio.setGunSpin(playing ? G.gunSpin : 0); ui.fire.classList.toggle('hot', G.hot > 0);
   audio.setDrive(playing && G.air <= 0 ? clamp((Math.abs(G.slip) * 180 / Math.PI - 8) / 30, 0, 1) + (G.burnout > 0 ? 0.6 : 0) : 0, playing && G.scraping ? 1 : 0);
   audio.music(dt, G.wave === 'pressure' ? (minute > 1 ? 2 : 1) : 0);
 }
@@ -115,7 +116,7 @@ async function start() { fit(); refreshSettings(); freshRun(false); enterTitle()
 function loadReplay(r) { seed = r.seed >>> 0; dailyMode = false; S.sens = r.cfg.sens; S.autoDrift = r.cfg.autoDrift; newRun(seed, { sens: r.cfg.sens, autoDrift: r.cfg.autoDrift, hairpinWall: !!r.cfg.hairpinWall }); if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.pad.hidden = true; updateSpecial(G); attachReplay(r); startPlaying(); return G; }
 window.__shunt = {
   get phase() { return phase; }, get G() { return G; }, get T() { return T; }, get S() { return S; }, input, slamTarget,
-  fireSpecial: () => input.requestFire(), trySlam: (d) => input.requestSlam(d),
+  fireSpecial: () => input.requestSpecial(), trySlam: (d) => input.requestSlam(d),
   startPlaying: () => { freshRun(false); startPlaying(); },
   record: (bot) => startRecording(bot), exportReplay, loadReplay, runSteps: (n) => { syncRun = true; return runSteps(n, phase === 'playing'); }, hashState, STEP: STEP_LEN,
   renderer: () => renderer, perf, get phaseName() { return phase; },

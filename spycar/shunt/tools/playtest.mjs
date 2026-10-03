@@ -22,7 +22,9 @@ const seed = opt.seed !== undefined ? Number(opt.seed) : null;
 const shots = !opt.noshots;   // --noshots: screenshots wait for web fonts, which can block for seconds behind a proxy
 // software GL only for the three.js build: canvas pages run far lighter without it
 const browser = await chromium.launch(/r=canvas/.test(opt.query || '') ? {} : { args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true });
+// bots run the lite renderer (half resolution, no shadows or post) unless --full: the sim must run at pace on software GL
+const lite = !opt.full && !/r=canvas/.test(opt.query || ''); if (lite) opt.query = (opt.query ? opt.query + '&' : '') + 'lite=1';
+const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: lite ? 1 : 2, hasTouch: true });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error' && !/ERR_CERT|net::/.test(m.text())) errors.push('console: ' + m.text()); });
@@ -47,7 +49,7 @@ async function sweep(speed, distance) {
 let paceT = Date.now();
 for (let i = 0; i < seconds * 10; i++) {
   if (opt.pace && i < 25) { const now = Date.now(); console.log('tick', i, 'wall ms', now - paceT); paceT = now; }
-  const s = await page.evaluate(() => {
+  const s = await page.evaluate((mode) => {
     const g = window.__shunt.G; const near = g.cars.filter(c => c.alive && !c.wrecked && c.kind !== 'truck' && c.y > g.dist - 300 && c.y < g.dist + 900);
     const enemies = near.filter(c => c.kind !== 'civ' && c.kind !== 'armored').sort((a, b) => Math.abs(a.y - g.dist) - Math.abs(b.y - g.dist));
     const civs = near.filter(c => c.kind === 'civ' && c.y > g.dist - 30 && c.y < g.dist + 260);
@@ -64,14 +66,19 @@ for (let i = 0; i < seconds * 10; i++) {
     const ahead = civs.find(c => Math.abs(c.x - g.x) < 30 && c.y - g.dist > 40 && c.y - g.dist < 170); if (ahead && !g.drifting) brake = true;
     // corners: a hard corner ahead and too fast for grip → brake, then drift through it toward the inside
     const cn = g.road.cornerAhead(g.dist, 2.2 * g.speed); if (cn && cn.hard) { const inCorner = g.dist >= cn.s0 - 60 && g.dist <= cn.s1; if (inCorner) { const w = g.road.at(g.dist).width; want = 195 + cn.dir * (w / 2 - 40); if (g.speed > cn.vmax * 0.9 && !g.drifting && !drift) drift = cn.dir; else if (g.drifting) drift = g.driftDir; } else if (g.speed > cn.vmax * 1.05) brake = true; }
-    return { phase: window.__shunt.phase, t: g.t, x: g.x, want, slam, drift, brake, speed: g.speed, drifting: g.drifting, tier: g.driftTier, score: g.score, armor: g.armor, armorLost: g.armorLost, kills: g.kills, passive: g.passiveWrecks, carKills: g.carKills, gunKills: g.gunKills, slams: g.slams, flicks: g.flicks, misses: g.flickMisses, special: g.special, lastEvent: g.lastEvent, near: near.length, cause: g.killedBy, gun: g.gun, wave: g.wave };
-  });
-  if (s.phase === 'over') { console.log('DIED at', s.t.toFixed(1), 's:', s.cause, '| score', s.score, 'kills', s.kills, 'slams', s.slams); await page.waitForTimeout(900); if (shots) try { await page.screenshot({ path: path.join(out, 'shunt-over.png'), timeout: 10000 }); } catch (e) {} break; }
+    // gas: a clear lane ahead and no hard corner coming; fire: a live enemy within the gun's reach and roughly ahead
+    const clearAhead = !civs.some(c => Math.abs(c.x - g.x) < 40 && c.y - g.dist > 0 && c.y - g.dist < 320) && !(cn && cn.hard && g.dist > cn.s0 - 2.2 * g.speed && g.dist < cn.s1); const gas = mode === 'active' && clearAhead && !brake && !drift;
+    const fire = mode === 'active' && g.cars.some(c => c.alive && !c.wrecked && c.kind !== 'civ' && c.kind !== 'truck' && c.y > g.dist + 20 && c.y < g.dist + 600 && Math.abs(c.x - g.x) < 90);
+    return { phase: window.__shunt.phase, t: g.t, x: g.x, want, slam, drift, brake, gas, fire, speed: g.speed, drifting: g.drifting, tier: g.driftTier, score: g.score, armor: g.armor, armorLost: g.armorLost, kills: g.kills, passive: g.passiveWrecks, carKills: g.carKills, gunKills: g.gunKills, slams: g.slams, flicks: g.flicks, misses: g.flickMisses, special: g.special, lastEvent: g.lastEvent, near: near.length, cause: g.killedBy, gun: g.gun, wave: g.wave };
+  }, mode);
+  if (s.phase === 'over' || (opt.sync && s.phase === 'dying')) { console.log('DIED at', s.t.toFixed(1), 's:', s.cause, '| score', s.score, 'kills', s.kills, 'slams', s.slams); await page.waitForTimeout(900); if (shots) try { await page.screenshot({ path: path.join(out, 'shunt-over.png'), timeout: 10000 }); } catch (e) {} break; }
   if (s.phase === 'playing') { samples++; if (s.near >= 2) twoPlus++; if (s.t > 3 && s.t - s.lastEvent > maxGap) maxGap = s.t - s.lastEvent; }
   if (mode === 'sweep') { sweepTimer += 0.1; if (sweepTimer >= 1.5) { sweepTimer = 0; const speed = SPEEDS[sweepN % SPEEDS.length]; await sweep(speed, 62 + 62 * (Math.floor(sweepN / SPEEDS.length) % 2)); } }
   else if (mode === 'drift') { driftTimer += 0.1; await page.evaluate(({ phaseT }) => { const inp = window.__shunt.input; const g = window.__shunt.G; if (inp.id === null) inp.down(1, 200, 700, performance.now()); inp.anchor = { x: 200, y: 700 }; inp.carAnchor = g.targetX - g.road.at(g.dist).center; const dir = Math.floor(phaseT / 4) % 2 ? -1 : 1; const k = phaseT % 4; if (k < 2.2 && g.speed > 400) { inp.brake = true; inp.cur = { x: 200 + dir * 60, y: 700 }; } else { inp.brake = false; inp.cur = { x: 200, y: 700 }; } }, { phaseT: driftTimer }); }
-  else if (mode !== 'idle') await page.evaluate(({ want, slam, drift, brake, mode }) => { const inp = window.__shunt.input; const g = window.__shunt.G; if (inp.id === null) inp.down(1, 200, 700, performance.now()); inp.anchor = { x: 200, y: 700 }; inp.carAnchor = g.targetX - g.road.at(g.dist).center; if (mode === 'passive') { inp.cur = { x: 200, y: 700 }; inp.brake = false; return; } if (drift) { inp.brake = true; inp.cur = { x: 200 + drift * 60, y: 700 }; return; } inp.brake = brake; const dx = (want - g.targetX) / 1.4; inp.cur = { x: 200 + Math.max(-70, Math.min(70, dx)), y: 700 }; if (slam) window.__shunt.trySlam(slam); if (g.special && g.special.ammo > 0 && (g.special.kind !== 'missiles' || g.cars.some(c => c.alive && !c.wrecked && (c.kind === 'armored' || c.kind === 'bruiser') && c.y > g.dist))) window.__shunt.fireSpecial(); }, { want: s.want, slam: s.slam, drift: s.drift, brake: s.brake, mode });
-  await page.waitForTimeout(100);
+  else if (mode !== 'idle') await page.evaluate(({ want, slam, drift, brake, gas, fire, mode }) => { const inp = window.__shunt.input; const g = window.__shunt.G; if (inp.id === null) inp.down(1, 200, 700, performance.now()); inp.anchor = { x: 200, y: 700 }; inp.carAnchor = g.targetX - g.road.at(g.dist).center; inp.gas = !!gas; inp.fireHeld = !!fire; if (mode === 'passive') { inp.cur = { x: 200, y: 700 }; inp.brake = false; inp.gas = false; inp.fireHeld = false; return; } if (drift) { inp.brake = true; inp.cur = { x: 200 + drift * 60, y: 700 }; return; } inp.brake = brake; const dx = (want - g.targetX) / 1.4; inp.cur = { x: 200 + Math.max(-70, Math.min(70, dx)), y: 700 }; if (slam) window.__shunt.trySlam(slam); if (g.special && g.special.ammo > 0 && (g.special.kind !== 'missiles' || g.cars.some(c => c.alive && !c.wrecked && (c.kind === 'armored' || c.kind === 'bruiser') && c.y > g.dist))) window.__shunt.fireSpecial(); }, { want: s.want, slam: s.slam, drift: s.drift, brake: s.brake, gas: s.gas, fire: s.fire, mode });
+  // --sync: step the sim 0.1 s synchronously per tick instead of waiting on the frame clock (the frame loop stops simulating
+  // after the first runSteps), so bots run at sim pace whatever the renderer costs; recordings are then paced in sim time
+  if (opt.sync) { await page.evaluate(() => window.__shunt.runSteps(12)); await page.waitForTimeout(1); } else await page.waitForTimeout(100);
   if (shots && i % 300 === 150) try { await page.screenshot({ path: path.join(out, `shunt-${Math.round(s.t)}s.png`), timeout: 10000 }); } catch (e) {}
   if (shots && mode === 'active' && !cornerShot && s.t > 19 && s.t < 40) { const inHairpin = await page.evaluate(() => { const g = window.__shunt.G; const c = g.road.at(g.dist).corner; return !!(c && c.type === 'hairpin'); }); if (inHairpin) { cornerShot = true; await page.screenshot({ path: path.join(out, 'shunt-hairpin.png') }); } }
   if (i % 100 === 0) console.log('t', s.t.toFixed(1), 'spd', Math.round(s.speed), s.drifting ? 'DRIFT T' + s.tier : '', 'score', s.score, 'armor', s.armor, 'kills', s.kills, '(car', s.carKills, 'gun', s.gunKills, 'passive', s.passive + ')', 'slams', s.slams, 'flicks', s.flicks, 'misses', s.misses, 'special', s.special ? s.special.kind + ':' + s.special.ammo : '-', 'near', s.near, s.wave);

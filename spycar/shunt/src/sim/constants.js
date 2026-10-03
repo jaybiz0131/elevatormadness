@@ -5,14 +5,22 @@ export const T = {
   speed0: 420, speedMax: 700, speedRampMinutes: 5,
   // Driving model (audit, Sprint B). Speed is the player's to manage: auto throttle to cruise, brake on the pedal pad, mini-turbo
   // after a drift, slipstream behind any car, nitro from the special. Steering is heading based: lateral speed = speed × sin(heading).
-  drive: { cruise: 480, districtGain: 1.1, top: 900, nitro: 1150, brake: 900, minSpeed: 260, throttle: 1.2, slipFor: 0.8, slipBoost: 120, slipBoostFor: 1.0,
+  // Sprint 4: gas pedal. Hold gas to pull past cruise toward `top` at `accel`; let go and the car eases back to cruise; brake to
+  // `minSpeed`, keep holding and it stops and reverses to `reverse` (back out of what you hit, then go on).
+  drive: { cruise: 480, districtGain: 1.1, top: 1300, nitro: 1600, brake: 1000, minSpeed: 260, throttle: 1.2, accel: 700, coast: 0.5, reverse: 220, reverseAccel: 500, slipFor: 0.8, slipBoost: 120, slipBoostFor: 1.0,
            maxHeading: 30, turnRate: 240, tau: 0.07, grip: 1500 },
   drift: { heading: 55, turnRate: 320, tau: 0.38, loss: 0.05, tiers: [0.8, 1.6, 2.6], turbo: [150, 250, 400], turboFor: [0.6, 0.9, 1.2], exit: 0.25, exitTau: 0.12, minSlip: 20, slamSlip: 25, bankRate: 0.5 },
+  // the 360: a drift held hard out for `arm` seconds above `speed` becomes a spin; the body turns a full circle at `rate` degrees
+  // a second while the car keeps sliding along its path, scrubbing `loss` of its speed a second; a finished spin pays score and a turbo
+  spin: { arm: 0.4, over: 0.8, speed: 480, rate: 420, loss: 0.3, score: 300 },
+  // the rotary guns: hold FIRE, the barrels spin up over `spinUp` seconds, then `rate` rounds a second along the car's heading, with
+  // `assist` degrees of aim help toward the nearest enemy in range; heat climbs per round and an overheated gun rests for `rest`
+  rotary: { spinUp: 0.3, rate: 12, assist: 10, heatPer: 0.05, cool: 0.35, rest: 1.4, spread: 2.5 },   // about 4 s of continuous fire before the rest
   laneW: 62, minLanes: 2, maxLanes: 5,
   // Roads with real turns (audit, Sprint C): constant-curvature arcs joined by 120 pt transitions; combat straights with gentle
   // sweepers alternate with technical sectors of hard corners and hairpins. Grip speed in a corner is sqrt(grip × radius).
   corner: { warn: 2.2, transition: 120, chevronEvery: 60, trafficSlow: 0.45, driftBonus: 1.0, driftGrip: 1.3, crestSpeed: 600, rumbleEvery: 0.08 },
-  fireRate: 6, bulletSpeed: 1100, gunRange: 520, gunHalfLane: 26,
+  fireRate: 6, bulletSpeed: 1300, gunRange: 640, gunHalfLane: 26,
   // Slam (audit, "The Slam, corrected"): 600 pt/s for 0.11 s is about one lane; a flick is 60 stage pt in under 100 ms from a
   // thumb that moved less than 10 pt in the previous 120 ms; it only fires with an enemy within 1.4 lanes on that side and 60 pt ahead or behind
   slam: { flickPt: 60, flickMs: 100, quietPt: 10, quietMs: 120, burst: 0.11, speed: 600, cooldown: 1.0, power: 2.5, reachLanes: 1.4, reachY: 60 },

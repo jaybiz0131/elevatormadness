@@ -32,6 +32,7 @@ const CSS = `
 #hud .look { position: absolute; left: 16px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); pointer-events: auto; display: flex; gap: 6px; }
 #hud .look button { height: 32px; padding: 0 10px; border-radius: 16px; border: 0; background: rgba(20,24,30,0.7); color: #f4f6f8; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.08em; }
 #hud .look button.on { background: rgba(55,230,255,0.3); }
+#hud .look[hidden] { display: none; }
 `;
 export function createHud(container, renderer) {
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);

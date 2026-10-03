@@ -35,6 +35,16 @@
   #pad.held { background: rgba(55,230,255,0.22); border-color: var(--player); color: var(--fg); }
   #pad.left { right: auto; left: 18px; }
   #pad[hidden] { display: none; }
+  /* Sprint 4 cluster: GAS (big, bottom right), BRAKE beside it, FIRE above GAS, SPECIAL above BRAKE; mirrored for left hand */
+  #pad { right: 128px; width: 84px; height: 84px; border-radius: 42px; }
+  #gas { position: absolute; right: 18px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 100px; height: 100px; border-radius: 50px; border: 3px solid rgba(255,255,255,0.28); background: rgba(20,24,30,0.78); color: var(--fg-dim); font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: 0.14em; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  #gas.held { background: rgba(255,210,63,0.2); border-color: var(--pickup); color: var(--fg); }
+  #fire { position: absolute; right: 26px; bottom: calc(130px + env(safe-area-inset-bottom, 0px)); width: 84px; height: 84px; border-radius: 42px; border: 3px solid rgba(255,255,255,0.28); background: rgba(20,24,30,0.78); color: var(--fg-dim); font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.14em; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  #fire.held { background: rgba(255,80,60,0.25); border-color: #ff5a3c; color: var(--fg); }
+  #fire.hot { border-color: #ff8a3c; box-shadow: 0 0 14px rgba(255,120,40,0.6); }
+  #gas.left { right: auto; left: 18px; } #fire.left { right: auto; left: 26px; } #pad.left { right: auto; left: 128px; }
+  #gas[hidden], #fire[hidden] { display: none; }
+  #special { right: 132px; bottom: calc(134px + env(safe-area-inset-bottom, 0px)); } #special.left { right: auto; left: 132px; }
   #special { position: absolute; right: 30px; bottom: calc(140px + env(safe-area-inset-bottom, 0px)); width: 76px; height: 76px; border-radius: 38px; border: 3px solid rgba(255,255,255,0.35); background: rgba(20,24,30,0.88); color: var(--fg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; transition: transform 0.3s, opacity 0.3s; }
   #special[hidden] { display: flex; opacity: 0; transform: translateY(40px) scale(0.6); }
   #special.armed { border-color: var(--pickup); box-shadow: 0 0 18px rgba(255,210,63,0.55); }
@@ -82,7 +92,9 @@
       <div class="callout" id="callout" style="opacity:0"></div>
       <button id="pause" class="tap" aria-label="Pause"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect x="4" y="3" width="4" height="14" rx="1" fill="currentColor"/><rect x="12" y="3" width="4" height="14" rx="1" fill="currentColor"/></svg></button>
       <button id="special" class="tap" aria-label="Special weapon" hidden><span id="specialIcon"></span><span class="pips" id="specialPips"></span></button>
-      <button id="pad" class="tap" aria-label="Brake, hold while steering to drift" hidden>BRAKE</button>
+      <button id="pad" class="tap" aria-label="Brake, hold while steering to drift, hold at a stop to reverse" hidden>BRAKE</button>
+      <button id="gas" class="tap" aria-label="Gas, hold to speed up" hidden>GAS</button>
+      <button id="fire" class="tap" aria-label="Fire, hold for the rotary guns" hidden>FIRE</button>
       <div id="card" hidden>
         <div class="logo" id="cardLogo" hidden>SHUNT</div>
         <div class="title" id="cardTitle"></div>

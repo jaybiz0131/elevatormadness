@@ -12,13 +12,13 @@ export function physics(dt, playing) {
   G.targetX = rc + G.in.off;
   { const off = G.targetX - rc; G.steerVx = G.prevOff === undefined ? 0 : (off - G.prevOff) / dt; G.prevOff = off; }   // how fast the thumb is moving the target across the road
   const lim = rw / 2 - T.sizes.player[0] / 2 - 2;
-  G.targetX = clamp(G.targetX, rc - lim, rc + lim);
+  G.rawTargetX = G.targetX; G.targetX = clamp(G.targetX, rc - lim, rc + lim);
   driveSpeed(dt, playing);
   if (G.slamT > 0) { G.slamT -= dt; G.vx = G.slamDir * T.slam.speed; G.x += G.vx * dt; G.heading = G.phi = G.slamDir * 0.2; if (G.rng() < 0.6) addMark(G.x - G.slamDir * 10, G.dist - 20, 3, true); if (G.slamT <= 0) { emit({ k: 'rebase', d: G.x - G.slamX0 }); G.targetX = G.x; G.heading = G.phi = 0; } }   // the thumb keeps relative control from where the Slam ended
   else driveSteer(dt, playing);
   G.fwd = G.speed * Math.cos(G.phi);
   if (G.slamCd > 0) G.slamCd -= dt;
-  if (G.in.slam) trySlam(G.in.slam); if (G.in.fire) fireSpecial(); G.flicks += G.in.flicks;
+  if (G.in.slam) trySlam(G.in.slam); if (G.in.special) fireSpecial(); G.flicks += G.in.flicks;
   if (playing) gun(dt);   // inside the fixed step, so the gun obeys slow motion and hit-stop (audit, hard truth 11)
   // rails: scrape = sparks, small speed loss, capped graze points (bug 6)
   const left = rc - rw / 2 + T.sizes.player[0] / 2, right = rc + rw / 2 - T.sizes.player[0] / 2;
@@ -97,8 +97,8 @@ export function physics(dt, playing) {
   for (const s of G.slicks) { s.t -= dt; for (const c of live) if (c.alive && !c.wrecked && c.kind !== 'truck' && Math.abs(c.x - s.x) < 30 && Math.abs(c.y - s.y) < 40 && !c.spun) { c.spun = true; c.vx = (G.rng() < 0.5 ? -1 : 1) * 300; c.shunted = true; creditCar(c, 'oil'); c.spinOut = 1.0; if (c.kind === 'civ') c.penalised = true; } }
   compact(G.slicks, s => s.t > 0);
   // bullets
-  for (const b of G.bullets) { b.py = b.y; b.y += T.bulletSpeed * dt; b.x += (b.vx || 0) * dt; }
-  compact(G.bullets, b => { if (b.y > G.dist + 900) return false; for (const c of live) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck') continue; if (Math.abs(b.x - c.x) < c.w / 2 && Math.abs(b.y - c.y) < c.l / 2) { gunHit(c, b); return false; } } for (const br of G.barrels) if (br.alive && Math.abs(b.x - br.x) < 12 && Math.abs(b.y - br.y) < 14) { explodeBarrel(br, true); return false; } return true; });
+  for (const b of G.bullets) { b.py = b.y; b.y += (b.vy === undefined ? T.bulletSpeed : b.vy) * dt; b.x += (b.vx || 0) * dt; b.life = (b.life || 0) + dt; }
+  compact(G.bullets, b => { if (b.y > G.dist + 900 || b.y < G.dist - 400 || b.life > 0.8 || Math.abs(b.x - REF) > 700) return false; for (const c of live) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck') continue; if (Math.abs(b.x - c.x) < c.w / 2 && Math.abs(b.y - c.y) < c.l / 2) { gunHit(c, b); return false; } } for (const br of G.barrels) if (br.alive && Math.abs(b.x - br.x) < 12 && Math.abs(b.y - br.y) < 14) { explodeBarrel(br, true); return false; } return true; });
   // missiles: arc, smoke, splash 40 pt
   for (const m of G.missiles) { let target = null, best = 1e9; for (const c of live) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck' || c.y <= m.y - 20) continue; const d = Math.hypot(c.x - m.x, c.y - m.y); if (d < best) { best = d; target = c; } } m.t += dt; m.py = m.y; if (target) m.x += (target.x - m.x) * Math.min(1, dt * 5); m.y += (700 + 400 * Math.min(1, m.t * 2)) * dt; if (G.rng() < 0.7) addDebris(m.x + (G.rng() - 0.5) * 6, m.y - 10, 0, G.speed * 0.5, 0.5, 'rgba(200,200,200,0.5)', 6, true); if (target && Math.abs(m.x - target.x) < 22 && Math.abs(m.y - target.y) < target.l / 2 + 10) { m.dead = true; G.fx.push({ x: m.x, y: m.y, t: 0, life: 0.5, big: true }); for (const c of live) if (c.alive && !c.wrecked && c.kind !== 'civ' && c.kind !== 'truck' && Math.abs(c.x - m.x) < 40 + c.w / 2 && Math.abs(c.y - m.y) < 40 + c.l / 2) wreck(c, 'missile', true); } if (m.y > G.dist + 1200) m.dead = true; }
   compact(G.missiles, m => !m.dead);
@@ -140,7 +140,8 @@ export function driveSpeed(dt, playing) {
   G.cruise = Math.min(D.top, D.cruise * Math.pow(D.districtGain, G.districtsPassed));
   if (!playing) { G.speed += (G.cruise * 0.5 - G.speed) * Math.min(1, dt * 2); G.braking = false; return; }
   if (G.burnout > 0) { G.burnout -= dt; G.speed = 0; G.braking = false; if (G.burnout <= 0) { G.speed = 320; say('Go', '', 600, true); sfx.launch(); hap([10, 30]); } return; }
-  let target = G.cruise;
+  let target = G.cruise; const gas = G.in.gas && G.wallT <= 0;
+  if (gas) target = D.top;
   if (G.turboT > 0) { G.turboT -= dt; target += G.turbo; if (G.turboT <= 0) G.popT = 0.35; }
   if (G.slipBoostT > 0) { G.slipBoostT -= dt; target += D.slipBoost; }
   if (G.nitro > 0) { G.nitro -= dt; target = D.nitro; if (G.nitro <= 0) G.popT = 0.5; }
@@ -148,12 +149,17 @@ export function driveSpeed(dt, playing) {
   target = Math.min(target, G.nitro > 0 ? D.nitro : D.top);
   if (G.wallT > 0) { G.wallT -= dt; target = D.minSpeed; G.turboT = 0; G.slipBoostT = 0; }   // grinding the rail after a barrier hit: no throttle until the stun ends
   const braking = G.in.brake && !G.drifting && G.air <= 0;
-  if (braking) { if (!G.braking) sfx.brake(); G.braking = true; G.speed = Math.max(D.minSpeed, G.speed - D.brake * dt); }
-  else { G.braking = false; const accel = D.top / D.throttle; if (G.speed < target) G.speed = Math.min(target, G.speed + accel * dt); else G.speed += (target - G.speed) * Math.min(1, dt * 1.5); }
+  // brake: down to minSpeed at the brake rate; keep holding and the car stops and backs up (reverse), as long as the pad is held
+  if (braking) { if (!G.braking) sfx.brake(); G.braking = true; if (G.speed > D.minSpeed) G.speed = Math.max(D.minSpeed, G.speed - D.brake * dt); else G.speed = Math.max(-D.reverse, G.speed - D.reverseAccel * dt); }
+  else { G.braking = false; const accel = gas ? D.accel : D.accel * 0.6;
+    if (G.speed < target) G.speed = Math.min(target, G.speed + accel * dt);   // throttle: pulling toward cruise by itself, toward top on the gas
+    else G.speed += (target - G.speed) * Math.min(1, dt * (gas ? 1.5 : D.coast)); }   // off the gas the car coasts back to cruise gently
+  G.reversing = G.speed < 0; if (G.reversing && G.drifting) endDrift(false);
   if (G.drifting) G.speed -= G.speed * T.drift.loss * dt;
+  if (G.spinning) G.speed -= G.speed * T.spin.loss * dt;
   // transient boost (set by landings, scrapes and hits) applied over about a third of a second
   if (G.boost !== 0) { const k = Math.min(1, dt * 3); G.speed += G.boost * k; G.boost -= G.boost * k; if (Math.abs(G.boost) < 2) G.boost = 0; }
-  G.speed = clamp(G.speed, G.air > 0 ? G.speed : 0, D.nitro);
+  G.speed = clamp(G.speed, G.air > 0 ? G.speed : -D.reverse, D.nitro);
   if (G.popT > 0) G.popT -= dt;
 }
 // Steering: the thumb sets a target lateral position; the car reaches it by yawing (30° in grip, 240°/s), and sideways speed is
@@ -171,8 +177,15 @@ export function driveSteer(dt, playing) {
   if (G.drifting) {
     G.driftT += dt; const counter = u * G.driftDir < -0.5;   // thumb swung hard the other way: the player is straightening up
     const hold = padHeld || (G.cfg.autoDrift && Math.abs(u) > 0.12 && !counter);
-    if (G.air > 0) endDrift(false); else if (!hold || counter) endDrift(true);
+    // the 360: thumb held hard out in the drift direction, at speed, for `arm` seconds: the drift becomes a spin
+    // "turned too much": the thumb dragged past where the road lets the car go (the raw target beyond the clamped one by a lane)
+    if (G.air > 0 && !G.crestAir) endDrift(false); else if (!G.spinning && (!hold || counter)) endDrift(true);   // a hill crest no longer drops the drift (Sprint 4: crests come fast at 1,300 pt/s)
   }
+  // "turned too much": pad held and the thumb dragged a lane past where the road lets the car go, at speed, for `arm` seconds:
+  // the car spins (from a drift, or straight from grip against the rail: the drift starts on the spot)
+  { const overX = G.rawTargetX - G.targetX; const dir = Math.sign(overX); const over = Math.abs(overX) > T.laneW * T.spin.over && (!G.drifting || dir === G.driftDir);
+    if (padHeld && over && !G.spinning && G.speed > T.spin.speed && G.air <= 0 && G.burnout <= 0) { G.spinArm += dt; if (G.spinArm >= T.spin.arm) { if (!G.drifting) startDrift(dir); startSpin(dir); } } else G.spinArm = 0; }
+  if (G.spinning) { spinStep(dt); return; }
   if (G.driftExitT > 0) G.driftExitT -= dt;
   if (G.drifting) {
     // in a drift the thumb steers the path with 70% authority while the body sits at the slip angle beyond it: 35° with the
@@ -346,15 +359,36 @@ export function damage(amount, by, cause) {
   G.damageAcc -= 1; G.armor--; G.armorLost++; G.invuln = T.invuln; G.flashT = T.invuln; G.vignette = 1; G.smoke = 2.5; kickShake(0, 0, 0.9); G.hitStop = Math.max(G.hitStop, 0.04); sfx.damage(); hap([60, 30, 60]);
   G.cause = cause || (by ? 'Hit by a car' : 'Crashed'); say(G.armor > 0 ? 'Armor ' + G.armor : 'Wrecked', '', 700);
 }
+// The rotary guns (Sprint 4): FIRE held spins the barrels up, then rounds leave along the car's heading at the rotary rate with a
+// little aim help toward the nearest enemy in range. Heat climbs per round; an overheated gun rests. Spread and cannon upgrades
+// fire the same way with their own patterns. Bullets fly in their own direction (vx, vy), so a spin sprays the whole street.
 export function gun(dt) {
-  G.gunCd -= dt; if (G.air > 0 || G.gunCd > 0) return;
-  const target = G.cars.find(c => c.alive && !c.wrecked && c.kind !== 'civ' && c.kind !== 'truck' && c.y > G.dist + 40 && c.y < G.dist + T.gunRange && Math.abs(c.x - G.x) < (G.gun === 'spread' ? 80 : T.gunHalfLane));
-  if (!target) return;
-  G.shots = (G.shots || 0) + 1; const side = G.shots % 2 ? -1 : 1;
-  if (G.gun === 'spread') { G.gunCd = 1 / 5; for (const vx of [-220, 0, 220]) G.bullets.push({ x: G.x, y: G.dist + 30, vx, dmg: 1 }); sfx.shot(); }
-  else if (G.gun === 'cannon') { G.gunCd = 1 / 2; G.bullets.push({ x: G.x, y: G.dist + 30, vx: 0, dmg: 2.5, knock: true }); sfx.cannon(); kickShake(0, 3); }
-  else { G.gunCd = 1 / T.fireRate; G.bullets.push({ x: G.x + side * 9, y: G.dist + 30, vx: 0, dmg: 1 }); sfx.shot(); }
-  G.flashT2 = 0.05;
+  const R = T.rotary; const want = G.in.fire && G.air <= 0 && G.hot <= 0 && G.burnout <= 0;
+  if (G.hot > 0) { G.hot -= dt; if (G.hot <= 0) { G.heat = 0; say('Guns cool', '', 500); } }
+  G.gunSpin = clamp(G.gunSpin + (want ? dt / R.spinUp : -dt / (R.spinUp * 2)), 0, 1);
+  G.heat = Math.max(0, G.heat - R.cool * dt);
+  G.gunCd -= dt; if (!want || G.gunSpin < 0.6 || G.gunCd > 0) return;
+  // direction: the body heading, bent toward the nearest live enemy within range and the assist cone
+  let ang = G.heading; let best = null, bestD = 1e9;
+  for (const c of G.cars) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck') continue; const dx = c.x - G.x, dy = c.y - G.dist; const d = Math.hypot(dx, dy); if (d > T.gunRange || d < 20) continue; const a = Math.atan2(dx, dy); let da = a - G.heading; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI; if (Math.abs(da) < R.assist * Math.PI / 180 && d < bestD) { bestD = d; best = da; } }
+  if (best !== null) ang += best;
+  G.shots++; const side = G.shots % 2 ? -1 : 1; const ca = Math.cos(ang), sa = Math.sin(ang);
+  const shoot = (off, dmg, knock, spreadDeg) => { const a2 = ang + (spreadDeg || 0) * Math.PI / 180; const vx = T.bulletSpeed * Math.sin(a2) + G.vx * 0.2, vy = T.bulletSpeed * Math.cos(a2) + Math.max(0, G.fwd) * 0.2; G.bullets.push({ x: G.x + ca * off + sa * 24, y: G.dist - sa * off + ca * 24, vx, vy, dmg, knock, life: 0 }); };
+  const jitter = (G.rng() * 2 - 1) * R.spread;
+  if (G.gun === 'spread') { G.gunCd = 1 / 6; for (const d of [-14, 0, 14]) shoot(side * 9, 1, false, d + jitter); G.heat += R.heatPer * 1.5; sfx.shot(); }
+  else if (G.gun === 'cannon') { G.gunCd = 1 / 3; shoot(0, 2.5, true, jitter * 0.4); G.heat += R.heatPer * 3; sfx.cannon(); kickShake(0, 3); }
+  else { G.gunCd = 1 / R.rate; shoot(side * 9, 1, false, jitter); G.heat += R.heatPer; sfx.shot(); }
+  G.flashT2 = 0.05; G.kick.y += 0.4;
+  if (G.heat >= 1) { G.hot = R.rest; G.gunSpin = 0; say('Overheated', 'let the guns cool', 800); sfx.ping(false); hap([20, 20, 20]); }
+}
+// The 360: the body turns a full circle at the spin rate while the velocity keeps the drift path; a finished circle pays
+// score and a tier-3 turbo, and the body snaps back behind the velocity with the drift exit wobble.
+export function startSpin(dir) { G.spinning = true; G.spinA = 0; G.spinDir = dir; G.spinArm = 0; G.driftDirty = true; sfx.slam(); hap([15, 20, 30]); say('Spin', '', 400); }
+export function spinStep(dt) {
+  const rate = T.spin.rate * Math.PI / 180 * dt; G.spinA += rate; G.heading = G.phi + G.spinDir * G.spinA; G.slipping = true;
+  G.vx = G.speed * Math.sin(G.phi) + G.slideVx; G.x += G.vx * dt; G.slideVx *= Math.exp(-dt / 0.4);
+  if (G.spinA >= Math.PI * 2) { G.spinning = false; G.spins++; G.heading = G.phi; G.slip = 0; G.driftCharge = T.drift.tiers[2]; G.driftTier = 3; G.driftDirty = false; endDrift(true); addScore(T.spin.score, G.x, G.dist + 40, false, '360'); say('360', 'spin turbo', 900, true); hap([30, 30, 60]); }
+  if (G.drifting) driftStep(dt);
 }
 export function gunHit(c, b) { if (c.kind === 'armored') { spark(b.x, b.y, 2); sfx.ping(false); return; } c.hp -= b.dmg; c.hitFlash = 0.08; spark(b.x, b.y, 3); if (b.knock) { c.vx += (b.x < c.x ? 1 : -1) * 260 * (c.kind === 'weak' ? 1.4 : 1); c.shunted = true; creditCar(c, 'shunt'); } sfx.ping(c.hp <= 0); if (c.hp <= 0) wreck(c, 'gun', true); }
 // Score by cause. `credit` (or the car's own credit flag) says the player caused this wreck: then it pays base × the cause
