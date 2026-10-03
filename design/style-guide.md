@@ -36,12 +36,12 @@ Every number here is a render parameter in `spycar/shunt/src/render/three/looks.
 | Parameter | Night | Dusk | Blue hour |
 |---|---|---|---|
 | Sky zenith / horizon | `#0b1030` / `#3a1a5a` | `#2a2560` / `#ff8a3a` | `#0a1a4a` / `#2a4a9a` |
-| Fog colour, density | `#241a44`, 0.0032 | `#7a4a66`, 0.0019 | `#1a2a6a`, 0.0018 |
+| Fog colour, density | `#241a44`, 0.0032 | `#6a4a7a`, 0.0017 | `#1a2a6a`, 0.0018 |
 | Key light colour, intensity | `#8fa8ff`, 1.8 | `#ffb070`, 2.2 | `#6a8aff`, 1.0 |
-| Key azimuth / elevation | 210° / 38° | 250° / 8° | 250° / −4° (clamped to 3° for shadows) |
-| Hemisphere sky / ground, intensity | `#3a4a8a` / `#1a1420`, 1.1 | `#6a6ab8` / `#2a1a20`, 0.9 | `#3a5aba` / `#101828`, 1.5 |
+| Key azimuth / elevation | 200° / 58° (a high moon, so towers do not stripe the road) | 250° / 8° | 250° / −4° (clamped to 3° for shadows) |
+| Hemisphere sky / ground, intensity | `#3a4a8a` / `#1a1420`, 1.1 | `#7a7ac8` / `#2a1a20`, 1.3 | `#3a5aba` / `#101828`, 1.5 |
 | Environment intensity | 0.7 | 0.8 | 0.9 |
-| Exposure | 1.15 | 1.0 | 1.1 |
+| Exposure | 1.15 | 1.15 | 1.1 |
 | Tone mapping | AgX | AgX | AgX |
 | Bloom threshold / intensity / radius | 0.85 / 1.1 / 0.7 | 0.9 / 0.8 / 0.6 | 0.8 / 1.3 / 0.75 |
 | LUT strength; saturation; contrast; warm; lift | 0.8; 1.15; 1.08; −0.04; 0 | 0.7; 1.15; 1.05; +0.03; 0 | 0.7; 1.1; 1.04; −0.08; +0.01 |
@@ -78,5 +78,14 @@ Height fog: the fog factor is multiplied by exp(−0.045 × height), so the stre
 | Tyre smoke | sim puffs, 0.5 m → 3 m over 1.4 s, 55% → 0 alpha, lit by the key direction, sorted back to front, 700 cap (800 with wreck smoke) |
 | Skid marks | ring buffer of 2,000 segments, 45 cm wide, fading over 15 s |
 | Drift sparks | points, additive, bright enough to bloom; colour by tier (white, gold, orange) |
-| Explosion | flash + fireball glow, 12 debris pieces on ballistic arcs, 6 rising smoke puffs, ground shockwave ring, shake 0.8 |
+| Explosion | flash + fireball glow (HDR, blooms), 12 debris pieces on ballistic arcs, 6 rising smoke puffs, ground shockwave ring, shake 0.8 |
+| Lamp pools | 3.6 m radius, warm `#ffb860`, alpha 0.14 + 0.08 × neon |
 | Speed | FOV kick 6° (turbo) / 10° (nitro); speed lines from 85% of top speed; wheel blur not yet (placeholder wheels) |
+
+## Hairpin barrier (Step 6, sim flag `hairpinWall`, `?wall=0` to turn off)
+
+| Rule | Value |
+|---|---|
+| Trigger | 0.3 s accumulated over 1.02 × the grip budget in a hard corner, not braking, not drifting, once per corner |
+| Hit | car put against the outer rail, speed × 0.45, 0.8 s grind at minimum speed with sparks, half an armor pip, kick 10, trauma 0.8, hit-stop 80 ms, "Too fast: brake or drift" |
+| Gate (20 hairpins, synchronous bots) | brake-or-drift 2.02 s per hairpin, floor-it 2.59 s: 0.57 s faster (need 0.5); floor-it hits 20 of 20 (need 80%) |
