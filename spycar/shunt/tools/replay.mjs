@@ -11,7 +11,7 @@ const file = process.argv[2];
 const live = process.argv.includes('--live');
 const pageArg = process.argv.find(a => a.startsWith('--page=')); const pageFile = pageArg ? path.resolve(pageArg.slice(7)) : path.join(here, '..', 'dist', 'shunt.html');
 const rep = JSON.parse(fs.readFileSync(file, 'utf8'));
-const browser = await chromium.launch();
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true });
 const errors = []; page.on('pageerror', e => errors.push(e.message));
 await page.goto((pageFile.startsWith('http') ? '' : 'file://') + pageFile);

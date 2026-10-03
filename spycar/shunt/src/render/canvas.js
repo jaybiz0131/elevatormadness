@@ -9,7 +9,7 @@ import { isTouch, view } from '../ui/dom.js';
 let ctx = null, phase = 'title', elapsed = 0, best = 0, bestDaily = 0, dailyMode = false;
 export function createCanvasRenderer(cv) {
   ctx = cv.getContext('2d');
-  return { kind: 'canvas', render, reset() { camPsi = 0; camZoom = 1; camLook = 0; camRoll = 0; camLane = LANE; }, resize() { cv.width = view.SW * view.dpr; cv.height = H * view.dpr; }, stats() { return null; } };
+  return { kind: 'canvas', render, visibleAhead(G) { const v = 0.3 + 0.7 / camZoom; return ahead(v) - ahead(camLane); }, reset() { camPsi = 0; camZoom = 1; camLook = 0; camRoll = 0; camLane = LANE; }, resize() { cv.width = view.SW * view.dpr; cv.height = H * view.dpr; }, stats() { return null; } };
 }
 const PY = 0.22, PX = 0.07, LANE = 0.30;
 const ahead = (v) => v * H * (1 + PY * v);

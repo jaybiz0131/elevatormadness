@@ -19,7 +19,7 @@ const mode = process.argv[4] || 'active';
 const opt = Object.fromEntries(process.argv.slice(5).filter(a => a.startsWith('--')).map(a => { const [k, v] = a.slice(2).split('='); return [k, v === undefined ? true : v]; }));
 const pageUrl = opt.page ? ((opt.page.startsWith('http') ? '' : 'file://') + path.resolve(opt.page)) : 'file://' + path.join(here, '..', 'dist', 'shunt.html');
 const seed = opt.seed !== undefined ? Number(opt.seed) : null;
-const browser = await chromium.launch();
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));

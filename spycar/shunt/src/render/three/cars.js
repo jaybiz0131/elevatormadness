@@ -30,6 +30,8 @@ export class CarSystem {
     for (const [k, c] of Object.entries(KIND_COL)) this.mat[k] = new MeshStandardMaterial({ color: new Color(c), vertexColors: true, roughness: 0.55, metalness: 0.25 });
     for (let i = 0; i < CIV_TINTS.length; i++) this.mat['civ' + i] = new MeshStandardMaterial({ color: new Color(CIV_TINTS[i]), vertexColors: true, roughness: 0.6, metalness: 0.2 });
     this.player = new Mesh(this.geo.player, this.mat.player); this.player.castShadow = true; scene.add(this.player);
+    // readability: a cyan silhouette drawn only where the depth test fails, so the player shows through whatever covers it
+    const outline = new Mesh(this.geo.player, new MeshStandardMaterial({ color: CYAN, emissive: CYAN, emissiveIntensity: 1.5, transparent: true, opacity: 0.55, depthFunc: 4 /* GreaterDepth */, depthWrite: false })); outline.renderOrder = 30; this.player.add(outline);
   }
   acquire(kind) { let m = this.free[kind].pop(); if (!m) { m = new Mesh(this.geo[kind], this.mat[kind]); m.castShadow = true; m.frustumCulled = false; } this.scene.add(m); return m; }
   release(m) { this.scene.remove(m); this.free[m.userData.kind].push(m); }
@@ -51,6 +53,7 @@ export class CarSystem {
       for (const sx of [-1, 1]) fx.glow(p.x + fx_ * l * 0.5 + rx * sx * w * 0.35, p.y + 0.7, p.z + fz_ * l * 0.5 + rz * sx * w * 0.35, c.kind === 'armored' ? 1.1 : 0.9, 1, 0.23, 0.23, 0.9);
       const brake = c.state === 'tell' && Math.floor(c.t * 12) % 2 === 0; if (brake) for (const sx of [-1, 1]) fx.glow(p.x - fx_ * l * 0.5 + rx * sx * w * 0.35, p.y + 0.8, p.z - fz_ * l * 0.5 + rz * sx * w * 0.35, 0.8, 1, 0.42, 0.42, 1);
       if (c.hitFlash > 0) fx.glow(p.x, p.y + 1, p.z, w * 1.2, 1, 1, 1, 0.8);
+      if (c.state === 'tell' || c.state === 'swerve' || c.state === 'sight') { const pulse = 0.55 + 0.45 * Math.sin(elapsed * 18); fx.ring(p.x, p.y + 0.04, p.z, Math.max(w, l) * 0.6, 0xff3b3b, pulse, 1); fx.glow(p.x, p.y + 0.8, p.z, l * 0.8, 1, 0.23, 0.23, 0.35 * pulse); }
       if (c.state === 'tell') { const dir = G.x < c.x ? -1 : 1; fx.marker(G, cx + dir * 36, cy, 'arrow', dir, 0.5 + 0.5 * Math.sin(elapsed * 20)); }
       if (c.kind === 'gunner' && c.state === 'sight') fx.sightLine(G, c.sightX, c.y, c.sightX, c.y + 700, 0.5 + 0.5 * Math.sin(elapsed * 30));
     }
@@ -65,6 +68,7 @@ export class CarSystem {
     // headlights (warm), brighter when the gun fires; tail lights, bright under braking; the cyan body glow that keeps the player readable
     for (const sx of [-1, 1]) { fx.glow(p.x + fx_ * l * 0.5 + rx_ * sx * w * 0.35, p.y + 0.7, p.z + fz_ * l * 0.5 + rz_ * sx * w * 0.35, G.flashT2 > 0 ? 1.6 : 1.0, 1, 0.97, 0.8, G.flashT2 > 0 ? 1 : 0.8); fx.glow(p.x - fx_ * l * 0.5 + rx_ * sx * w * 0.35, p.y + 0.8, p.z - fz_ * l * 0.5 + rz_ * sx * w * 0.35, G.braking ? 1.2 : 0.6, 1, 0.3, 0.3, G.braking ? 1 : 0.6); }
     fx.glow(p.x, p.y + 0.8, p.z, 4.0, G.nitro > 0 ? 1 : 0.22, G.nitro > 0 ? 0.82 : 0.9, G.nitro > 0 ? 0.25 : 1, G.nitro > 0 ? 0.5 : 0.3);
+    fx.poolAt(p.x + fx_ * 9, p.y - lift, p.z + fz_ * 9, 1, 0.95, 0.75, 0.22, 6, -m.rotation.y, 2.4);   // headlight pool on the road ahead
     if (G.drifting && st.phase === 'playing') fx.ring(p.x, p.y - lift + 0.03, p.z, 36 * M, G.driftTier >= 3 ? 0xff7a2a : G.driftTier === 2 ? 0xffd23f : 0xffffff, 0.8, Math.min(1, G.driftCharge / T.drift.tiers[2]));
     if (G.slamCd > 0) fx.ring(p.x, p.y - lift + 0.03, p.z, 30 * M, 0xffffff, 0.5, 1 - G.slamCd / T.slam.cooldown);
     if (G.air > 0 && G.air < 0.4) fx.ring(p.x, p.y - lift + 0.03, p.z, 26 * M, 0xffffff, 0.8, 1);

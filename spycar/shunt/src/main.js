@@ -10,19 +10,28 @@ import { stage, cv, ui, $, view, callout, hideCallout, updateSpecial, pulseSpeci
 import { showCard, refreshSettings, screen, setScreen, setSettingsFrom, settingsFrom } from './ui/cards.js';
 import { input, bindInput } from './input/input.js';
 import { createCanvasRenderer } from './render/canvas.js';
+import { createThreeRenderer } from './render/three/index.js';
+import { createHud } from './ui/hud.js';
+import { createPerf } from './ui/perf.js';
 
 let syncRun = false, phase = 'title', now = 0, lastT = 0, elapsed = 0, countdown = 0, pausedFrom = 'playing';
 const Q = new URLSearchParams(location.search);
 let seed = Q.get('seed') !== null ? (Number(Q.get('seed')) >>> 0) : (Math.random() * 4294967296) >>> 0, dailyMode = false, best = 0, bestDaily = 0, cash = 0, hadRun = false;
 try { best = Number(localStorage.getItem('shunt-best') || 0); bestDaily = Number(localStorage.getItem('shunt-best-' + localDate()) || 0); cash = Number(localStorage.getItem('shunt-cash') || 0); } catch (e) {}
 const app = { get G() { return G; }, get dailyMode() { return dailyMode; }, get best() { return best; }, get bestDaily() { return bestDaily; }, get cash() { return cash; } };
-const renderer = createCanvasRenderer(cv);
+// ?r=canvas keeps the Sprint C canvas renderer (the parity fallback); everything else renders in three.js. ?look= picks the look.
+const useCanvas = Q.get('r') === 'canvas';
+const renderer = useCanvas ? createCanvasRenderer(cv) : createThreeRenderer(cv, { look: Q.get('look') || 'night' });
+const hud = useCanvas ? null : createHud($('ui'), renderer);
+const perf = createPerf(Q, renderer, hud);
+if (!useCanvas && Q.get('tune') === '1') import('./render/three/tune.js').then(m => m.createTune(renderer, null));
+if (hud) hud.lookToggle([{ key: 'night', label: 'NIGHT' }, { key: 'dusk', label: 'DUSK' }, { key: 'bluehour', label: 'BLUE HOUR' }], renderer.look, (k) => renderer.setLook(k));
 
 // ---------------- runs and phases ----------------
 function freshRun(reseed) {
   if (reseed) seed = dailyMode ? fnv1a(localDate()) : (Math.random() * 4294967296) >>> 0;
   newRun(seed, { sens: S.sens, autoDrift: S.autoDrift });
-  renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.pad.hidden = true; updateSpecial(G);
+  if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.pad.hidden = true; updateSpecial(G);
 }
 function enterTitle() { phase = 'title'; showCard('title', app); }
 function startPlaying() { phase = 'playing'; hideCallout(); hadRun = true; ui.card.hidden = true; ui.pad.hidden = false; beginRun(); }
@@ -83,7 +92,7 @@ function frame(t) {
     else if (phase === 'playing') simulate(dt, true);
     else if (phase === 'dying') { G.deathT += dt; simulate(dt * 0.3, false); if (G.deathT >= 1.2) finishDeath(); }
     else if (phase === 'over') G.replayT += dt;
-    renderer.render(dt, { phase, elapsed, best, bestDaily, dailyMode });
+    const st = { G, phase, elapsed, best, bestDaily, dailyMode }; renderer.render(dt, st); if (hud) hud.update(st); perf.frame(dt, st);
   }
   requestAnimationFrame(frame);
 }
@@ -95,7 +104,7 @@ function fit() {
   try { const pad = parseFloat(getComputedStyle(document.documentElement).paddingTop) || 0; window.safeTop = Math.max(0, pad) / s; view.safeTop = window.safeTop; document.documentElement.style.setProperty('--safe-top', window.safeTop + 'px'); } catch (e) { window.safeTop = 0; }
 }
 window.addEventListener('resize', fit);
-function start() { fit(); refreshSettings(); freshRun(false); enterTitle(); try { localStorage.setItem('shunt-runs', String(Number(localStorage.getItem('shunt-runs') || 0) + 1)); } catch (e) {} requestAnimationFrame(frame); }
+async function start() { fit(); refreshSettings(); freshRun(false); enterTitle(); try { localStorage.setItem('shunt-runs', String(Number(localStorage.getItem('shunt-runs') || 0) + 1)); } catch (e) {} if (renderer.prewarm) await renderer.prewarm(); requestAnimationFrame(frame); perf.start(loadReplay); }
 
 // ---------------- hooks for bots and replays ----------------
 function loadReplay(r) { seed = r.seed >>> 0; dailyMode = false; S.sens = r.cfg.sens; S.autoDrift = r.cfg.autoDrift; freshRun(false); attachReplay(r); startPlaying(); return G; }
@@ -104,6 +113,6 @@ window.__shunt = {
   fireSpecial: () => input.requestFire(), trySlam: (d) => input.requestSlam(d),
   startPlaying: () => { freshRun(false); startPlaying(); },
   record: (bot) => startRecording(bot), exportReplay, loadReplay, runSteps: (n) => { syncRun = true; return runSteps(n); }, hashState, STEP: STEP_LEN,
-  renderer: () => renderer,
+  renderer: () => renderer, perf, get phaseName() { return phase; },
 };
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start); else start();

@@ -2,14 +2,14 @@
 // 320 pt texture bands and crest shading, lane dashes on the 40 pt world grid, rails as low walls, tyre walls on the outside of hard
 // corners, the red and white rumble strip on the inside of every corner. One merged geometry and one draw call per chunk; chunks
 // are recycled as the player moves on. Vertex colours carry the look so the material can change without rebuilding.
-import { BufferGeometry, BufferAttribute, Mesh, MeshStandardMaterial, Color, Group, PlaneGeometry, MeshBasicMaterial } from 'three';
+import { BufferGeometry, BufferAttribute, Mesh, MeshStandardMaterial, Color, Group, PlaneGeometry, DoubleSide } from 'three';
 import { REF, T } from '../../sim/constants.js';
 import { DISTRICTS } from '../../sim/road.js';
 import { M, toWorld } from './scale.js';
 export const CHUNK = 400, SAMPLE = 10;
 const col = (hex) => new Color(hex);
 const PAL = DISTRICTS.map(d => ({ road: col(d.road), dark: col(d.dark), shoulder: col(d.shoulder), rail: col(d.rail) }));
-export const ROAD_COL = { lane: col('#d8dce4'), tyre: col('#2b2d31'), rumbleR: col('#d93a3a'), rumbleW: col('#f2f2f2'), railPost: col('#5d6675') };
+export const ROAD_COL = { walk: col('#3c3f4a'), lane: col('#d8dce4'), tyre: col('#2b2d31'), rumbleR: col('#d93a3a'), rumbleW: col('#f2f2f2'), railPost: col('#5d6675') };
 const tmp = { x: 0, y: 0, z: 0 }, tmp2 = { x: 0, y: 0, z: 0 }, tmpc = new Color();
 class Builder {
   constructor() { this.pos = []; this.col = []; this.nrm = []; this.idx = []; this.n = 0; }
@@ -18,7 +18,7 @@ class Builder {
   strip(road, a0, a1, s0, b0, b1, s1, c, h = 0, c2) {
     const i0 = this.vert(lift(toWorld(road, a0, s0, tmp), h), c, 0, 1, 0), i1 = this.vert(lift(toWorld(road, a1, s0, tmp), h), c, 0, 1, 0);
     const i2 = this.vert(lift(toWorld(road, b1, s1, tmp), h), c2 || c, 0, 1, 0), i3 = this.vert(lift(toWorld(road, b0, s1, tmp), h), c2 || c, 0, 1, 0);
-    this.idx.push(i0, i2, i1, i0, i3, i2);
+    this.idx.push(i0, i1, i2, i0, i2, i3);   // counter-clockwise seen from above: the face points up
   }
   // a vertical face along the road at lateral offset x, from height h0 to h1, normal toward the road centre
   wall(road, x0, s0, x1, s1, h0, h1, c, inward) {
@@ -42,6 +42,7 @@ export function buildChunk(G, k, material) {
     for (const side of [-1, 1]) { const o0 = REF + side * (w0 / 2 + 2), o1 = REF + side * (w1 / 2 + 2), q0 = REF + side * (w0 / 2 + 6), q1 = REF + side * (w1 / 2 + 6);
       b.strip(road, Math.min(o0, q0), Math.max(o0, q0), s, Math.min(o1, q1), Math.max(o1, q1), s1, P.rail, 0.5); b.wall(road, o0, s, o1, s1, 0, 0.5, P.rail, -side); }
     if (cn && cn.hard) { const o = -cn.dir; const t0 = REF + o * (w0 / 2 + 7), u0 = REF + o * (w0 / 2 + 19), t1 = REF + o * (w1 / 2 + 7), u1 = REF + o * (w1 / 2 + 19); b.strip(road, Math.min(t0, u0), Math.max(t0, u0), s, Math.min(t1, u1), Math.max(t1, u1), s1, ROAD_COL.tyre, 0.8); b.wall(road, t0, s, t1, s1, 0, 0.8, ROAD_COL.tyre, -o); }
+    for (const side of [-1, 1]) { const p0 = REF + side * (w0 / 2 + 6), q0 = REF + side * (w0 / 2 + 46), p1 = REF + side * (w1 / 2 + 6), q1 = REF + side * (w1 / 2 + 46); b.strip(road, Math.min(p0, q0), Math.max(p0, q0), s, Math.min(p1, q1), Math.max(p1, q1), s1, ROAD_COL.walk, 0.15); b.wall(road, q0, s, q1, s1, 0, 0.15, ROAD_COL.walk, side); }   // sidewalk, 3.5 m, kerb 15 cm
     if (cn) { const d = cn.dir; const r0 = REF + d * (w0 / 2 - 10), e0 = REF + d * w0 / 2, r1 = REF + d * (w1 / 2 - 10), e1 = REF + d * w1 / 2; b.strip(road, Math.min(r0, e0), Math.max(r0, e0), s, Math.min(r1, e1), Math.max(r1, e1), s1, Math.floor(s / 20) % 2 ? ROAD_COL.rumbleR : ROAD_COL.rumbleW, 0.012); }
   }
   const m = new Mesh(b.geometry(), material); m.receiveShadow = true; m.frustumCulled = true; m.userData.k = k; return m;
@@ -49,8 +50,8 @@ export function buildChunk(G, k, material) {
 export class RoadMesh {
   constructor(scene) {
     this.group = new Group(); scene.add(this.group); this.chunks = new Map();
-    this.material = new MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0.0 });
-    // the shoulder: one big ground plane that follows the player; the sim's district colour, never shadowed by nothing
+    this.material = new MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0.0, side: DoubleSide });
+    // the shoulder: one big ground plane that follows the camera, in the district's shoulder colour
     this.ground = new Mesh(new PlaneGeometry(2400, 2400), new MeshStandardMaterial({ color: PAL[0].shoulder, roughness: 1 })); this.ground.rotation.x = -Math.PI / 2; this.ground.position.y = -0.02; this.ground.receiveShadow = true; scene.add(this.ground);
   }
   update(G, rdist, camPos) {
@@ -59,5 +60,6 @@ export class RoadMesh {
     for (const [k, m] of this.chunks) if (k < k0 - 1 || k > k1 + 1) { this.group.remove(m); m.geometry.dispose(); this.chunks.delete(k); }
     this.ground.position.x = camPos.x; this.ground.position.z = camPos.z; this.ground.material.color.copy(PAL[G.district].shoulder);
   }
+  setLook(P) { this.material.roughness = 0.92 - 0.55 * P.wet; this.material.metalness = 0.05 * P.wet; this.material.envMapIntensity = 0.3 + 0.9 * P.wet; }
   reset() { for (const [, m] of this.chunks) { this.group.remove(m); m.geometry.dispose(); } this.chunks.clear(); }
 }

@@ -4,6 +4,7 @@
 import { InstancedMesh, BoxGeometry, CylinderGeometry, ConeGeometry, SphereGeometry, PlaneGeometry, MeshStandardMaterial, MeshBasicMaterial, Object3D, Color, Group, Mesh, CanvasTexture, DoubleSide } from 'three';
 import { REF, T, hashI, clamp } from '../../sim/constants.js';
 import { M, toWorld, toWorldFlat } from './scale.js';
+import { arrowTexture } from './fx.js';
 const D = new Object3D(); const P = { x: 0, y: 0, z: 0 };
 function inst(geo, mat, n, shadow = true) { const m = new InstancedMesh(geo, mat, n); m.count = 0; m.castShadow = shadow; m.receiveShadow = false; m.frustumCulled = false; return m; }
 function textTexture(text, w, h, bg, fg, size) { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.fillStyle = bg; x.fillRect(0, 0, w, h); x.fillStyle = fg; x.font = '700 ' + size + 'px Rajdhani, Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, w / 2, h / 2 + 2); const t = new CanvasTexture(c); t.colorSpace = 'srgb'; return t; }
@@ -28,12 +29,13 @@ export class Props {
     this.block = inst(new BoxGeometry(1, 1.2, 0.8).translate(0, 0.6, 0), std('#ff9f1c'), 32);
     this.median = inst(new BoxGeometry(1, 0.9, 1).translate(0, 0.45, 0), std('#8a8f99'), 96);
     this.ramp = inst(new BoxGeometry(1, 1, 1), std('#dfe3e8'), 8);
-    this.arrow = inst(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: new Color('#ffd23f'), transparent: true, opacity: 0.85 }), 24, false);
+    this.arrow = inst(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: new Color('#ffd23f'), map: arrowTexture(64), transparent: true, opacity: 0.85, depthWrite: false }), 24, false);
     this.slick = inst(new CylinderGeometry(1, 1, 0.02, 16), new MeshStandardMaterial({ color: new Color('#0a0a14'), roughness: 0.05, metalness: 0.6 }), 16, false);
     this.pit = inst(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: new Color('#0b0d12') }), 8, false);
+    this.stripe = inst(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: new Color('#ff3b3b'), transparent: true, opacity: 0.8, depthWrite: false }), 16, false);
     this.sign = inst(new BoxGeometry(12, 2.8, 0.2).translate(0, 2.4, 0), std('#1f6b3a'), 8);
     this.signPost = inst(new BoxGeometry(0.3, 2.4, 0.3).translate(0, 1.2, 0), std('#aab2bf'), 16);
-    this.all = [this.post, this.treeTrunk, this.treeTop, this.lamp, this.lampHead, this.board, this.boardFace, this.chevron, this.chevronY, this.chevMark, this.spectator, this.cone, this.barrel, this.crate, this.block, this.median, this.ramp, this.arrow, this.slick, this.pit, this.sign, this.signPost];
+    this.all = [this.stripe, this.post, this.treeTrunk, this.treeTop, this.lamp, this.lampHead, this.board, this.boardFace, this.chevron, this.chevronY, this.chevMark, this.spectator, this.cone, this.barrel, this.crate, this.block, this.median, this.ramp, this.arrow, this.slick, this.pit, this.sign, this.signPost];
     for (const m of this.all) this.group.add(m);
     this.labels = new Map(); this.labelGroup = new Group(); this.group.add(this.labelGroup); this.labelPool = [];
   }
@@ -41,10 +43,10 @@ export class Props {
   put(m, G, x, s, yaw, sx = 1, sy = 1, sz = 1, lift = 0) { if (m.count >= m.instanceMatrix.count) return; toWorld(G.road, x, s, D.position); D.position.y += lift; D.rotation.set(0, -(G.road.frame(s).psi + yaw), 0); D.scale.set(sx, sy, sz); D.updateMatrix(); m.setMatrixAt(m.count++, D.matrix); }
   end() { for (const m of this.all) if (m.count) m.instanceMatrix.needsUpdate = true; for (let i = this.labelsUsed; i < this.labelPool.length; i++) this.labelPool[i].visible = false; }
   // a text board (corner name, district sign): a pooled plane with a canvas texture per distinct text
-  label(G, text, x, s, lift, w, h, bg, fg, size, yaw = 0) {
+  label(G, text, x, s, lift, w, h, bg, fg, size, yaw = 0, flat = false) {
     let mesh = this.labelPool[this.labelsUsed]; if (!mesh) { mesh = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({ side: DoubleSide, transparent: true })); this.labelPool.push(mesh); this.labelGroup.add(mesh); }
     this.labelsUsed++; let tex = this.labels.get(text); if (!tex) { tex = textTexture(text, 256, 64, bg, fg, size); this.labels.set(text, tex); } if (mesh.material.map !== tex) { mesh.material.map = tex; mesh.material.needsUpdate = true; }
-    toWorld(G.road, x, s, mesh.position); mesh.position.y += lift; mesh.rotation.set(0, -(G.road.frame(s).psi + yaw), 0); mesh.scale.set(w, h, 1); mesh.visible = true;
+    toWorld(G.road, x, s, mesh.position); mesh.position.y += lift; mesh.rotation.set(flat ? -Math.PI / 2 : 0, -(G.road.frame(s).psi + yaw), 0, 'YXZ'); mesh.scale.set(w, h, 1); mesh.visible = true;
   }
   update(G, scroll, yTop, elapsed) {
     this.begin(); const road = G.road; const seedHash = (s) => hashI(road.seed, Math.round(s / 160)) / 4294967296;
@@ -60,7 +62,8 @@ export class Props {
     // corner furniture
     for (let i = Math.max(0, road.ci2 || 0); i < road.corners.length; i++) { const cn = road.corners[i]; if (cn.s1 < scroll - 200) continue; if (cn.warnS - 200 > yTop) break;
       const hard = cn.hard;
-      if (cn.warnS > scroll - 100 && cn.warnS < yTop) { this.put(this.arrow, G, REF, cn.warnS, cn.dir > 0 ? -Math.PI / 2 : Math.PI / 2, 5, 1, 6, 0.02); const bw = road.at(cn.warnS).width; this.label(G, cn.type === 'hairpin' ? 'HAIRPIN' : cn.type === 'hard' ? 'HARD ' + (cn.dir > 0 ? 'RIGHT' : 'LEFT') : cn.type === 'fast' ? 'BEND' : 'SWEEP', REF - cn.dir * (bw / 2 + 40), cn.warnS + 60, 2.2, 5.2, 1.4, hard ? '#ff3b3b' : '#ffd23f', hard ? '#ffffff' : '#222222', 40); this.put(this.signPost, G, REF - cn.dir * (bw / 2 + 40), cn.warnS + 60, 0, 1, 0.8, 1); }
+      if (cn.type === 'hairpin' && cn.warnS > scroll - 100 && cn.warnS < yTop) { const bw = road.at(cn.warnS).width; for (let j = 0; j < 3; j++) this.put(this.stripe, G, REF, cn.warnS - 70 - j * 24, 0, bw * M * 0.96, 1, 0.9, 0.025); this.label(G, 'BRAKE', REF, cn.warnS - 40, 0.03, 7, 1.8, '#ff3b3b', '#ffffff', 48, 0, true); }
+      if (cn.warnS > scroll - 100 && cn.warnS < yTop) { this.put(this.arrow, G, REF, cn.warnS, cn.dir > 0 ? -Math.PI / 2 : Math.PI / 2, 6, 1, 5, 0.02); this.arrow.material.color.set(hard ? '#ff3b3b' : '#ffd23f'); const bw = road.at(cn.warnS).width; this.label(G, cn.type === 'hairpin' ? 'HAIRPIN' : cn.type === 'hard' ? 'HARD ' + (cn.dir > 0 ? 'RIGHT' : 'LEFT') : cn.type === 'fast' ? 'BEND' : 'SWEEP', REF - cn.dir * (bw / 2 + 40), cn.warnS + 60, 2.2, 5.2, 1.4, hard ? '#ff3b3b' : '#ffd23f', hard ? '#ffffff' : '#222222', 40); this.put(this.signPost, G, REF - cn.dir * (bw / 2 + 40), cn.warnS + 60, 0, 1, 0.8, 1); }
       for (let cs = cn.s0; cs <= cn.s1; cs += T.corner.chevronEvery) { if (cs < scroll - 100 || cs > yTop) continue; const w = road.at(cs).width; const x = REF - cn.dir * (w / 2 + 26); this.put(hard ? this.chevron : this.chevronY, G, x, cs, cn.dir > 0 ? 0.35 : -0.35); this.put(this.chevMark, G, x, cs, cn.dir > 0 ? 0.35 : -0.35, 1, 1, 1); }
       if (cn.type === 'hairpin') for (let cs = cn.s0 + 30; cs < cn.s1; cs += 34) { if (cs < scroll - 100 || cs > yTop) continue; const w = road.at(cs).width; const hsp = hashI(road.seed, Math.round(cs)) / 4294967296; this.put(this.spectator, G, REF - cn.dir * (w / 2 + 48 + hsp * 24), cs, 0, 1, 0.9 + hsp * 0.3, 1); }
     }
