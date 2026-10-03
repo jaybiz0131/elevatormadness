@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#1b1d22">
 <title>Shunt Graybox</title>
 <style>
-  /* Gray-box, sprint 1-4 build. Plain shapes, colour means role. Portrait stage fills the viewport aspect; HUD top 15%, special button bottom corner. */
+  /* Gray-box, sprint 1-4 build plus the audit's Sprint A (design/spy-car-audit-2.pdf). Plain shapes, colour means role. Portrait stage fills the viewport aspect; HUD top 15%, special button bottom corner. */
   :root {
     --bg: #1b1d22; --fg: #f2f4f8; --fg-dim: rgba(242,244,248,0.7);
     --player: #37e6ff; --enemy: #ff3b3b; --civ: #cfe6ff; --pickup: #ffd23f; --hazard: #ff9f1c;
@@ -19,14 +19,15 @@
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); overflow: hidden; }
   body { font-family: var(--font-body); -webkit-user-select: none; user-select: none; touch-action: none; overscroll-behavior: none; }
   #frame { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--bg); }
-  #stage { position: relative; width: 390px; height: 844px; transform-origin: center center; background: #000; overflow: hidden; }
+  #stage { position: relative; flex-shrink: 0; width: 390px; height: 844px; transform-origin: center center; background: #000; overflow: hidden; }
   #shake { position: absolute; inset: 0; }
   #stage canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
   #ui { position: absolute; inset: 0; pointer-events: none; font-family: var(--font-display); }
   #ui * { pointer-events: none; }
   #ui .tap { pointer-events: auto; }
-  .callout { position: absolute; left: 24px; right: 24px; top: 22%; text-align: center; letter-spacing: 0.16em; font-weight: 700; font-size: 22px; text-transform: uppercase; text-shadow: 0 2px 10px rgba(0,0,0,0.9); transition: opacity 0.2s; }
-  .callout small { display: block; margin-top: 6px; font-size: 15px; letter-spacing: 0.08em; color: var(--fg-dim); text-transform: none; font-weight: 600; }
+  /* callouts live in a slim band under the HUD so they never cover what they describe (audit, UI section) */
+  .callout { position: absolute; left: 24px; right: 24px; top: calc(86px + var(--safe-top, 0px)); text-align: center; letter-spacing: 0.16em; font-weight: 700; font-size: 19px; line-height: 1.1; text-transform: uppercase; text-shadow: 0 2px 10px rgba(0,0,0,0.9); transition: opacity 0.2s; }
+  .callout small { display: block; margin-top: 2px; font-size: 13px; letter-spacing: 0.08em; color: var(--fg-dim); text-transform: none; font-weight: 600; }
   .callout.big { font-size: 64px; top: 38%; }
   #pause { position: absolute; top: calc(18px + var(--safe-top, 0px)); right: 16px; width: 44px; height: 44px; border-radius: 22px; background: rgba(255,255,255,0.10); border: 0; color: var(--fg); font-size: 13px; }
   #special { position: absolute; right: 22px; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); width: 76px; height: 76px; border-radius: 38px; border: 3px solid rgba(255,255,255,0.35); background: rgba(20,24,30,0.88); color: var(--fg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; transition: transform 0.3s, opacity 0.3s; }
@@ -50,13 +51,23 @@
   #card .row .btn.on { background: rgba(55,230,255,0.25); }
   #card .bar { width: 100%; max-width: 310px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.12); overflow: hidden; }
   #card .bar i { display: block; height: 100%; background: var(--pickup); }
-  #card label { font-size: 12px; letter-spacing: 0.12em; color: var(--fg-dim); text-transform: uppercase; width: 100%; max-width: 310px; display: flex; justify-content: space-between; align-items: center; }
-  #card input[type=range] { pointer-events: auto; width: 150px; }
+  /* settings: standard rows, a 17 pt label on the left and a switch on the right, grouped (audit, UI section) */
+  #settings { width: 100%; max-width: 310px; display: flex; flex-direction: column; gap: 6px; }
+  #settings[hidden] { display: none; }
+  #settings .grp { font-size: 12px; letter-spacing: 0.16em; color: var(--fg-dim); text-transform: uppercase; margin-top: 10px; }
+  #settings label { font-family: var(--font-body); font-size: 17px; color: var(--fg); display: flex; justify-content: space-between; align-items: center; min-height: 36px; }
+  #settings label b { font-weight: 600; color: var(--fg-dim); margin-left: 6px; }
+  #settings input[type=range] { pointer-events: auto; width: 140px; accent-color: var(--player); }
+  .sw { width: 51px; height: 31px; border-radius: 16px; border: 0; background: rgba(255,255,255,0.22); position: relative; padding: 0; flex-shrink: 0; }
+  .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; transition: left 0.15s; }
+  .sw.on { background: var(--player); } .sw.on::after { left: 22px; }
+  .sw.seg { width: auto; padding: 0 14px; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.1em; color: var(--fg); background: rgba(255,255,255,0.14); } .sw.seg::after { display: none; }
+  /* the death card sits low so the replay plays in the top half behind it */
+  #card.over { justify-content: flex-end; padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.2) 38%, rgba(0,0,0,0.82) 52%); }
   .btn:focus-visible { outline: 2px solid var(--player); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { .callout { transition: none; } #special.pulse { animation: none; } }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&display=swap">
-
 </head>
 <body>
 <div id="frame">
@@ -64,7 +75,7 @@
     <div id="shake"><canvas id="cv"></canvas></div>
     <div id="ui">
       <div class="callout" id="callout" style="opacity:0"></div>
-      <button id="pause" class="tap" aria-label="Pause">▐▐</button>
+      <button id="pause" class="tap" aria-label="Pause"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect x="4" y="3" width="4" height="14" rx="1" fill="currentColor"/><rect x="12" y="3" width="4" height="14" rx="1" fill="currentColor"/></svg></button>
       <button id="special" class="tap" aria-label="Special weapon" hidden><span id="specialIcon"></span><span class="pips" id="specialPips"></span></button>
       <div id="card" hidden>
         <div class="logo" id="cardLogo" hidden>SHUNT</div>
@@ -73,15 +84,18 @@
         <div class="newbest" id="cardNewBest" hidden>NEW BEST</div>
         <div class="lines" id="cardLines"></div>
         <div class="bar" id="cardBar" hidden><i id="cardBarFill" style="width:0%"></i></div>
-        <div id="settings" hidden style="display:contents">
-          <label>Sound <button class="btn tap" id="sSound">ON</button></label>
-          <label>Music <button class="btn tap" id="sMusic">ON</button></label>
-          <label>Haptics <button class="btn tap" id="sHaptics">ON</button></label>
-          <label>Screen shake <button class="btn tap" id="sShake">ON</button></label>
-          <label>Reduce motion <button class="btn tap" id="sMotion">OFF</button></label>
-          <label>Special button <button class="btn tap" id="sHand">RIGHT</button></label>
-          <label>Sensitivity <span id="sSensVal">1.0×</span><input id="sSens" type="range" min="0.7" max="1.6" step="0.1" value="1"></label>
-          <label>Tap half to Slam <button class="btn tap" id="sTapSlam">OFF</button></label>
+        <div id="settings" hidden>
+          <div class="grp">Audio</div>
+          <label><span>Sound</span><button class="sw tap" id="sSound" role="switch" aria-label="Sound"></button></label>
+          <label><span>Music</span><button class="sw tap" id="sMusic" role="switch" aria-label="Music"></button></label>
+          <div class="grp">Controls</div>
+          <label><span>Special button side</span><button class="sw seg tap" id="sHand">RIGHT</button></label>
+          <label><span>Sensitivity <b id="sSensVal">1.0×</b></span><input id="sSens" type="range" min="0.7" max="1.6" step="0.1" value="1" aria-label="Sensitivity"></label>
+          <label><span>Tap half to Slam</span><button class="sw tap" id="sTapSlam" role="switch" aria-label="Tap half to Slam"></button></label>
+          <div class="grp">Accessibility</div>
+          <label><span>Haptics</span><button class="sw tap" id="sHaptics" role="switch" aria-label="Haptics"></button></label>
+          <label><span>Screen shake</span><button class="sw tap" id="sShake" role="switch" aria-label="Screen shake"></button></label>
+          <label><span>Reduce motion</span><button class="sw tap" id="sMotion" role="switch" aria-label="Reduce motion"></button></label>
         </div>
         <button class="btn tap" id="btnPrimary">DRIVE AGAIN</button>
         <div class="row" id="cardRow">
@@ -111,16 +125,21 @@ const T = {
   speed0: 420, speedMax: 700, speedRampMinutes: 5,
   laneW: 62, minLanes: 3, maxLanes: 5,
   fireRate: 6, bulletSpeed: 1100, gunRange: 520, gunHalfLane: 26,
-  slam: { flickPt: 40, flickMs: 120, burst: 0.22, speed: 950, cooldown: 1.0, power: 2.5 },
-  shuntMul: 1.5, shuntMin: 220, shuntThreshold: 120, rearCd: 0.35, armor: 3, invuln: 1.0,
+  // Slam (audit, "The Slam, corrected"): 600 pt/s for 0.11 s is about one lane; a flick is 60 stage pt in under 100 ms from a
+  // thumb that moved less than 10 pt in the previous 120 ms; it only fires with an enemy within 1.4 lanes on that side and 60 pt ahead or behind
+  slam: { flickPt: 60, flickMs: 100, quietPt: 10, quietMs: 120, burst: 0.11, speed: 600, cooldown: 1.0, power: 2.5, reachLanes: 1.4, reachY: 60 },
+  shuntMul: 1.5, shuntMin: 220, shuntThreshold: 120, shuntIntent: 80, rearCd: 0.35, armor: 3, invuln: 1.0,
   bruiser: { hold: [0.8, 1.6], tell: 0.6, lunge: 70, lungeSpeed: 260, recover: 1.0, push: 30, closeCap: 180, dropCap: 60 },
   gunner: { sight: 0.8, cooldown: 3.0 },
   ramp: { first: 12, every: [12, 18], warn: 2.0, air: 1.2, steerAir: 0.5, slowmo: 0.7, slowmoFor: 0.3 },
   truckEvery: 25, barrelEvery: 20, closureEvery: 30, forkEvery: [60, 90], onrampEvery: 45, districtEvery: 60,
   missiles: 6, oil: 4, nitro: 3, crateDrop: 0.25,
   combo: { window: 2.5, max: 8 },
-  score: { weak: 100, bruiser: 250, gunner: 250, armored: 400, stompMul: 3, chainMul: 2, civilian: -100, crate: 250, graze: 10, grazeCap: 3, truckLoad: 100, clean: 120, closeCall: 25, slamKill: 50, shuntEnemy: 100, barrelDouble: 150, distancePer: 100 },
-  graceSeconds: 60, pipRestoreAt: 30,
+  // score by cause (audit, "Give the kills back to the player"): a wreck the player caused pays base × the cause multiplier;
+  // the car is the main weapon, so Slam, shunt, ram, wall and oil kills pay 3× a gun kill; enemy-on-enemy accidents pay nothing
+  score: { weak: 100, bruiser: 250, gunner: 250, armored: 400, cause: { gun: 1, missile: 1, slam: 3, shunt: 3, ram: 3, rail: 3, wall: 3, oil: 3, stomp: 3, chain: 2, barrel: 2 },
+           civilian: -100, crate: 250, graze: 10, grazeCap: 3, truckLoad: 100, clean: 120, closeCall: 25, shuntEnemy: 100, barrelDouble: 150, distancePer: 100 },
+  graceSeconds: 30,   // damage halved for the first 30 s only; no free pip; armor comes from the supply truck only
   sizes: { player: [34, 60, 1.0], civ: [34, 58, 0.8], weak: [30, 52, 0.8], bruiser: [40, 70, 1.2], gunner: [40, 76, 1.3], armored: [120, 150, 3.0], truck: [56, 110, 3.0] },
 };
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
@@ -146,7 +165,7 @@ const DISTRICTS = [
   { name: 'MOUNTAIN', sign: 'PASS 0.5 MI', road: '#3b4040', dark: '#333838', shoulder: '#222828', rail: '#aab5b5' },
 ];
 class Road {
-  constructor(seed) { this.seed = seed; this.knots = [{ y: -600, x: REF, lanes: 4 }, { y: 0, x: REF, lanes: 4 }]; this.built = 0; }
+  constructor(seed) { this.seed = seed; this.knots = [{ y: -600, x: REF, lanes: 4 }, { y: 0, x: REF, lanes: 4 }]; this.built = 0; this.j = 0; this.out = { center: REF, lanes: 4, width: 4 * T.laneW }; }
   ensure(y) { while (this.knots[this.knots.length - 1].y < y + 1800) this.build(); }
   build() {
     const i = this.built++; const rng = mulberry32(hashI(this.seed, i)); const prev = this.knots[this.knots.length - 1]; const y1 = prev.y + 600;
@@ -159,13 +178,17 @@ class Road {
     }
     this.knots.push({ y: y1, x, lanes });
   }
+  // Catmull-Rom through the knots. Remembers the last knot index (lookups are nearly always near the previous one) and
+  // returns one reused result object, so a lookup costs the same after ten minutes as at the start and allocates nothing.
   at(y) {
-    this.ensure(y); const k = this.knots; let j = 0; while (j + 1 < k.length - 1 && y > k[j + 1].y) j++;
-    const p1 = k[j], p2 = k[j + 1], p0 = k[j - 1] || { y: p1.y - 600, x: p1.x, lanes: p1.lanes }, p3 = k[j + 2] || { y: p2.y + 600, x: p2.x, lanes: p2.lanes };
+    this.ensure(y); const k = this.knots; let j = Math.min(this.j, k.length - 2);
+    while (j > 0 && y < k[j].y) j--; while (j + 1 < k.length - 1 && y > k[j + 1].y) j++; this.j = j;
+    const p1 = k[j], p2 = k[j + 1], p0 = j > 0 ? k[j - 1] : p1, p3 = j + 2 < k.length ? k[j + 2] : p2;
     const t = clamp((y - p1.y) / (p2.y - p1.y), 0, 1), t2 = t * t, t3 = t2 * t;
-    const cr = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+    const a = p0.x, b = p1.x, c = p2.x, d = p3.x;
+    const center = 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
     const lanes = p1.lanes + (p2.lanes - p1.lanes) * smooth(t);
-    return { center: cr(p0.x, p1.x, p2.x, p3.x), lanes, width: lanes * T.laneW };
+    const o = this.out; o.center = center; o.lanes = lanes; o.width = lanes * T.laneW; return o;
   }
   laneCount(y) { return Math.round(this.at(y).lanes); }
   laneX(y, i) { const a = this.at(y); const n = Math.round(a.lanes); i = clamp(i, 0, n - 1); return a.center - a.width / 2 + (i + 0.5) * (a.width / n); }
@@ -232,39 +255,66 @@ function hideCallout() { clearTimeout(calloutTimer); ui.callout.style.opacity = 
 
 function makeCar(kind, x, y, extra) {
   const [w, l, mass] = T.sizes[kind];
-  return Object.assign({ kind, x, y, w, l, mass, vx: 0, speed: 0, factor: 1, hp: kind === 'bruiser' ? 4 : kind === 'gunner' ? 5 : kind === 'armored' ? 999 : 2, alive: true, wrecked: false, debrisT: 0, spin: 0, flip: 0, state: 'approach', t: 0, lane: 0, blink: 0, blinkDir: 0, laneTimer: 3 + Math.random() * 5, hitCd: 0, shunted: false, slammed: false, slamBy: null, penalised: false, closeCalled: false, id: Math.random(), tint: null, side: 1, sight: 0, cd: 0, honk: 0, sq: 1 }, extra || {});
+  // px/py: position at the previous physics step, for interpolated rendering. credit: the player caused this car's motion or wreck.
+  return Object.assign({ kind, x, y, px: x, py: y, w, l, mass, vx: 0, speed: 0, factor: 1, hp: kind === 'bruiser' ? 4 : kind === 'gunner' ? 5 : kind === 'armored' ? 999 : 2, alive: true, wrecked: false, debrisT: 0, spin: 0, flip: 0, state: 'approach', t: 0, lane: 0, blink: 0, blinkDir: 0, laneTimer: 3 + Math.random() * 5, hitCd: 0, shunted: false, slammed: false, credit: false, creditT: 0, how: null, penalised: false, closeCalled: false, id: Math.random(), tint: null, side: 1, sight: 0, cd: 0, honk: 0, sq: 1, hitFlash: 0, lean: 0 }, extra || {});
+}
+// in-place compaction: keeps the elements that pass, in order, without allocating a new array (audit, "Smooth movement" 3)
+function compact(arr, keep) { let n = 0; for (let i = 0; i < arr.length; i++) { const v = arr[i]; if (keep(v)) arr[n++] = v; } arr.length = n; return arr; }
+// replay ring buffer: 1.5 s at 30 Hz, every frame and car slot pre-allocated so recording allocates nothing
+const REPLAY_FRAMES = 45, REPLAY_SLOTS = 24, REPLAY_FIELDS = ['kind', 'x', 'y', 'w', 'l', 'wrecked', 'tint', 'spin', 'flip', 'lean', 'state', 'blink', 'blinkDir', 'honk', 'debrisT', 'loaded', 'hitFlash', 't', 'sightX'];
+function makeReplay() { const frames = []; for (let i = 0; i < REPLAY_FRAMES; i++) { const cars = []; for (let j = 0; j < REPLAY_SLOTS; j++) cars.push({ kind: 'civ', x: 0, y: 0, w: 34, l: 58, wrecked: false, tint: null, spin: 0, flip: 0, lean: 0, state: '', blink: 0, blinkDir: 0, honk: 0, debrisT: 0, loaded: false, hitFlash: 0, t: 0, sightX: 0 }); frames.push({ x: REF, y: 0, jumpZ: 0, lean: 0, n: 0, cars, district: 0 }); } return { frames, head: 0, count: 0, acc: 0 }; }
+function recordReplay(dt) {
+  const R = G.replay; R.acc += dt; if (R.acc < 1 / 30) return; R.acc = 0;
+  const f = R.frames[R.head]; R.head = (R.head + 1) % REPLAY_FRAMES; R.count = Math.min(REPLAY_FRAMES, R.count + 1);
+  f.x = G.x; f.y = G.dist; f.jumpZ = G.jumpZ; f.lean = G.lean; f.district = G.district; let n = 0;
+  for (const c of G.cars) { if (n >= REPLAY_SLOTS) break; if (c.y < G.dist - 400 || c.y > G.dist + 900) continue; const s = f.cars[n++]; for (const k of REPLAY_FIELDS) s[k] = c[k]; }
+  f.n = n;
 }
 function newRun(reseed) {
   if (reseed) seed = dailyMode ? fnv1a(localDate()) : (Math.random() * 4294967296) >>> 0;
   const road = new Road(seed);
-  G = { road, rng: mulberry32(seed ^ 0x5bd1e995), t: 0, acc: 0, dist: 0, speed: T.speed0, x: REF, vx: 0, targetX: REF, lean: 0, sq: 1, lastFlick: null,
-        armor: T.armor, invuln: 0, damageAcc: 0, pipRestored: false, score: 0, combo: 0, comboT: 0, comboPeak: 1, kills: 0, civHits: 0, slams: 0, stomps: 0, distScore: 0,
+  G = { road, rng: mulberry32(seed ^ 0x5bd1e995), t: 0, acc: 0, dist: 0, pdist: 0, speed: T.speed0, x: REF, px: REF, vx: 0, targetX: REF, lean: 0, sq: 1,
+        armor: T.armor, invuln: 0, damageAcc: 0, armorLost: 0, score: 0, combo: 0, comboT: 0, comboPeak: 1, kills: 0, passiveWrecks: 0, gunKills: 0, carKills: 0, civHits: 0, slams: 0, flicks: 0, flickMisses: 0, stomps: 0, distScore: 0,
         cars: [], bullets: [], missiles: [], crates: [], ramps: [], slicks: [], barrels: [], cones: [], medians: [], gaps: [], barriers: [], signs: [], debris: [], marks: [], fx: [], pops: [], sparks: [], queue: [],
-        air: 0, airTotal: 0, jumpZ: 0, slowmo: 0, slowmoRate: 0.7, hitStop: 0, shake: { x: 0, y: 0, vx: 0, vy: 0 }, vignette: 0, smoke: 0, flashT: 0, nitro: 0, speedLines: 0, punch: 0, detour: 0,
+        air: 0, airTotal: 0, jumpZ: 0, slowmo: 0, slowmoRate: 0.7, hitStop: 0, trauma: 0, kick: { x: 0, y: 0 }, vignette: 0, smoke: 0, flashT: 0, nitro: 0, speedLines: 0, punch: 0, detour: 0,
         special: null, gun: 'twin', gunLevel: 1, nextRamp: T.ramp.first, rampIndex: 0, nextTruck: 999, truckIndex: 0, nextBarrel: 999, nextClosure: 999, nextFork: 999, nextOnramp: 999, nextSpawn: 0, lastEvent: 0, lastSpawnBurst: [], wave: 'pressure', waveT: 40, waveN: 0,
-        scripted: true, script: 0, district: 0, nextDistrictY: 600 * 8, signShown: -1, cause: '', killedBy: '', boost: 0, grazeT: 0, grazePaid: 0, gunCd: 0, slamT: 0, slamDir: 0, slamCd: 0, replay: [], deathT: 0, bestMoment: 0 };
+        scripted: true, script: 0, district: 0, nextDistrictY: 600 * 8, signShown: -1, cause: '', killedBy: '', boost: 0, grazeT: 0, grazePaid: 0, gunCd: 0, slamT: 0, slamDir: 0, slamCd: 0, replay: makeReplay(), replayT: 0, deathT: 0, bestMoment: 0 };
   G.x = REF; input.reset(); ui.card.hidden = true; ui.special.hidden = true; updateSpecial();
 }
 function enterTitle() { phase = 'title'; screen = 'title'; showCard('title'); }
 function startPlaying() { phase = 'playing'; hideCallout(); hadRun = true; ui.card.hidden = true; }
 
 // ---------------- input: relative drag with flick-to-Slam ----------------
+const TRAIL = 24;   // ring of recent thumb samples {x, t(ms, event timeStamp)}
 const input = {
-  id: null, anchor: null, carAnchor: 0, cur: null, keys: {}, trail: [], lastKeyTap: { k: null, t: -9 },
-  reset() { this.id = null; this.anchor = null; this.cur = null; this.trail = []; },
-  down(id, x, y) { if (this.id !== null) return; this.id = id; this.anchor = { x, y }; this.cur = { x, y }; this.carAnchor = G ? G.targetX : REF; this.trail = [{ x, t: now }];
+  id: null, anchor: null, carAnchor: 0, cur: null, keys: {}, trail: [], trailN: 0, flickT: -1e9, lastKeyTap: { k: null, t: -9 },
+  reset() { this.id = null; this.anchor = null; this.cur = null; this.trailN = 0; },
+  push(x, t) { if (this.trail.length < TRAIL) this.trail.push({ x, t }); const i = this.trailN % TRAIL; this.trail[i].x = x; this.trail[i].t = t; this.trailN++; },
+  sample(back) { return this.trail[(this.trailN - 1 - back + TRAIL * 2) % TRAIL]; },   // back = 0 is the newest
+  // carAnchor is the car's target as an offset from the road centre, so no input means holding the lane while the road wanders
+  down(id, x, y, ts) { if (this.id !== null) return; this.id = id; this.anchor = { x, y }; this.cur = { x, y }; this.carAnchor = G ? G.targetX - G.road.at(G.dist).center : 0; this.trailN = 0; this.push(x, ts);
     if (S.tapSlam && G && phase === 'playing') { if (Math.abs(x - this.carAnchorScreen()) > 90) { /* tap far from the car: a Slam toward that side */ this.pendingTapSlam = x < SW / 2 ? -1 : 1; this.tapT = now; } } },
   carAnchorScreen() { return SW / 2 + (G.x - REF); },
-  move(id, x, y) { if (id !== this.id) return; this.cur = { x, y }; this.trail.push({ x, t: now }); while (this.trail.length > 12) this.trail.shift();
-    // flick: at least 40 pt of horizontal travel in under 120 ms
-    const first = this.trail.find(p => now - p.t <= T.slam.flickMs / 1000); if (first && Math.abs(x - first.x) >= T.slam.flickPt) { trySlam(Math.sign(x - first.x)); this.trail = [{ x, t: now }]; } },
-  up(id) { if (id === this.id) { if (this.pendingTapSlam && now - this.tapT < 0.15) trySlam(this.pendingTapSlam); this.pendingTapSlam = 0; this.id = null; this.anchor = null; this.cur = null; this.trail = []; } },
+  // Flick (audit): at least 60 stage pt in under 100 ms, from a thumb that moved less than 10 pt in the 120 ms before that, judged on
+  // event timestamps rather than the frame clock. A detected flick asks for a contextual Slam; with no enemy beside the car it is
+  // simply a fast lane change, which the relative drag already delivers.
+  move(id, x, y, ts) { if (id !== this.id) return; this.cur = { x, y }; this.push(x, ts);
+    if (ts - this.flickT < 250) return;   // one flick per gesture: the thumb is still moving after a flick, so nothing counts as quiet for a while
+    const n = Math.min(this.trailN, TRAIL); let start = null;
+    for (let b = 1; b < n; b++) { const p = this.sample(b); if (ts - p.t > T.slam.flickMs) break; if (Math.abs(x - p.x) >= T.slam.flickPt) start = b; }
+    if (start === null) return;
+    const s0 = this.sample(start); let quiet = true;
+    for (let b = start + 1; b < n; b++) { const p = this.sample(b); if (s0.t - p.t > T.slam.quietMs) break; if (Math.abs(p.x - s0.x) >= T.slam.quietPt) { quiet = false; break; } }
+    if (!quiet) return;
+    if (G && phase === 'playing') G.flicks++;
+    this.flickT = ts; trySlam(Math.sign(x - s0.x)); },
+  up(id) { if (id === this.id) { if (this.pendingTapSlam && now - this.tapT < 0.15) trySlam(this.pendingTapSlam); this.pendingTapSlam = 0; if (G) this.carAnchor = G.targetX - G.road.at(G.dist).center; this.id = null; this.anchor = null; this.cur = null; this.trailN = 0; } },
   key(k) { if (k === 'left' || k === 'right') { const dir = k === 'left' ? -1 : 1; if (this.lastKeyTap.k === k && now - this.lastKeyTap.t < 0.25) trySlam(dir); this.lastKeyTap = { k, t: now }; } if (k === 'slamL') trySlam(-1); if (k === 'slamR') trySlam(1); },
-  target(dt) {
-    if (this.keys.left || this.keys.right) return G.targetX + ((this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0)) * T.maxLateral * S.sens * dt;
-    if (!this.anchor) return G.targetX;
+  target(rc, dt) {
+    if (this.keys.left || this.keys.right) { this.carAnchor += ((this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0)) * T.maxLateral * S.sens * dt; return rc + this.carAnchor; }
+    if (!this.anchor) return rc + this.carAnchor;
     let dx = this.cur.x - this.anchor.x; if (Math.abs(dx) < T.deadZone) dx = 0; else dx -= Math.sign(dx) * T.deadZone;
-    return this.carAnchor + dx * T.thumbRatio * S.sens;
+    return rc + this.carAnchor + dx * T.thumbRatio * S.sens;
   },
 };
 function stagePoint(e) { const r = stage.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * SW, y: (e.clientY - r.top) / r.height * H }; }
@@ -273,10 +323,11 @@ stage.addEventListener('pointerdown', e => {
   e.preventDefault(); audio.init(); audio.resume();
   if (phase === 'over' || phase === 'paused' || phase === 'countdown') return;
   if (phase === 'title') { newRun(false); startPlaying(); }
-  const p = stagePoint(e); input.down(e.pointerId, p.x, p.y);
+  const p = stagePoint(e); input.down(e.pointerId, p.x, p.y, e.timeStamp);
   try { stage.setPointerCapture(e.pointerId); } catch (err) {}
 });
-stage.addEventListener('pointermove', e => { const p = stagePoint(e); input.move(e.pointerId, p.x, p.y); });
+// coalesced events carry every touch sample the OS saw since the last frame, each with its own timestamp
+stage.addEventListener('pointermove', e => { const list = e.getCoalescedEvents ? e.getCoalescedEvents() : null; if (list && list.length) { for (const ce of list) { const p = stagePoint(ce); input.move(ce.pointerId, p.x, p.y, ce.timeStamp || e.timeStamp); } } else { const p = stagePoint(e); input.move(e.pointerId, p.x, p.y, e.timeStamp); } });
 const upH = e => input.up(e.pointerId);
 stage.addEventListener('pointerup', upH); stage.addEventListener('pointercancel', upH);
 const KEYS = { ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', ' ': 'fire', j: 'fire', q: 'slamL', e: 'slamR' };
@@ -288,18 +339,19 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && (ph
 
 // ---------------- screens ----------------
 function showCard(kind) {
-  screen = kind; ui.card.hidden = false; ui.logo.hidden = kind !== 'title'; ui.newBest.hidden = true; ui.bar.hidden = true; ui.settings.hidden = kind !== 'settings'; ui.settings.style.display = kind === 'settings' ? 'contents' : 'none';
+  screen = kind; ui.card.hidden = false; ui.card.classList.toggle('over', kind === 'over'); ui.logo.hidden = kind !== 'title'; ui.newBest.hidden = true; ui.bar.hidden = true; ui.settings.hidden = kind !== 'settings';
   ui.score.hidden = kind === 'settings';
   if (kind === 'title') { ui.title.textContent = dailyMode ? 'Daily run · ' + localDate() : 'Spy car brawler · gray-box'; ui.score.textContent = 'BEST ' + fmt(dailyMode ? bestDaily : best); ui.lines.innerHTML = 'Slide to steer. Flick to Slam.<br>Cash ' + fmt(cash); ui.primary.textContent = 'TOUCH TO DRIVE'; ui.a.textContent = dailyMode ? 'RANDOM ROAD' : 'DAILY RUN'; ui.b.textContent = 'SETTINGS'; ui.c.hidden = true; }
   if (kind === 'pause') { ui.title.textContent = 'Paused'; ui.score.textContent = fmt(G.score); ui.lines.textContent = ''; ui.primary.textContent = 'RESUME'; ui.a.textContent = 'RESTART'; ui.b.textContent = 'SETTINGS'; ui.c.hidden = false; ui.c.textContent = 'QUIT TO TITLE'; }
   if (kind === 'over') { const isBest = G.score > (dailyMode ? bestDaily : best); ui.title.textContent = G.cause || 'Wrecked'; ui.score.textContent = fmt(G.score); ui.newBest.hidden = !isBest; const earned = Math.round(G.score * 0.1);
-    ui.lines.innerHTML = 'BEST ' + fmt(Math.max(G.score, dailyMode ? bestDaily : best)) + ' &nbsp;·&nbsp; WRECKS ' + G.kills + ' &nbsp;·&nbsp; SLAMS ' + G.slams + ' &nbsp;·&nbsp; COMBO ×' + G.comboPeak + ' &nbsp;·&nbsp; ' + Math.round(G.t) + ' s<br>' + (G.civHits ? G.civHits + ' civilian' + (G.civHits > 1 ? 's' : '') + ' hit &nbsp;·&nbsp; ' : '') + '+' + fmt(earned) + ' cash · next car at 5,000';
-    ui.bar.hidden = false; ui.barFill.style.width = Math.min(100, (cash + earned) / 5000 * 100) + '%'; ui.primary.textContent = 'DRIVE AGAIN'; ui.a.textContent = 'NEW ROAD'; ui.b.textContent = 'TITLE'; ui.c.hidden = false; ui.c.textContent = 'SETTINGS'; }
+    // no "next car at 5,000" promise: the garage does not exist yet (audit, UI section)
+    ui.lines.innerHTML = 'BEST ' + fmt(Math.max(G.score, dailyMode ? bestDaily : best)) + ' &nbsp;·&nbsp; WRECKS ' + G.kills + ' &nbsp;·&nbsp; SLAMS ' + G.slams + ' &nbsp;·&nbsp; COMBO ×' + G.comboPeak + ' &nbsp;·&nbsp; ' + Math.round(G.t) + ' s<br>' + (G.civHits ? G.civHits + ' civilian' + (G.civHits > 1 ? 's' : '') + ' hit &nbsp;·&nbsp; ' : '') + '+' + fmt(earned) + ' cash';
+    ui.primary.textContent = 'DRIVE AGAIN'; ui.a.textContent = 'NEW ROAD'; ui.b.textContent = 'TITLE'; ui.c.hidden = false; ui.c.textContent = 'SETTINGS'; }
   if (kind === 'settings') { ui.title.textContent = 'Settings'; ui.lines.textContent = ''; ui.primary.textContent = 'BACK'; ui.a.hidden = true; ui.b.hidden = true; ui.c.hidden = true; refreshSettings(); return; }
   ui.a.hidden = false; ui.b.hidden = false;
 }
 let settingsFrom = 'title';
-function refreshSettings() { $('sSound').textContent = S.sound ? 'ON' : 'OFF'; $('sMusic').textContent = S.music ? 'ON' : 'OFF'; $('sHaptics').textContent = S.haptics ? 'ON' : 'OFF'; $('sShake').textContent = S.shake ? 'ON' : 'OFF'; $('sMotion').textContent = S.motion ? 'ON' : 'OFF'; $('sHand').textContent = S.left ? 'LEFT' : 'RIGHT'; $('sSens').value = S.sens; $('sSensVal').textContent = S.sens.toFixed(1) + '×'; $('sTapSlam').textContent = S.tapSlam ? 'ON' : 'OFF'; ui.special.classList.toggle('left', S.left); }
+function refreshSettings() { for (const [id, key] of [['sSound', 'sound'], ['sMusic', 'music'], ['sHaptics', 'haptics'], ['sShake', 'shake'], ['sMotion', 'motion'], ['sTapSlam', 'tapSlam']]) { const el = $(id); el.classList.toggle('on', !!S[key]); el.setAttribute('aria-checked', S[key] ? 'true' : 'false'); } $('sHand').textContent = S.left ? 'LEFT' : 'RIGHT'; $('sSens').value = S.sens; $('sSensVal').textContent = S.sens.toFixed(1) + '×'; ui.special.classList.toggle('left', S.left); }
 for (const [id, key] of [['sSound', 'sound'], ['sMusic', 'music'], ['sHaptics', 'haptics'], ['sShake', 'shake'], ['sMotion', 'motion'], ['sHand', 'left'], ['sTapSlam', 'tapSlam']]) $(id).addEventListener('click', () => { S[key] = !S[key]; saveSettings(); audio.apply(); refreshSettings(); });
 $('sSens').addEventListener('input', e => { S.sens = parseFloat(e.target.value); saveSettings(); refreshSettings(); });
 ui.primary.addEventListener('click', () => { audio.init(); audio.resume(); if (screen === 'title') { newRun(false); startPlaying(); } else if (screen === 'pause') resume(); else if (screen === 'over') restartAndPlay(false); else if (screen === 'settings') { if (settingsFrom === 'pause') showCard('pause'); else if (settingsFrom === 'over') showCard('over'); else enterTitle(); } });
@@ -319,7 +371,7 @@ function spawnCar(kind, lane, yAhead, opts = {}) {
   if (kind === 'weak') c.factor = 0.8 + G.rng() * 0.1;
   if (kind === 'bruiser' || kind === 'gunner') { c.factor = 1; c.side = G.rng() < 0.5 ? -1 : 1; }
   if (kind === 'armored') { c.factor = 0.7; c.lane = Math.min(lane, G.road.laneCount(y) - 2); c.x = (G.road.laneX(y, c.lane) + G.road.laneX(y, c.lane + 1)) / 2; }
-  if (kind === 'truck') { c.factor = 0.85; c.loaded = false; c.gives = opts.gives || ['missiles', 'oil', 'nitro'][G.truckIndex++ % 3]; }
+  if (kind === 'truck') { c.factor = 0.85; c.loaded = false; c.gives = opts.gives || ['missiles', 'oil', 'armor', 'nitro'][G.truckIndex++ % 4]; }   // armor is rare: supply truck only
   c.speed = G.speed * c.factor; Object.assign(c, opts);
   G.cars.push(c);
   if (kind !== 'civ' && kind !== 'truck') { event(); if (yAhead < 0) c.rearWarn = 1.0; }
@@ -327,6 +379,9 @@ function spawnCar(kind, lane, yAhead, opts = {}) {
 }
 function freeLane(y, avoid = []) { const n = G.road.laneCount(y); const options = []; for (let i = 0; i < n; i++) if (!avoid.includes(i)) options.push(i); return options.length ? options[Math.floor(G.rng() * options.length)] : 0; }
 function playerLane() { return G.road.laneOf(G.dist, G.x); }
+// fodder goes one or two lanes over from the player, never in the gun line, so lining up a shot is a decision (audit, combat 1)
+// Judged by road offset rather than lane index, because lane indices shift where the lane count changes.
+function fodderLane(y) { const off = G.x - G.road.at(G.dist).center; const n = G.road.laneCount(y); const c = G.road.at(y).center; const opts = []; for (let i = 0; i < n; i++) { const d = Math.abs(G.road.laneX(y, i) - c - off); if (d >= T.laneW * 0.9 && d <= T.laneW * 2.2) opts.push(i); } if (!opts.length) for (let i = 0; i < n; i++) if (Math.abs(G.road.laneX(y, i) - c - off) >= T.laneW * 0.9) opts.push(i); return opts.length ? opts[Math.floor(G.rng() * opts.length)] : freeLane(y, [playerLane()]); }
 function nearLane(y) { const pl = playerLane(); const n = G.road.laneCount(y); const opts = [pl, pl - 1, pl + 1].filter(i => i >= 0 && i < n); return opts[Math.floor(G.rng() * opts.length)]; }
 function spawnRamp(yAhead, lane, setup) {
   const y = G.dist + yAhead; lane = clamp(lane, 0, G.road.laneCount(y) - 1);
@@ -340,14 +395,14 @@ function spawnRamp(yAhead, lane, setup) {
 function spawnBarrels(yAhead, lane) { const y = G.dist + yAhead; for (let i = 0; i < 3; i++) G.barrels.push({ x: G.road.laneX(y, lane) + (i - 1) * 16, y: y + (i % 2) * 18, alive: true }); event(); }
 function spawnClosure(yAhead) { const y = G.dist + yAhead; const n = G.road.laneCount(y); const edge = G.rng() < 0.5 ? 0 : n - 1; for (let i = 0; i < 6; i++) G.cones.push({ x: G.road.laneX(y + i * 70, edge) + (edge === 0 ? -14 + i * 5 : 14 - i * 5), y: y + i * 70, alive: true }); G.signs.push({ y: y - 150, text: edge === 0 ? '→ MERGE' : 'MERGE ←' }); }
 function spawnFork(yAhead) { const y = G.dist + yAhead; const n = G.road.laneCount(y + 300); if (n < 4) return; G.medians.push({ y0: y, y1: y + 520, lane0: Math.floor(n / 2) - 1, lanes: 1 }); const right = n - 1; if (G.rng() < 0.5) spawnCar('truck', right, yAhead + 260); else spawnRamp(yAhead + 260, right, 'crate'); G.signs.push({ y: y - 200, text: 'FORK · REWARD RIGHT' }); }
-function spawnOnramp() { const side = G.rng() < 0.5 ? -1 : 1; const y = G.dist + 300; const a = G.road.at(y); const kind = G.t / 60 >= 1 && G.rng() < 0.4 ? 'gunner' : 'bruiser'; const c = spawnCar(kind, side < 0 ? 0 : G.road.laneCount(y) - 1, 300); c.x = a.center + side * (a.width / 2 + 40); c.vx = -side * 160; c.sideWarn = side; }
+function spawnOnramp() { const side = G.rng() < 0.5 ? -1 : 1; const y = G.dist + 300; const a = G.road.at(y), ac = a.center, aw = a.width; const kind = G.t / 60 >= 1 && G.rng() < 0.4 ? 'gunner' : 'bruiser'; const c = spawnCar(kind, side < 0 ? 0 : G.road.laneCount(y) - 1, 300); c.x = c.px = ac + side * (aw / 2 + 40); c.vx = -side * 160; c.sideWarn = side; }
 
 // Scripted first 60 s (review section 7), then the director.
 function script() {
   const t = G.t, s = G.script;
   if (s === 0 && t >= 0.3) { G.script = 1; spawnRamp(120, playerLane(), 'none'); callout('Go', '', 600, true); }
   else if (s === 1 && t >= 3) { G.script = 2; const b = spawnCar('bruiser', playerLane() === 0 ? 1 : playerLane() - 1, 360); b.slowDuel = true; G.ghostThumb = 3; callout('Flick to Slam', isTouch ? 'a fast sideways flick' : 'double-tap an arrow, or Q / E', 2500); }
-  else if (s === 2 && t >= 8) { G.script = 3; const pl = playerLane(); spawnCar('weak', pl, 520); spawnCar('weak', pl, 760); for (const l of [pl - 1, pl + 1, pl - 2]) if (l >= 0 && l < G.road.laneCount(G.dist + 600)) spawnCar('civ', l, 600 + G.rng() * 300); callout('Spare the civilians', 'pastel cars cost points', 1600); }
+  else if (s === 2 && t >= 8) { G.script = 3; const pl = playerLane(); const fl = fodderLane(G.dist + 520); spawnCar('weak', fl, 520); spawnCar('weak', fl, 760); for (const l of [pl - 1, pl + 1, pl - 2]) if (l !== fl && l >= 0 && l < G.road.laneCount(G.dist + 600)) spawnCar('civ', l, 600 + G.rng() * 300); callout('Spare the civilians', 'pastel cars cost points', 1600); }
   else if (s === 3 && t >= 15) { G.script = 4; spawnRamp(600, playerLane(), 'jam'); }
   else if (s === 4 && t >= 22) { G.script = 5; spawnCar('truck', playerLane(), 560, { gives: 'missiles' }); callout('Supply truck', 'drive up its ramp', 1500); }
   else if (s === 5 && t >= 28) { G.script = 6; spawnCar('armored', Math.max(0, playerLane() - 1), 900); callout('Armored truck', 'only missiles kill it', 1500); }
@@ -356,7 +411,7 @@ function script() {
   else if (s === 8 && t >= 50) { G.script = 9; const pl = playerLane(); spawnCar('bruiser', pl, 600); spawnCar('weak', freeLane(G.dist + 800, [pl]), 800); spawnCar('civ', freeLane(G.dist + 1000, [pl]), 1000); G.crates.push({ x: G.road.laneX(G.dist + 700, pl), y: G.dist + 700, vy: 0, t: 0, kind: 'oil', speed: G.speed * 0.6 }); }
   else if (s === 9 && t >= 60) { G.script = 10; G.scripted = false; G.nextTruck = t + T.truckEvery; G.nextBarrel = t + 10; G.nextClosure = t + 15; G.nextFork = t + 30; G.nextOnramp = t + 20; G.waveT = 40; G.wave = 'pressure'; }
   population(2, 1);
-  if (t > 8 && t - G.lastEvent > 2.6) spawnCar('weak', playerLane(), 600 + G.rng() * 150);   // 3-second rule holds inside the script too
+  if (t > 8 && t - G.lastEvent > 2.6) spawnCar('weak', fodderLane(G.dist + 600), 600 + G.rng() * 150);   // 3-second rule holds inside the script too
 }
 function population(minCars, minEnemies) {
   const onScreen = G.cars.filter(c => c.alive && !c.wrecked && c.kind !== 'truck' && c.y > G.dist - 300 && c.y < G.dist + 900);
@@ -372,8 +427,8 @@ function spawnEnemy() {
   const kind = pool[Math.floor(G.rng() * pool.length)];
   const behind = (kind === 'bruiser' || kind === 'gunner') && G.rng() < 0.4;
   const y = behind ? -420 : 700 + G.rng() * 300;
-  spawnCar(kind, kind === 'weak' ? playerLane() : freeLane(G.dist + y, []), y);
-  G.lastSpawnBurst.push(G.t);
+  spawnCar(kind, kind === 'weak' ? fodderLane(G.dist + y) : freeLane(G.dist + y, []), y);
+  G.lastSpawnBurst.push(G.t); if (G.lastSpawnBurst.length > 8) G.lastSpawnBurst.shift();
 }
 function director() {
   const minute = G.t / 60; const cap = minute < 1 ? 2 : minute < 3 ? 3 : minute < 5 ? 4 : 5;
@@ -396,7 +451,7 @@ function director() {
   if (G.t >= G.nextOnramp) { G.nextOnramp = G.t + T.onrampEvery; spawnOnramp(); }
   if (!pressure && G.waveReward !== G.waveN) { G.waveReward = G.waveN; if (G.rng() < 0.5) spawnCar('truck', nearLane(G.dist + 800), 800); else G.crates.push({ x: G.road.laneX(G.dist + 800, playerLane()), y: G.dist + 800, vy: 0, t: 0, kind: ['gun', 'armor', 'ammo'][Math.floor(G.rng() * 3)], speed: G.speed * 0.6 }); }
   // 3-second rule: a quiet road gets a weak car in the lane (fodder does not count against the heavy-enemy cap)
-  if (G.t - G.lastEvent > 2.6) { if (enemies < cap) spawnEnemy(); else spawnCar('weak', playerLane(), 600 + G.rng() * 150); }
+  if (G.t - G.lastEvent > 2.6) { if (enemies < cap) spawnEnemy(); else spawnCar('weak', fodderLane(G.dist + 600), 600 + G.rng() * 150); }
 }
 function event() { G.lastEvent = G.t; }
 
@@ -420,16 +475,21 @@ function simulate(dt, playing) {
   if (playing && G.armor <= 0 && phase === 'playing') die();
 }
 function physics(dt, playing) {
-  const road = G.road.at(G.dist);
+  // previous state for interpolated rendering (audit, "Smooth movement" 2)
+  G.px = G.x; G.pdist = G.dist; for (const c of G.cars) { c.px = c.x; c.py = c.y; }
+  const road = G.road.at(G.dist), rc = road.center, rw = road.width;   // road.at() returns a reused object: copy the numbers
   // --- player steering: target from the thumb; eased; 50% authority in the air; Slam burst overrides
-  if (playing) G.targetX = input.target(dt);
-  const lim = road.width / 2 - T.sizes.player[0] / 2 - 2;
-  G.targetX = clamp(G.targetX, road.center - lim, road.center + lim);
-  if (G.slamT > 0) { G.slamT -= dt; G.vx = G.slamDir * T.slam.speed; G.x += G.vx * dt; if (Math.random() < 0.6) G.marks.push({ x: G.x - G.slamDir * 10, y: G.dist - 20, t: 3, skid: true }); }
-  else { const authority = G.air > 0 ? T.ramp.steerAir : 1; const want = clamp((G.targetX - G.x) / T.ease * authority, -T.maxLateral * authority, T.maxLateral * authority); G.vx += (want - G.vx) * (1 - Math.exp(-dt / 0.035)); G.x += G.vx * dt; if (Math.abs(G.vx) > 400 && G.air <= 0 && Math.random() < 0.5) G.marks.push({ x: G.x, y: G.dist - 24, t: 2.5, skid: true }); }
+  G.roadVx = G.prevRc === undefined ? 0 : (rc - G.prevRc) / dt; G.prevRc = rc;   // how fast the road itself is sliding sideways under the car
+  if (playing) G.targetX = input.target(rc, dt); else G.targetX = rc + input.carAnchor;
+  { const off = G.targetX - rc; G.steerVx = G.prevOff === undefined ? 0 : (off - G.prevOff) / dt; G.prevOff = off; }   // how fast the thumb is moving the target across the road
+  const lim = rw / 2 - T.sizes.player[0] / 2 - 2;
+  G.targetX = clamp(G.targetX, rc - lim, rc + lim);
+  if (G.slamT > 0) { G.slamT -= dt; G.vx = G.slamDir * T.slam.speed; G.x += G.vx * dt; if (Math.random() < 0.6) addMark(G.x - G.slamDir * 10, G.dist - 20, 3, true); if (G.slamT <= 0) { input.carAnchor += G.x - G.slamX0; G.targetX = G.x; } }   // the thumb keeps relative control from where the Slam ended
+  else { const authority = G.air > 0 ? T.ramp.steerAir : 1; const want = clamp((G.targetX - G.x) / T.ease * authority, -T.maxLateral * authority, T.maxLateral * authority); G.vx += (want - G.vx) * (1 - Math.exp(-dt / 0.035)); G.x += G.vx * dt; if (Math.abs(G.vx) > 400 && G.air <= 0 && Math.random() < 0.5) addMark(G.x, G.dist - 24, 2.5, true); }
   if (G.slamCd > 0) G.slamCd -= dt;
+  if (playing) gun(dt);   // inside the fixed step, so the gun obeys slow motion and hit-stop (audit, hard truth 11)
   // rails: scrape = sparks, small speed loss, capped graze points (bug 6)
-  const left = road.center - road.width / 2 + T.sizes.player[0] / 2, right = road.center + road.width / 2 - T.sizes.player[0] / 2;
+  const left = rc - rw / 2 + T.sizes.player[0] / 2, right = rc + rw / 2 - T.sizes.player[0] / 2;
   let scraping = false;
   if (G.x < left) { G.x = left; G.vx = Math.max(G.vx, 0); scraping = true; } if (G.x > right) { G.x = right; G.vx = Math.min(G.vx, 0); scraping = true; }
   if (scraping && G.air <= 0 && playing) { G.grazeT += dt; spark(G.x + (G.x <= left + 0.5 ? -17 : 17), G.dist, 1); G.boost = Math.max(G.boost - 40 * dt, -40); if (G.grazeT > 0.25 && G.grazePaid < T.score.grazeCap) { G.grazeT = 0; G.grazePaid++; addScore(T.score.graze, G.x, G.dist, true); } } else { G.grazeT = 0; if (!scraping) G.grazePaid = 0; }
@@ -437,19 +497,18 @@ function physics(dt, playing) {
   for (const m of G.medians) if (G.dist > m.y0 - 30 && G.dist < m.y1 + 30) { const mx0 = G.road.laneX(G.dist, m.lane0) - 6, mx1 = G.road.laneX(G.dist, m.lane0 + m.lanes - 1) + 6; const hw = T.sizes.player[0] / 2; if (G.x + hw > mx0 && G.x - hw < mx1) { if (G.x < (mx0 + mx1) / 2) G.x = mx0 - hw; else G.x = mx1 + hw; G.vx = 0; if (G.slamT > 0) G.slamT = 0; spark(G.x, G.dist, 2); } }
   for (const b of G.barriers) if (!b.hit && G.air <= 0 && Math.abs(G.dist - b.y) < 36) { const x0 = G.road.laneX(b.y, b.lane0) - T.laneW / 2, x1 = G.road.laneX(b.y, b.lane0 + b.lanes - 1) + T.laneW / 2; if (G.x > x0 && G.x < x1) { b.hit = true; damage(1, null, 'Hit a roadblock'); G.boost = -120; spark(G.x, G.dist + 30, 10); } }
   for (const g of G.gaps) if (!g.done && G.air <= 0 && G.dist > g.y0 && G.dist < g.y1 && playing) { g.done = true; G.detour = 2.5; G.combo = 0; G.comboT = 0; callout('Detour', 'you missed the jump', 1200); audio.horn(); }
-  if (!playing) { G.targetX = G.x = G.x + (road.center - G.x) * Math.min(1, dt * 2); }
-  G.lean += ((G.vx / T.maxLateral) * T.lean - G.lean) * Math.min(1, dt * 12);
+  G.relVx = G.vx - G.roadVx;   // sideways speed relative to the road: what shunts, skids and the lean read
+  G.lean += ((G.relVx / T.maxLateral) * T.lean - G.lean) * Math.min(1, dt * 12);
   G.sq += (1 - G.sq) * Math.min(1, dt * 10);
   const prevDist = G.dist; G.dist += G.speed * dt; G.road.ensure(G.dist + 2400);
   if (playing) { G.distScore += (G.dist - prevDist); while (G.distScore >= T.score.distancePer) { G.distScore -= T.score.distancePer; G.score += 1; } }
   // jump
   if (G.air > 0) { G.air -= dt; const k = 1 - G.air / G.airTotal; G.jumpZ = Math.sin(k * Math.PI); if (G.air <= 0) land(); }
   if (G.invuln > 0) G.invuln -= dt;
-  // grace: restore a pip at 30 s if on the last one
-  if (playing && !G.pipRestored && G.t >= T.pipRestoreAt && G.armor === 1) { G.pipRestored = true; G.armor = 2; callout('Armor restored', '', 800); }
   // --- cars
   for (const c of G.cars) {
-    if (!c.alive) continue; c.t += dt; if (c.hitCd > 0) c.hitCd -= dt; if (c.honk > 0) c.honk -= dt;
+    if (!c.alive) continue; c.t += dt; if (c.hitCd > 0) c.hitCd -= dt; if (c.honk > 0) c.honk -= dt; if (c.hitFlash > 0) c.hitFlash -= dt;
+    if (c.creditT > 0 && !c.wrecked) { c.creditT -= dt; if (c.creditT <= 0) { c.credit = false; c.how = null; c.shunted = false; } }   // the player's credit for a push lasts 1.5 s
     if (c.wrecked) { c.debrisT -= dt; c.y += c.speed * dt; c.x += c.vx * dt; c.vx *= Math.exp(-dt * 2.2); c.speed += (G.speed * 0.3 - c.speed) * Math.min(1, dt * 1.5); c.spin += (3 + Math.abs(c.vx) / 60) * dt; c.flip = Math.min(1, c.flip + dt * 2); if (c.y < G.dist - 500 || c.debrisT < -3) c.alive = false; continue; }
     const a = G.road.at(c.y); const hw = c.w / 2; const l = a.center - a.width / 2 + hw, r = a.center + a.width / 2 - hw;
     // traffic model: each car has a world speed
@@ -471,45 +530,51 @@ function physics(dt, playing) {
     for (const m of G.medians) if (c.y > m.y0 - 30 && c.y < m.y1 + 30) { const mx0 = G.road.laneX(c.y, m.lane0) - 6, mx1 = G.road.laneX(c.y, m.lane0 + m.lanes - 1) + 6; if (c.x + hw > mx0 && c.x - hw < mx1) { if ((Math.abs(c.vx) > T.shuntThreshold || c.slammed) && c.kind !== 'civ' && c.kind !== 'truck') { wreck(c, 'wall'); break; } c.x = c.x < (mx0 + mx1) / 2 ? mx0 - hw : mx1 + hw; c.vx = 0; } }
     if (c.y < G.dist - 700 || c.y > G.dist + 2600) c.alive = false;
   }
-  G.cars = G.cars.filter(c => c.alive);
+  compact(G.cars, isAlive);
   // --- car-to-car collisions with mass push-out (cars never overlap)
-  const live = G.cars.filter(c => c.alive);
+  const live = G.cars;
   for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) carPair(live[i], live[j]);
   if (playing && G.air <= 0) for (const c of live) if (c.alive) contactPlayer(c);
-  // barrels: cars and the player
-  for (const b of G.barrels) { if (!b.alive) continue; for (const c of live) if (c.alive && !c.wrecked && Math.abs(c.x - b.x) < c.w / 2 + 8 && Math.abs(c.y - b.y) < c.l / 2 + 8 && (Math.abs(c.vx) > 80 || c.kind !== 'civ')) { explodeBarrel(b); break; } if (b.alive && G.air <= 0 && Math.abs(G.x - b.x) < 25 && Math.abs(G.dist - b.y) < 38) explodeBarrel(b); }
-  for (const cn of G.cones) if (cn.alive && G.air <= 0 && Math.abs(G.x - cn.x) < 22 && Math.abs(G.dist - cn.y) < 34) { cn.alive = false; cn.vx = Math.sign(G.x - cn.x || 1) * -200; spark(cn.x, cn.y, 2); audio.ping(false); G.debris.push({ x: cn.x, y: cn.y, vx: (G.rng() * 2 - 1) * 200, speed: G.speed * 0.4, t: 1.2, col: '#ff9f1c', s: 8 }); }
-  // oil slicks: any car crossing spins out
-  for (const s of G.slicks) { s.t -= dt; for (const c of live) if (c.alive && !c.wrecked && c.kind !== 'truck' && Math.abs(c.x - s.x) < 30 && Math.abs(c.y - s.y) < 40 && !c.spun) { c.spun = true; c.vx = (G.rng() < 0.5 ? -1 : 1) * 300; c.shunted = true; c.spinOut = 1.0; if (c.kind === 'civ') c.penalised = true; } }
-  G.slicks = G.slicks.filter(s => s.t > 0);
+  // barrels: cars and the player (the player gets the credit for a barrel they drive into; a civilian or enemy setting one off pays nothing)
+  for (const b of G.barrels) { if (!b.alive) continue; for (const c of live) if (c.alive && !c.wrecked && Math.abs(c.x - b.x) < c.w / 2 + 8 && Math.abs(c.y - b.y) < c.l / 2 + 8 && (Math.abs(c.vx) > 80 || c.kind !== 'civ')) { explodeBarrel(b, c.credit); break; } if (b.alive && G.air <= 0 && Math.abs(G.x - b.x) < 25 && Math.abs(G.dist - b.y) < 38) explodeBarrel(b, true); }
+  for (const cn of G.cones) if (cn.alive && G.air <= 0 && Math.abs(G.x - cn.x) < 22 && Math.abs(G.dist - cn.y) < 34) { cn.alive = false; cn.vx = Math.sign(G.x - cn.x || 1) * -200; spark(cn.x, cn.y, 2); audio.ping(false); addDebris(cn.x, cn.y, (G.rng() * 2 - 1) * 200, G.speed * 0.4, 1.2, '#ff9f1c', 8, false); }
+  // oil slicks: any car crossing spins out; the player's slick, so the player gets the credit
+  for (const s of G.slicks) { s.t -= dt; for (const c of live) if (c.alive && !c.wrecked && c.kind !== 'truck' && Math.abs(c.x - s.x) < 30 && Math.abs(c.y - s.y) < 40 && !c.spun) { c.spun = true; c.vx = (G.rng() < 0.5 ? -1 : 1) * 300; c.shunted = true; creditCar(c, 'oil'); c.spinOut = 1.0; if (c.kind === 'civ') c.penalised = true; } }
+  compact(G.slicks, s => s.t > 0);
   // bullets
-  for (const b of G.bullets) { b.y += T.bulletSpeed * dt; b.x += (b.vx || 0) * dt; }
-  G.bullets = G.bullets.filter(b => { if (b.y > G.dist + 900) return false; for (const c of live) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck') continue; if (Math.abs(b.x - c.x) < c.w / 2 && Math.abs(b.y - c.y) < c.l / 2) { gunHit(c, b); return false; } } for (const br of G.barrels) if (br.alive && Math.abs(b.x - br.x) < 12 && Math.abs(b.y - br.y) < 14) { explodeBarrel(br); return false; } return true; });
+  for (const b of G.bullets) { b.py = b.y; b.y += T.bulletSpeed * dt; b.x += (b.vx || 0) * dt; }
+  compact(G.bullets, b => { if (b.y > G.dist + 900) return false; for (const c of live) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck') continue; if (Math.abs(b.x - c.x) < c.w / 2 && Math.abs(b.y - c.y) < c.l / 2) { gunHit(c, b); return false; } } for (const br of G.barrels) if (br.alive && Math.abs(b.x - br.x) < 12 && Math.abs(b.y - br.y) < 14) { explodeBarrel(br, true); return false; } return true; });
   // missiles: arc, smoke, splash 40 pt
-  for (const m of G.missiles) { const target = live.filter(c => c.alive && !c.wrecked && c.kind !== 'civ' && c.kind !== 'truck' && c.y > m.y - 20).sort((a, b) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(b.x - m.x, b.y - m.y))[0]; m.t += dt; if (target) m.x += (target.x - m.x) * Math.min(1, dt * 5); m.y += (700 + 400 * Math.min(1, m.t * 2)) * dt; if (Math.random() < 0.7) G.debris.push({ x: m.x + (Math.random() - 0.5) * 6, y: m.y - 10, vx: 0, speed: G.speed * 0.5, t: 0.5, col: 'rgba(200,200,200,0.5)', s: 6, smoke: true }); if (target && Math.abs(m.x - target.x) < 22 && Math.abs(m.y - target.y) < target.l / 2 + 10) { m.dead = true; G.fx.push({ x: m.x, y: m.y, t: 0, life: 0.5, big: true }); for (const c of live) if (c.alive && !c.wrecked && c.kind !== 'civ' && c.kind !== 'truck' && Math.abs(c.x - m.x) < 40 + c.w / 2 && Math.abs(c.y - m.y) < 40 + c.l / 2) wreck(c, 'missile'); } if (m.y > G.dist + 1200) m.dead = true; }
-  G.missiles = G.missiles.filter(m => !m.dead);
+  for (const m of G.missiles) { let target = null, best = 1e9; for (const c of live) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck' || c.y <= m.y - 20) continue; const d = Math.hypot(c.x - m.x, c.y - m.y); if (d < best) { best = d; target = c; } } m.t += dt; m.py = m.y; if (target) m.x += (target.x - m.x) * Math.min(1, dt * 5); m.y += (700 + 400 * Math.min(1, m.t * 2)) * dt; if (Math.random() < 0.7) addDebris(m.x + (Math.random() - 0.5) * 6, m.y - 10, 0, G.speed * 0.5, 0.5, 'rgba(200,200,200,0.5)', 6, true); if (target && Math.abs(m.x - target.x) < 22 && Math.abs(m.y - target.y) < target.l / 2 + 10) { m.dead = true; G.fx.push({ x: m.x, y: m.y, t: 0, life: 0.5, big: true }); for (const c of live) if (c.alive && !c.wrecked && c.kind !== 'civ' && c.kind !== 'truck' && Math.abs(c.x - m.x) < 40 + c.w / 2 && Math.abs(c.y - m.y) < 40 + c.l / 2) wreck(c, 'missile', true); } if (m.y > G.dist + 1200) m.dead = true; }
+  compact(G.missiles, m => !m.dead);
   // chain-wreck queue on the game clock (bug 8)
-  G.queue = G.queue.filter(q => { q.t -= dt; if (q.t <= 0) { q.fn(); return false; } return true; });
+  compact(G.queue, q => { q.t -= dt; if (q.t <= 0) { q.fn(); return false; } return true; });
   // ramps, trucks, crates
   for (const rp of G.ramps) { if (!rp.used && G.air <= 0 && G.dist >= rp.y - 20 && prevDist < rp.y + 20 && Math.abs(G.x - rp.x) < rp.w / 2 + 4) { rp.used = true; launch(rp); } if (rp.crate && !rp.crate.taken && G.air > 0 && Math.abs(G.dist - (rp.y + 240)) < 60 && Math.abs(G.x - rp.x) < 40) { rp.crate.taken = true; pickup('crate', rp.x, rp.y + 240); } }
-  G.ramps = G.ramps.filter(rp => rp.y > G.dist - 500);
+  compact(G.ramps, rp => rp.y > G.dist - 500);
   for (const c of live) if (c.kind === 'truck' && c.alive && !c.loaded && G.air <= 0 && Math.abs(G.x - c.x) < c.w / 2 - 4) { const rampY = c.y - c.l / 2; if (prevDist <= rampY + 10 && G.dist >= rampY - 40) { c.loaded = true; truckLoad(c); } }
   for (const cr of G.crates) { cr.t += dt; cr.y += (cr.speed !== undefined ? cr.speed : G.speed * 0.3) * dt; if (Math.abs(cr.y - G.dist) < 250) cr.x += (G.x - cr.x) * Math.min(1, dt * 1.5); if (Math.abs(cr.x - G.x) < 26 && Math.abs(cr.y - G.dist) < 42) { cr.dead = true; pickup(cr.kind, cr.x, cr.y); } }
-  G.crates = G.crates.filter(cr => !cr.dead && cr.y > G.dist - 300);
-  G.barrels = G.barrels.filter(b => b.y > G.dist - 300); G.cones = G.cones.filter(c => c.y > G.dist - 300); G.medians = G.medians.filter(m => m.y1 > G.dist - 300); G.gaps = G.gaps.filter(g => g.y1 > G.dist - 300); G.barriers = G.barriers.filter(b => b.y > G.dist - 300); G.signs = G.signs.filter(s => s.y > G.dist - 300);
-  for (const d of G.debris) { d.t -= dt; d.x += d.vx * dt; d.y += d.speed * dt; d.vx *= Math.exp(-dt * 2); } G.debris = G.debris.filter(d => d.t > 0);
-  for (const m of G.marks) m.t -= dt; G.marks = G.marks.filter(m => m.t > 0 && m.y > G.dist - 400);
-  for (const f of G.fx) f.t += dt; G.fx = G.fx.filter(f => f.t < f.life);
-  for (const p of G.pops) p.t += dt; G.pops = G.pops.filter(p => p.t < 1.0);
-  for (const s of G.sparks) { s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; } G.sparks = G.sparks.filter(s => s.t < 0.4);
+  compact(G.crates, cr => !cr.dead && cr.y > G.dist - 300);
+  const behind = G.dist - 300;
+  compact(G.barrels, b => b.y > behind); compact(G.cones, c => c.y > behind); compact(G.medians, m => m.y1 > behind); compact(G.gaps, g => g.y1 > behind); compact(G.barriers, b => b.y > behind); compact(G.signs, s => s.y > behind);
+  for (const d of G.debris) { d.t -= dt; d.x += d.vx * dt; d.y += d.speed * dt; d.vx *= Math.exp(-dt * 2); } compact(G.debris, d => { if (d.t > 0) return true; pool.debris.push(d); return false; });
+  for (const m of G.marks) m.t -= dt; compact(G.marks, m => { if (m.t > 0 && m.y > G.dist - 400) return true; pool.marks.push(m); return false; });
+  for (const f of G.fx) f.t += dt; compact(G.fx, f => f.t < f.life);
+  for (const p of G.pops) p.t += dt; compact(G.pops, p => p.t < 1.0);
+  for (const s of G.sparks) { s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; } compact(G.sparks, s => { if (s.t < 0.4) return true; pool.sparks.push(s); return false; });
   if (G.smoke > 0) G.smoke -= dt; if (G.comboT > 0) { G.comboT -= dt; if (G.comboT <= 0) G.combo = 0; }
   if (G.ghostThumb > 0) G.ghostThumb -= dt;
   // districts
   if (G.dist > G.nextDistrictY - G.speed * 3 && G.signShown !== G.district + 1) { G.signShown = G.district + 1; G.signs.push({ y: G.nextDistrictY - 100, text: DISTRICTS[(G.district + 1) % 4].sign, big: true }); }
   if (G.dist > G.nextDistrictY) { G.district = (G.district + 1) % 4; G.nextDistrictY += T.speed0 * T.districtEvery; }
-  // replay buffer for the death replay (last 1.5 s at 30 Hz)
-  G.replayAcc = (G.replayAcc || 0) + dt; if (G.replayAcc >= 1 / 30) { G.replayAcc = 0; G.replay.push({ x: G.x, y: G.dist, cars: live.filter(c => Math.abs(c.y - G.dist) < 700).map(c => ({ kind: c.kind, x: c.x, y: c.y, wrecked: c.wrecked, tint: c.tint, w: c.w, l: c.l, spin: c.spin })) }); while (G.replay.length > 45) G.replay.shift(); }
+  if (playing) recordReplay(dt);   // last 1.5 s at 30 Hz into the pre-allocated ring, shown on the death card
 }
+const isAlive = c => c.alive;
+function creditCar(c, how) { c.credit = true; c.how = how; c.creditT = 1.5; }
+// pools for the short-lived particles so a busy second does not allocate thousands of throwaway objects
+const pool = { sparks: [], debris: [], marks: [] };
+function addDebris(x, y, vx, speed, t, col, s, smoke) { const d = pool.debris.pop() || {}; d.x = x; d.y = y; d.vx = vx; d.speed = speed; d.t = t; d.col = col; d.s = s; d.smoke = smoke; G.debris.push(d); }
+function addMark(x, y, t, skid) { const m = pool.marks.pop() || {}; m.x = x; m.y = y; m.t = t; m.skid = skid; m.scorch = !skid; G.marks.push(m); }
 function enemyAI(c, dt, playing) {
   const py = G.dist, px = G.x; const closeCap = T.bruiser.closeCap, dropCap = T.bruiser.dropCap;
   const slotY = () => c.kind === 'gunner' ? py - 230 : py + 6;
@@ -541,16 +606,17 @@ function carPair(a, b) {
   const ma = a.wrecked ? a.mass * 0.5 : a.mass, mb = b.wrecked ? b.mass * 0.5 : b.mass; const sa = mb / (ma + mb), sb = ma / (ma + mb);
   if (px < py) { const s = Math.sign(dx || 1); a.x -= s * px * sa; b.x += s * px * sb;
     const rel = a.vx - b.vx; if (Math.abs(rel) > T.shuntThreshold || a.slammed || b.slammed || a.wrecked || b.wrecked) { const mover = Math.abs(a.vx) > Math.abs(b.vx) ? a : b, other = mover === a ? b : a; other.vx += mover.vx * mover.mass / other.mass * 0.8; mover.vx *= 0.3; resolveShunt(mover, other); } else { const t = a.vx; a.vx = b.vx * 0.5; b.vx = t * 0.5; }
-  } else { const s = Math.sign(dy || 1); a.y -= s * py * sa; b.y += s * py * sb; const ahead = s > 0 ? b : a, behind = s > 0 ? a : b; if (behind.speed > ahead.speed) { const v = behind.speed; behind.speed = ahead.speed; ahead.speed = v * 0.5 + ahead.speed * 0.5; } if ((behind.wrecked || behind.slammed) && !ahead.wrecked && ahead.kind !== 'civ' && ahead.kind !== 'truck') wreck(ahead, 'chain'); }
+  } else { const s = Math.sign(dy || 1); a.y -= s * py * sa; b.y += s * py * sb; const ahead = s > 0 ? b : a, behind = s > 0 ? a : b; if (behind.speed > ahead.speed) { const v = behind.speed; behind.speed = ahead.speed; ahead.speed = v * 0.5 + ahead.speed * 0.5; } if ((behind.wrecked || behind.slammed) && !ahead.wrecked && ahead.kind !== 'civ' && ahead.kind !== 'truck') wreck(ahead, 'chain', behind.credit); }
 }
 function resolveShunt(mover, other) {
-  // a shunted or wrecked enemy hitting things: civ → mover wrecks, civ bumps (no penalty); enemy → both wreck (chain); truck → mover wrecks
-  const moverEnemy = mover.kind !== 'civ' && mover.kind !== 'truck';
-  if (mover.wrecked) { if (!other.wrecked && other.kind !== 'civ' && other.kind !== 'truck' && other.kind !== 'armored') wreck(other, 'chain'); if (other.kind === 'civ') { other.honk = 0.5; other.penalised = true; } return; }
+  // a shunted or wrecked enemy hitting things: civ → mover wrecks, civ bumps (no penalty); enemy → both wreck (chain); truck → mover wrecks.
+  // Credit follows the push: a car the player shunted carries the player's credit into everything it hits; enemy-on-enemy accidents pay nothing.
+  const moverEnemy = mover.kind !== 'civ' && mover.kind !== 'truck'; const credit = mover.credit;
+  if (mover.wrecked) { if (!other.wrecked && other.kind !== 'civ' && other.kind !== 'truck' && other.kind !== 'armored') wreck(other, 'chain', credit); if (other.kind === 'civ') { other.honk = 0.5; other.penalised = true; } return; }
   if (!(mover.shunted || mover.slammed || moverEnemy)) return;
   if (other.kind === 'civ') { other.honk = 0.5; other.penalised = true; if (moverEnemy && (mover.shunted || mover.slammed)) wreck(mover, mover.slammed ? 'slam' : 'shunt'); }
   else if (other.kind === 'truck' || other.kind === 'armored') { if (moverEnemy && (mover.shunted || mover.slammed)) wreck(mover, 'wall'); }
-  else if (moverEnemy && (mover.shunted || mover.slammed)) { addScore(T.score.shuntEnemy, other.x, other.y, false, 'INTO ENEMY'); wreck(mover, mover.slammed ? 'slam' : 'shunt'); G.queue.push({ t: 0.1, fn: () => { if (other.alive && !other.wrecked) wreck(other, 'chain'); } }); }
+  else if (moverEnemy && (mover.shunted || mover.slammed)) { if (credit) addScore(T.score.shuntEnemy, other.x, other.y, false, 'INTO ENEMY'); wreck(mover, mover.slammed ? 'slam' : 'shunt'); G.queue.push({ t: 0.1, fn: () => { if (other.alive && !other.wrecked) wreck(other, 'chain', credit); } }); }
 }
 function contactPlayer(c) {
   // Close Call: passing a civilian within 12 pt at speed, without touching it
@@ -565,25 +631,45 @@ function contactPlayer(c) {
   if (c.kind === 'armored') { if (!side && dy > 0) { if (c.hitCd <= 0) { c.hitCd = T.rearCd; damage(1, c, 'Rammed the armored truck'); G.boost = -150; G.x -= s * 4; } } else { G.x -= s * (hw - Math.abs(dx)); G.vx = -s * 150; if (G.slamT > 0) { G.slamT = 0; damage(0, null); spark(G.x, G.dist, 6); audio.crunch(true); } } return; }
   if (side) {
     const slamming = G.slamT > 0;
-    const power = Math.max(T.shuntMin, Math.abs(G.vx) * T.shuntMul) * (slamming ? T.slam.power : 1);
-    c.vx = s * power; c.x += s * (hw - Math.abs(dx)) * 0.5; c.shunted = true; if (slamming) { c.slammed = true; c.slamBy = 'player'; c.spin = 0.4 * s; }
+    const attacking = c.state === 'swerve' && !slamming;                         // a Bruiser landing its lunge
+    const intent = slamming || (G.relVx * s > T.shuntIntent && G.steerVx * s > 0);   // the player is actually steering into the car, not being slid by the road
+    if (attacking) {
+      // the Bruiser's hit lands: the player takes the damage and the push; the Bruiser is not flung, so an idle driver cannot farm lunges
+      damage(1, c, 'Rammed by a Bruiser'); G.x -= s * T.bruiser.push; G.vx = -s * 120; c.vx = s * 90; c.state = 'recover'; c.t = 0;
+      spark(G.x + s * 17, G.dist, 8); audio.crunch(false); buzz(30); kickShake(-s * 6, 0, 0.3); G.sq = 0.9; G.hitStop = Math.max(G.hitStop, 0.02); event(); return;
+    }
+    if (!intent) { c.x += s * (hw - Math.abs(dx)) * 0.5; G.x -= s * (hw - Math.abs(dx)) * 0.5; c.vx = s * 60; G.vx = -s * 40; if (c.hitCd <= 0) { c.hitCd = T.rearCd; spark(G.x + s * 17, G.dist, 2); audio.ping(false); } return; }   // a brush, nothing more
+    const power = Math.max(T.shuntMin, Math.abs(G.relVx) * T.shuntMul) * (slamming ? T.slam.power : 1);
+    c.vx = s * power; c.x += s * (hw - Math.abs(dx)) * 0.5; c.shunted = true; creditCar(c, slamming ? 'slam' : 'shunt'); if (slamming) { c.slammed = true; c.spin = 0.4 * s; }
     G.x -= s * (hw - Math.abs(dx)) * 0.5; G.vx = slamming ? G.vx * 0.2 : -G.vx * 0.3;
-    spark(G.x + s * 17, G.dist, slamming ? 14 : 8); audio.crunch(slamming); buzz(slamming ? 60 : 30); kickShake(-s * (slamming ? 10 : 5), 0); G.sq = 0.9; G.hitStop = Math.max(G.hitStop, slamming ? 0.07 : 0.02);
-    if (slamming) { G.slamT = 0; G.slams++; addScore(T.score.slamKill * 0, c.x, c.y, true); callout('Slam', '', 400); }
-    if (c.state === 'swerve' && !slamming) { damage(1, c, 'Rammed by a Bruiser'); G.x -= s * T.bruiser.push; c.state = 'recover'; c.t = 0; }
+    spark(G.x + s * 17, G.dist, slamming ? 14 : 8); audio.crunch(slamming); buzz(slamming ? 60 : 30); kickShake(-s * (slamming ? 10 : 5), 0, slamming ? 0.5 : 0.3); G.sq = 0.9; G.hitStop = Math.max(G.hitStop, slamming ? 0.07 : 0.02);
+    if (slamming) { G.slamT = 0; input.carAnchor += G.x - G.slamX0; G.targetX = G.x; G.slams++; callout('Slam', '', 400); }   // no "+0" pop: the wreck pays, by cause
     event();
   } else if (dy > 0) {
     // rear-ending at speed: no armor loss, 10% speed loss for 0.5 s, damages the car ahead (per-car cooldown)
-    if (c.hitCd <= 0) { c.hitCd = T.rearCd; c.y += (hl - Math.abs(dy)) + 10; c.speed = Math.max(c.speed, G.speed * 1.05); c.hp -= c.kind === 'weak' ? 1 : 1.5; G.boost = -Math.min(60, G.speed * 0.1); spark(G.x, G.dist + 30, 6); audio.crunch(false); buzz(25); kickShake(0, 6); G.sq = 0.92; event(); if (c.hp <= 0) wreck(c, 'ram'); }
+    if (c.hitCd <= 0) { c.hitCd = T.rearCd; c.y += (hl - Math.abs(dy)) + 10; c.speed = Math.max(c.speed, G.speed * 1.05); c.hp -= c.kind === 'weak' ? 1 : 1.5; creditCar(c, 'ram'); G.boost = -Math.min(60, G.speed * 0.1); spark(G.x, G.dist + 30, 6); audio.crunch(false); buzz(25); kickShake(0, 6, 0.25); G.sq = 0.92; event(); if (c.hp <= 0) wreck(c, 'ram', true); }
     else { c.y += (hl - Math.abs(dy)); }
   } else { c.y -= (hl - Math.abs(dy)); if (c.hitCd <= 0) { c.hitCd = T.rearCd; G.boost = 60; } }
 }
-function trySlam(dir) { if (!G || phase !== 'playing' || G.slamCd > 0 || G.slamT > 0) return; G.slamT = T.slam.burst; G.slamDir = dir; G.slamCd = T.slam.cooldown; audio.slam(); buzz(12); G.sq = 1.08; }
+// Contextual Slam (audit): fires only with an enemy within 1.4 lanes on that side and 60 pt ahead or behind. Otherwise the flick
+// was just a fast lane change and the relative drag already delivers it. flickMisses counts the flicks that found no target.
+function slamTarget(dir) {
+  const reach = T.slam.reachLanes * T.laneW;
+  for (const c of G.cars) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck') continue; const dx = (c.x - G.x) * dir; if (dx > 0 && dx <= reach + c.w / 2 && Math.abs(c.y - G.dist) <= T.slam.reachY + c.l / 2) return c; }
+  return null;
+}
+function trySlam(dir) {
+  if (!G || phase !== 'playing' || G.slamCd > 0 || G.slamT > 0) return false;
+  const target = slamTarget(dir); if (!target) { G.flickMisses++; return false; }
+  // the burst covers about one lane (0.11 s at 600 pt/s); a target sitting a little further out gets a slightly longer burst so the Slam connects
+  const need = Math.abs(target.x - G.x) - (target.w + T.sizes.player[0]) / 2 + 8;
+  G.slamT = clamp(need / T.slam.speed, T.slam.burst, T.slam.burst * 1.5); G.slamDir = dir; G.slamX0 = G.x; G.slamCd = T.slam.cooldown; audio.slam(); buzz(12); G.sq = 1.08; return true;
+}
 function damage(amount, by, cause) {
   if (amount <= 0) return; if (G.invuln > 0 || G.nitro > 0) return;
-  if (G.t < T.graceSeconds) amount *= 0.5;
+  if (G.t < T.graceSeconds) amount *= 0.5;   // 30 s of half damage, then the road is dangerous
   G.damageAcc += amount; if (G.damageAcc < 1) { G.vignette = 0.5; audio.crunch(false); return; }
-  G.damageAcc -= 1; G.armor--; G.invuln = T.invuln; G.flashT = T.invuln; G.vignette = 1; G.smoke = 2.5; kickShake((Math.random() - 0.5) * 16, 8); G.hitStop = Math.max(G.hitStop, 0.04); audio.damage(); buzz([60, 30, 60]);
+  G.damageAcc -= 1; G.armor--; G.armorLost++; G.invuln = T.invuln; G.flashT = T.invuln; G.vignette = 1; G.smoke = 2.5; kickShake(0, 0, 0.9); G.hitStop = Math.max(G.hitStop, 0.04); audio.damage(); buzz([60, 30, 60]);
   G.cause = cause || (by ? 'Hit by a car' : 'Crashed'); callout(G.armor > 0 ? 'Armor ' + G.armor : 'Wrecked', '', 700);
 }
 function gun(dt) {
@@ -596,29 +682,35 @@ function gun(dt) {
   else { G.gunCd = 1 / T.fireRate; G.bullets.push({ x: G.x + side * 9, y: G.dist + 30, vx: 0, dmg: 1 }); audio.shot(); }
   G.flashT2 = 0.05;
 }
-function gunHit(c, b) { if (c.kind === 'armored') { spark(b.x, b.y, 2); audio.ping(false); return; } c.hp -= b.dmg; c.hitFlash = 0.08; spark(b.x, b.y, 3); if (b.knock) { c.vx += (b.x < c.x ? 1 : -1) * 260 * (c.kind === 'weak' ? 1.4 : 1); c.shunted = true; } audio.ping(c.hp <= 0); if (c.hp <= 0) wreck(c, 'gun'); }
-function wreck(c, how) {
+function gunHit(c, b) { if (c.kind === 'armored') { spark(b.x, b.y, 2); audio.ping(false); return; } c.hp -= b.dmg; c.hitFlash = 0.08; spark(b.x, b.y, 3); if (b.knock) { c.vx += (b.x < c.x ? 1 : -1) * 260 * (c.kind === 'weak' ? 1.4 : 1); c.shunted = true; creditCar(c, 'shunt'); } audio.ping(c.hp <= 0); if (c.hp <= 0) wreck(c, 'gun', true); }
+// Score by cause. `credit` (or the car's own credit flag) says the player caused this wreck: then it pays base × the cause
+// multiplier (car kills 3× a gun kill, player-caused chains 2×), feeds the combo and may drop a crate. A passive wreck, an
+// enemy-on-enemy accident the player had no hand in, pays nothing and counts separately.
+function wreck(c, how, credit) {
   if (c.wrecked || !c.alive) return;
-  c.wrecked = true; c.debrisT = 1.5; c.speed = Math.max(c.speed * 0.6, G.speed * 0.3); c.vx = (c.vx || 0) + (G.rng() * 2 - 1) * 80; c.flip = 0;
+  credit = !!(credit || c.credit); if ((how === 'rail' || how === 'wall') && c.how) how = c.how;   // the push that sent it into the wall is the cause
+  c.wrecked = true; c.debrisT = 1.5; c.speed = Math.max(c.speed * 0.6, G.speed * 0.3); c.vx = (c.vx || 0) + (G.rng() * 2 - 1) * 80; c.flip = 0; c.credit = credit;
+  G.fx.push({ x: c.x, y: c.y, t: 0, life: 0.6, big: true }); addMark(c.x, c.y, 3, false);
+  for (let i = 0; i < 4; i++) addDebris(c.x, c.y, (G.rng() * 2 - 1) * 260, c.speed + (G.rng() - 0.3) * 200, 1 + G.rng(), '#3a2a2a', 6 + G.rng() * 6, false);
+  if (!credit) { G.passiveWrecks++; audio.wreck(); kickShake(0, 0, 0.35); event(); return; }
   const base = c.kind === 'bruiser' ? T.score.bruiser : c.kind === 'gunner' ? T.score.gunner : c.kind === 'armored' ? T.score.armored : T.score.weak;
-  let mul = 1, label = ''; if (how === 'stomp') { mul = T.score.stompMul; label = 'STOMP'; } if (how === 'chain') { mul = T.score.chainMul; label = 'CHAIN WRECK'; }
-  G.kills++; G.combo = Math.min(T.combo.max, G.combo + 1); G.comboT = T.combo.window; G.comboPeak = Math.max(G.comboPeak, G.combo);
+  const mul = T.score.cause[how] || 1;
+  const label = how === 'stomp' ? 'STOMP' : how === 'chain' ? 'CHAIN WRECK' : how === 'slam' ? 'SLAM KILL' : how === 'shunt' ? 'SHUNT' : how === 'ram' ? 'RAMMED' : how === 'oil' ? 'SPUN OUT' : how === 'wall' || how === 'rail' ? 'INTO THE WALL' : how === 'barrel' ? 'BLASTED' : '';
+  G.kills++; if (how === 'gun' || how === 'missile') G.gunKills++; else G.carKills++; if (G.wreckLog) G.wreckLog.push(G.t.toFixed(1) + ' ' + c.kind + ' ' + how + ' ' + (c.state || ''));
+  G.combo = Math.min(T.combo.max, G.combo + 1); G.comboT = T.combo.window; G.comboPeak = Math.max(G.comboPeak, G.combo);
   addScore(base * mul, c.x, c.y, false, label);
-  if (how === 'slam' || c.slammed) { addScore(T.score.slamKill, c.x, c.y - 30, false, 'SLAM KILL'); }
-  G.fx.push({ x: c.x, y: c.y, t: 0, life: 0.6, big: true }); G.marks.push({ x: c.x, y: c.y, t: 3, scorch: true });
-  for (let i = 0; i < 4; i++) G.debris.push({ x: c.x, y: c.y, vx: (G.rng() * 2 - 1) * 260, speed: c.speed + (G.rng() - 0.3) * 200, t: 1 + G.rng(), col: '#3a2a2a', s: 6 + G.rng() * 6 });
   const hs = how === 'stomp' ? 0.09 : how === 'chain' ? 0.09 : (how === 'slam' ? 0.07 : 0.04); G.hitStop = Math.min(0.12, Math.max(G.hitStop, hs));
-  kickShake((G.rng() - 0.5) * (how === 'stomp' ? 22 : 12), how === 'stomp' ? 12 : 6); if (how === 'stomp') { audio.stomp(); G.punch = 0.1; } else audio.wreck(); if (G.combo > 1) audio.chain(G.combo); buzz(how === 'chain' ? [30, 30, 30] : how === 'stomp' ? [80, 30, 120] : 45);
+  kickShake(0, 0, how === 'gun' ? 0.6 : how === 'stomp' ? 1.0 : 0.8); if (how === 'stomp') { audio.stomp(); G.punch = 0.1; } else audio.wreck(); if (G.combo > 1) audio.chain(G.combo); buzz(how === 'chain' ? [30, 30, 30] : how === 'stomp' ? [80, 30, 120] : 45);
   if (how === 'chain') G.slowmo = Math.max(G.slowmo, 0.3), G.slowmoRate = 0.5;
   if (G.combo >= 3) G.bestMoment = G.t;
   event();
-  if (G.rng() < T.crateDrop) G.crates.push({ x: c.x, y: c.y, vy: 0, t: 0, kind: ['armor', 'ammo', 'gun'][Math.floor(G.rng() * 3)], speed: G.speed * 0.3 });
+  if (G.rng() < T.crateDrop) G.crates.push({ x: c.x, y: c.y, vy: 0, t: 0, kind: ['ammo', 'gun'][Math.floor(G.rng() * 2)], speed: G.speed * 0.3 });   // crates never carry armor
 }
-function explodeBarrel(b) {
-  if (!b.alive) return; b.alive = false; G.fx.push({ x: b.x, y: b.y, t: 0, life: 0.6, big: true, orange: true }); audio.wreck(); kickShake((G.rng() - 0.5) * 10, 8); G.hitStop = Math.max(G.hitStop, 0.04);
-  let n = 0; for (const c of G.cars) if (c.alive && !c.wrecked && c.kind !== 'truck' && Math.abs(c.x - b.x) < 60 + c.w / 2 && Math.abs(c.y - b.y) < 60 + c.l / 2) { if (c.kind === 'civ') { c.honk = 0.5; c.vx += Math.sign(c.x - b.x || 1) * 200; } else { G.queue.push({ t: 0.05 * n, fn: () => wreck(c, 'chain') }); n++; } }
-  if (n >= 2) addScore(T.score.barrelDouble, b.x, b.y + 40, false, 'DOUBLE');
-  for (const o of G.barrels) if (o.alive && o !== b && Math.abs(o.x - b.x) < 40 && Math.abs(o.y - b.y) < 40) G.queue.push({ t: 0.08, fn: () => explodeBarrel(o) });
+function explodeBarrel(b, credit) {
+  if (!b.alive) return; b.alive = false; G.fx.push({ x: b.x, y: b.y, t: 0, life: 0.6, big: true, orange: true }); audio.wreck(); kickShake(0, 0, credit ? 0.8 : 0.4); G.hitStop = Math.max(G.hitStop, 0.04);
+  let n = 0; for (const c of G.cars) if (c.alive && !c.wrecked && c.kind !== 'truck' && Math.abs(c.x - b.x) < 60 + c.w / 2 && Math.abs(c.y - b.y) < 60 + c.l / 2) { if (c.kind === 'civ') { c.honk = 0.5; c.vx += Math.sign(c.x - b.x || 1) * 200; } else { G.queue.push({ t: 0.05 * n, fn: () => wreck(c, 'barrel', credit) }); n++; } }
+  if (n >= 2 && credit) addScore(T.score.barrelDouble, b.x, b.y + 40, false, 'DOUBLE');
+  for (const o of G.barrels) if (o.alive && o !== b && Math.abs(o.x - b.x) < 40 && Math.abs(o.y - b.y) < 40) G.queue.push({ t: 0.08, fn: () => explodeBarrel(o, credit) });
   if (G.air <= 0 && Math.abs(G.x - b.x) < 60 && Math.abs(G.dist - b.y) < 70) damage(1, null, 'Caught in a barrel blast');
   event();
 }
@@ -626,17 +718,19 @@ function addScore(base, x, y, quiet, label) {
   const mul = quiet ? 1 : Math.max(1, G.combo); const p = Math.round(base * mul); G.score = Math.max(0, G.score + p);
   if (x !== undefined) G.pops.push({ x, y, text: (p < 0 ? '' : '+') + fmt(p) + (label ? ' ' + label : ''), t: 0, bad: p < 0, small: quiet && !label });
 }
-function spark(x, y, n) { for (let i = 0; i < n; i++) G.sparks.push({ x, y, vx: (G.rng() * 2 - 1) * 260, vy: -G.speed * 0.5 + (G.rng() * 2 - 1) * 120, t: 0 }); }
-function kickShake(x, y) { if (!S.shake || S.motion) return; G.shake.vx += x * 40; G.shake.vy += y * 40; }
+function spark(x, y, n) { for (let i = 0; i < n; i++) { const s = pool.sparks.pop() || {}; s.x = x; s.y = y; s.vx = (G.rng() * 2 - 1) * 260; s.vy = -G.speed * 0.5 + (G.rng() * 2 - 1) * 120; s.t = 0; G.sparks.push(s); } }
+// Shake (audit, game feel): a directional kick that decays without overshoot, plus trauma-based noise shake scaled by trauma²,
+// capped at 16 pt and 2 degrees. Gun kill 0.6 (6 pt), wreck 0.8 (10 pt), stomp 1.0 (16 pt). Applied inside the renderer with overscan.
+function kickShake(x, y, trauma) { if (!S.shake || S.motion) return; G.kick.x += x; G.kick.y += y; G.trauma = Math.min(1, Math.max(G.trauma, trauma || 0)); }
 function launch(rp) { G.air = T.ramp.air; G.airTotal = T.ramp.air; G.slowmo = T.ramp.slowmoFor; G.slowmoRate = T.ramp.slowmo; audio.launch(); buzz([10, 20, 20, 20, 30]); event(); }
 function land() {
-  G.jumpZ = 0; G.sq = 0.9; audio.land(); buzz(35); kickShake(0, 6); G.fx.push({ x: G.x, y: G.dist, t: 0, life: 0.4, ring: true });
+  G.jumpZ = 0; G.sq = 0.9; audio.land(); buzz(35); kickShake(0, 4, 0.3); G.fx.push({ x: G.x, y: G.dist, t: 0, life: 0.4, ring: true });
   let stomped = false, clean = true;
-  for (const c of G.cars) { if (!c.alive || c.wrecked) continue; if (Math.abs(c.x - G.x) < c.w / 2 + 10 && Math.abs(c.y - G.dist) < c.l / 2 + 20) { if (c.kind === 'civ') { c.penalised = true; G.civHits++; addScore(T.score.civilian, c.x, c.y, true, 'CIVILIAN'); G.combo = 0; audio.horn(); clean = false; } else if (c.kind === 'truck') { clean = false; } else { wreck(c, 'stomp'); G.stomps++; stomped = true; } } }
+  for (const c of G.cars) { if (!c.alive || c.wrecked) continue; if (Math.abs(c.x - G.x) < c.w / 2 + 10 && Math.abs(c.y - G.dist) < c.l / 2 + 20) { if (c.kind === 'civ') { c.penalised = true; G.civHits++; addScore(T.score.civilian, c.x, c.y, true, 'CIVILIAN'); G.combo = 0; audio.horn(); clean = false; } else if (c.kind === 'truck') { clean = false; } else { wreck(c, 'stomp', true); G.stomps++; stomped = true; } } }
   if (!stomped && clean && Math.abs(G.vx) < 150) { G.boost = T.score.clean; G.speedLines = 0.6; addScore(T.score.clean, G.x, G.dist, false, 'CLEAN'); callout('Clean!', '', 600); }
   event();
 }
-function truckLoad(tr) { giveSpecial(tr.gives); G.slowmo = 0.8; G.slowmoRate = 0.3; audio.chime(); buzz([20, 40, 60]); addScore(T.score.truckLoad, tr.x, tr.y - 40, false, 'LOADED'); event(); }
+function truckLoad(tr) { if (tr.gives === 'armor') { G.armor = Math.min(T.armor, G.armor + 1); callout('Armor +1', 'the only place it comes from', 1200); } else giveSpecial(tr.gives); G.slowmo = 0.8; G.slowmoRate = 0.3; audio.chime(); buzz([20, 40, 60]); addScore(T.score.truckLoad, tr.x, tr.y - 40, false, 'LOADED'); event(); }
 const SPECIALS = { missiles: { ammo: T.missiles, name: 'Homing missiles' }, oil: { ammo: T.oil, name: 'Oil slick' }, nitro: { ammo: T.nitro, name: 'Nitro' } };
 function giveSpecial(kind) { if (G.special && G.special.kind === kind) { G.special.level = Math.min(3, G.special.level + 1); G.special.ammo = Math.min(9, G.special.ammo + SPECIALS[kind].ammo + 1); callout(SPECIALS[kind].name + ' level ' + G.special.level, '', 1200); } else { G.special = { kind, ammo: SPECIALS[kind].ammo, level: 1 }; callout(SPECIALS[kind].name, 'tap the button', 1500); } const first = ui.special.hidden; ui.special.hidden = false; updateSpecial(); ui.special.classList.add('armed'); if (first) { ui.special.classList.add('pulse'); setTimeout(() => ui.special.classList.remove('pulse'), 1300); } }
 function pickup(kind, x, y) {
@@ -658,9 +752,9 @@ function fireSpecial() {
 const ICONS = { missiles: '<svg viewBox="0 0 32 32"><path d="M16 2l5 10v12l-5 6-5-6V12z" fill="#ffd23f"/><path d="M11 20l-5 5 5-1zM21 20l5 5-5-1z" fill="#ffd23f"/></svg>', oil: '<svg viewBox="0 0 32 32"><path d="M16 3c5 7 9 11 9 17a9 9 0 0 1-18 0c0-6 4-10 9-17z" fill="#ffd23f"/></svg>', nitro: '<svg viewBox="0 0 32 32"><path d="M18 2L6 18h8l-2 12 14-18h-8z" fill="#ffd23f"/></svg>' };
 function updateSpecial() { if (!G || !G.special) { ui.specialIcon.innerHTML = ''; ui.specialPips.innerHTML = ''; return; } ui.specialIcon.innerHTML = ICONS[G.special.kind]; ui.specialPips.innerHTML = ''; for (let i = 0; i < Math.min(G.special.ammo, 9); i++) ui.specialPips.appendChild(document.createElement('i')); if (G.special.ammo <= 0) ui.special.classList.remove('armed'); }
 function die() {
-  phase = 'dying'; G.deathT = 0; G.slowmo = 1.2; G.slowmoRate = 0.25; audio.death(); buzz([80, 40, 80, 40, 120]); if (S.shake && !S.motion) { G.shake.vx += 400; G.shake.vy += 300; } G.fx.push({ x: G.x, y: G.dist, t: 0, life: 1.2, big: true, player: true });
-  G.killedBy = G.cause || 'Wrecked';
-  G.queue = [];
+  phase = 'dying'; G.deathT = 0; G.slowmo = 1.2; G.slowmoRate = 0.25; audio.death(); buzz([80, 40, 80, 40, 120]); kickShake(0, 0, 1.0); G.fx.push({ x: G.x, y: G.dist, t: 0, life: 1.2, big: true, player: true });
+  G.killedBy = G.cause || 'Wrecked'; ui.special.hidden = true;
+  G.queue.length = 0;
 }
 function finishDeath() {
   phase = 'over'; const isDaily = dailyMode; const prev = isDaily ? bestDaily : best; const earned = Math.round(G.score * 0.1); cash += earned;
@@ -675,26 +769,41 @@ function shadow(p, w, l) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); 
 const glowCache = new Map();
 function glowSprite(col) { let c = glowCache.get(col); if (c) return c; c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); glowCache.set(col, c); return c; }
 function glow(x, y, r, col, a) { const prev = ctx.globalAlpha; ctx.globalAlpha = prev * a; ctx.drawImage(glowSprite(col), x - r, y - r, r * 2, r * 2); ctx.globalAlpha = prev; }
-function drawRoad(scroll) {
-  const D = DISTRICTS[G.district], DN = DISTRICTS[(G.district + 1) % 4];
-  ctx.fillStyle = D.shoulder; ctx.fillRect(0, 0, SW, H);
-  const step = 10;
-  for (let sy = H; sy > -step; sy -= step) {
-    const v = 1 - sy / H; const wy = scroll + ahead(v); const a = G.road.at(wy); const ls = (1 - PX * v) * camZoom;
-    const dist = wy >= G.nextDistrictY ? DN : D;
-    const l = SW / 2 + (a.center - a.width / 2 - REF - camLook) * ls, r = SW / 2 + (a.center + a.width / 2 - REF - camLook) * ls;
-    const yy = H * 0.7 + (sy - H * 0.7) * camZoom, hh = step * camZoom + 2;
-    ctx.fillStyle = dist.shoulder; ctx.fillRect(0, yy - hh + 1, SW, hh);
-    // detour shoulder lane and gaps
-    let gap = null; for (const g of G.gaps) if (wy > g.y0 && wy < g.y1) gap = g;
-    ctx.fillStyle = (Math.floor(wy / 300) % 2) ? dist.road : dist.dark; ctx.fillRect(l, yy - hh + 1, r - l, hh);
-    if (gap) { ctx.fillStyle = '#0b0d12'; ctx.fillRect(l + 40 * ls, yy - hh + 1, r - l - 40 * ls, hh); ctx.fillStyle = '#5a5a44'; ctx.fillRect(l, yy - hh + 1, 40 * ls, hh); }
-    ctx.fillStyle = dist.rail; ctx.fillRect(l - 6 * ls, yy - hh + 1, 4 * ls, hh); ctx.fillRect(r + 2 * ls, yy - hh + 1, 4 * ls, hh);
-    const n = Math.round(a.lanes);
-    if (!gap && Math.floor(wy / 40) % 2 === 0) for (let i = 1; i < n; i++) { const lx = SW / 2 + (a.center - a.width / 2 + a.width * i / n - REF - camLook) * ls; ctx.fillStyle = C.lane; ctx.fillRect(lx - 1.5 * ls, yy - hh + 1, 3 * ls, hh); }
-    if (Math.floor(wy / 60) % 2 === 0) { ctx.fillStyle = C.railPost; ctx.fillRect(l - 10 * ls, yy - 4, 6 * ls, 4); ctx.fillRect(r + 4 * ls, yy - 4, 6 * ls, 4); }
-    for (const m of G.medians) if (wy > m.y0 && wy < m.y1) { const mx0 = SW / 2 + (G.road.laneX(wy, m.lane0) - 6 - REF - camLook) * ls, mx1 = SW / 2 + (G.road.laneX(wy, m.lane0 + m.lanes - 1) + 6 - REF - camLook) * ls; ctx.fillStyle = '#8a8f99'; ctx.fillRect(mx0, yy - hh + 1, mx1 - mx0, hh); ctx.fillStyle = '#c9ced6'; ctx.fillRect(mx0 + 2 * ls, yy - hh + 1, 2 * ls, hh); }
+// Road as polygons (audit, "Smooth movement" 1): the road is sampled every 40 world pt on a world-aligned grid, so lane dashes,
+// rail posts and texture bands sit at fixed world positions and glide by exactly the distance travelled each frame. OV is the
+// overscan that keeps the edges covered while the renderer shakes the camera.
+const OV = 32, SEG = 40, MAXS = 64;
+const RS = { wy: new Float64Array(MAXS), sy: new Float64Array(MAXS), l: new Float64Array(MAXS), r: new Float64Array(MAXS), c: new Float64Array(MAXS), w: new Float64Array(MAXS), ls: new Float64Array(MAXS), n: new Int8Array(MAXS), count: 0 };
+function quad(x0a, y0, x0b, x1a, y1, x1b, fill) { ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(x0a, y0); ctx.lineTo(x0b, y0); ctx.lineTo(x1b, y1); ctx.lineTo(x1a, y1); ctx.closePath(); ctx.fill(); }
+function drawRoad(scroll, district) {
+  const D = DISTRICTS[district], DN = DISTRICTS[(district + 1) % 4];
+  // sample the road on the world grid, from below the screen bottom (overscan) to past the top
+  const y0 = Math.floor((scroll - 200) / SEG) * SEG, yTop = scroll + ahead(1.35); let n = 0;
+  for (let wy = y0; wy <= yTop && n < MAXS; wy += SEG, n++) {
+    const v = vFor(wy - scroll); const ls = (1 - PX * v) * camZoom; const a = G.road.at(wy);
+    RS.wy[n] = wy; RS.sy[n] = H * 0.7 + (H - v * H - H * 0.7) * camZoom; RS.ls[n] = ls; RS.c[n] = a.center; RS.w[n] = a.width; RS.n[n] = Math.round(a.lanes);
+    RS.l[n] = SW / 2 + (a.center - a.width / 2 - REF - camLook) * ls; RS.r[n] = SW / 2 + (a.center + a.width / 2 - REF - camLook) * ls;
   }
+  RS.count = n;
+  // shoulders: the whole stage plus overscan, with the next district's colour above the boundary
+  ctx.fillStyle = D.shoulder; ctx.fillRect(-OV, -OV, SW + 2 * OV, H + 2 * OV);
+  for (let i = 0; i < n; i++) if (RS.wy[i] >= G.nextDistrictY) { ctx.fillStyle = DN.shoulder; ctx.fillRect(-OV, -OV, SW + 2 * OV, RS.sy[i] + OV); break; }
+  // road surface, one quad per segment; texture bands every 320 world pt; the top edge is overlapped by 1 px to hide seams
+  for (let i = 0; i + 1 < n; i++) {
+    const wy = RS.wy[i]; const dist = wy >= G.nextDistrictY ? DN : D; const dark = Math.floor(wy / 320) % 2 === 0;
+    let gap = null; for (const g of G.gaps) if (wy >= g.y0 && wy < g.y1) gap = g;
+    quad(RS.l[i], RS.sy[i] + 1, RS.r[i], RS.l[i + 1], RS.sy[i + 1] - 1, RS.r[i + 1], dark ? dist.dark : dist.road);
+    if (gap) { quad(RS.l[i] + 40 * RS.ls[i], RS.sy[i] + 1, RS.r[i], RS.l[i + 1] + 40 * RS.ls[i + 1], RS.sy[i + 1] - 1, RS.r[i + 1], '#0b0d12'); quad(RS.l[i], RS.sy[i] + 1, RS.l[i] + 40 * RS.ls[i], RS.l[i + 1], RS.sy[i + 1] - 1, RS.l[i + 1] + 40 * RS.ls[i + 1], '#5a5a44'); }
+    // lane dashes: 40 on, 40 off, on the world grid; skipped where the lane count changes between samples
+    if (!gap && Math.floor(wy / SEG) % 2 === 0 && RS.n[i] === RS.n[i + 1]) { const ln = RS.n[i]; for (let k = 1; k < ln; k++) { const lx0 = SW / 2 + (RS.c[i] - RS.w[i] / 2 + RS.w[i] * k / ln - REF - camLook) * RS.ls[i], lx1 = SW / 2 + (RS.c[i + 1] - RS.w[i + 1] / 2 + RS.w[i + 1] * k / ln - REF - camLook) * RS.ls[i + 1]; quad(lx0 - 1.5 * RS.ls[i], RS.sy[i], lx0 + 1.5 * RS.ls[i], lx1 - 1.5 * RS.ls[i + 1], RS.sy[i + 1], lx1 + 1.5 * RS.ls[i + 1], C.lane); } }
+    // rails as continuous strips
+    quad(RS.l[i] - 6 * RS.ls[i], RS.sy[i] + 1, RS.l[i] - 2 * RS.ls[i], RS.l[i + 1] - 6 * RS.ls[i + 1], RS.sy[i + 1] - 1, RS.l[i + 1] - 2 * RS.ls[i + 1], dist.rail);
+    quad(RS.r[i] + 2 * RS.ls[i], RS.sy[i] + 1, RS.r[i] + 6 * RS.ls[i], RS.r[i + 1] + 2 * RS.ls[i + 1], RS.sy[i + 1] - 1, RS.r[i + 1] + 6 * RS.ls[i + 1], dist.rail);
+    for (const m of G.medians) if (wy >= m.y0 && wy < m.y1) { const a0 = (G.road.laneX(wy, m.lane0) - 6 - REF - camLook) * RS.ls[i] + SW / 2, b0 = (G.road.laneX(wy, m.lane0 + m.lanes - 1) + 6 - REF - camLook) * RS.ls[i] + SW / 2; const wy1 = RS.wy[i + 1]; const a1 = (G.road.laneX(wy1, m.lane0) - 6 - REF - camLook) * RS.ls[i + 1] + SW / 2, b1 = (G.road.laneX(wy1, m.lane0 + m.lanes - 1) + 6 - REF - camLook) * RS.ls[i + 1] + SW / 2; quad(a0, RS.sy[i] + 1, b0, a1, RS.sy[i + 1] - 1, b1, '#8a8f99'); quad(a0 + 2 * RS.ls[i], RS.sy[i] + 1, a0 + 4 * RS.ls[i], a1 + 2 * RS.ls[i + 1], RS.sy[i + 1] - 1, a1 + 4 * RS.ls[i + 1], '#c9ced6'); }
+  }
+  // rail posts every 120 world pt, the main near-layer speed cue until the landscape exists
+  ctx.fillStyle = C.railPost;
+  for (let i = 0; i < n; i++) if (RS.wy[i] % 120 === 0) { const ls = RS.ls[i], sy = RS.sy[i]; ctx.fillRect(RS.l[i] - 11 * ls, sy - 3 * ls, 7 * ls, 6 * ls); ctx.fillRect(RS.r[i] + 4 * ls, sy - 3 * ls, 7 * ls, 6 * ls); }
   for (const m of G.marks) { const p = project(m.x, m.y, scroll); ctx.globalAlpha = Math.min(1, m.t / (m.scorch ? 3 : 2.5)) * 0.6; if (m.scorch) { ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 22 * p.s, 30 * p.s, 0, 0, Math.PI * 2); ctx.fill(); if (m.t > 2) { ctx.fillStyle = 'rgba(255,120,30,' + (m.t - 2) * 0.6 + ')'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10 * p.s, 14 * p.s, 0, 0, Math.PI * 2); ctx.fill(); } } else { ctx.fillStyle = '#15171b'; ctx.fillRect(p.x - 12 * p.s, p.y - 4, 4 * p.s, 10 * p.s); ctx.fillRect(p.x + 8 * p.s, p.y - 4, 4 * p.s, 10 * p.s); } ctx.globalAlpha = 1; }
   for (const s of G.slicks) { const p = project(s.x, s.y, scroll); ctx.fillStyle = 'rgba(10,10,20,0.75)'; ctx.beginPath(); ctx.ellipse(p.x, p.y, s.r * 1.4 * p.s, s.r * p.s, 0, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = 'rgba(120,80,200,0.5)'; ctx.lineWidth = 1; ctx.stroke(); }
   for (const g of G.signs) { if (g.y < scroll || g.y > scroll + ahead(1)) continue; const p = project(G.road.at(g.y).center, g.y, scroll); ctx.save(); ctx.translate(p.x, p.y - 30 * p.s); ctx.scale(p.s, p.s); rrect(-80, -18, 160, 36, 4, '#1f6b3a', '#dfe'); ctx.fillStyle = '#fff'; ctx.font = '700 ' + (g.big ? 20 : 15) + 'px Rajdhani, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g.text, 0, 0); ctx.restore(); }
@@ -708,8 +817,8 @@ function drawRamp(rp, scroll) {
   ctx.restore();
   if (rp.crate && !rp.crate.taken) { const cpos = project(rp.x, rp.y + 240, scroll); ctx.save(); ctx.translate(cpos.x, cpos.y - 70 * cpos.s - Math.sin(elapsed * 4) * 4); ctx.scale(cpos.s * 1.4, cpos.s * 1.4); rrect(-12, -12, 24, 24, 4, C.pickup, '#fff'); glow(0, 0, 30, 'rgba(255,210,63,0.5)', 0.8); ctx.restore(); ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(cpos.x, cpos.y, 14 * cpos.s, 7 * cpos.s, 0, 0, Math.PI * 2); ctx.fill(); }
 }
-function drawCar(c, scroll) {
-  const p = project(c.x, c.y, scroll); const isCiv = c.kind === 'civ'; const w = c.w, l = c.l;
+function drawCar(c, scroll, cx, cy) {
+  const p = project(cx, cy, scroll); const isCiv = c.kind === 'civ'; const w = c.w, l = c.l;
   shadow(p, w, l);
   ctx.save(); ctx.translate(p.x, p.y); ctx.scale(p.s, p.s);
   if (c.wrecked) { ctx.rotate(c.spin); const fl = 1 - 0.5 * Math.abs(Math.sin(c.flip * Math.PI * 2)); ctx.scale(fl, 1); ctx.globalAlpha = 0.9; rrect(-w / 2, -l / 2, w, l, 4, '#3a2a2a', '#111'); if (c.debrisT > 0.5) { ctx.fillStyle = 'rgba(255,120,40,' + (c.debrisT - 0.5) + ')'; ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); return; }
@@ -725,19 +834,18 @@ function drawCar(c, scroll) {
   if (c.kind === 'gunner') { ctx.fillStyle = '#555'; ctx.fillRect(-4, -l / 2 - 6, 8, 16); }
   const brake = c.state === 'tell' && Math.floor(c.t * 12) % 2 === 0; ctx.fillStyle = brake ? '#ff6a6a' : '#7a1b1b'; ctx.fillRect(-w / 2 + 3, l / 2 - 7, 9, 4); ctx.fillRect(w / 2 - 12, l / 2 - 7, 9, 4);
   ctx.globalCompositeOperation = 'lighter'; glow(-w / 2 + 7, -l / 2 + 2, 12, 'rgba(255,59,59,0.9)', 0.9); glow(w / 2 - 7, -l / 2 + 2, 12, 'rgba(255,59,59,0.9)', 0.9);
-  if (c.hitFlash > 0) c.hitFlash -= 1 / 60;
   ctx.restore();
   // tell arrow on the road pointing at the player
   if (c.state === 'tell') { const dir = G.x < c.x ? -1 : 1; ctx.save(); ctx.translate(p.x + dir * 36 * p.s, p.y); ctx.scale(p.s, p.s); ctx.fillStyle = 'rgba(255,59,59,' + (0.5 + 0.5 * Math.sin(elapsed * 20)) + ')'; ctx.beginPath(); ctx.moveTo(dir * 16, 0); ctx.lineTo(-dir * 6, -12); ctx.lineTo(-dir * 6, 12); ctx.closePath(); ctx.fill(); ctx.restore(); }
   if (c.kind === 'gunner' && c.state === 'sight') { const a = project(c.sightX, c.y, scroll), b = project(c.sightX, c.y + 700, scroll); ctx.save(); ctx.strokeStyle = 'rgba(255,40,40,' + (0.5 + 0.5 * Math.sin(elapsed * 30)) + ')'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.restore(); }
 }
-function drawPlayer(scroll, px, py, alpha) {
-  const p = project(px, py, scroll); const z = G.jumpZ; const lift = z * 90;
+function drawPlayer(scroll, px, py, alpha, zOverride, leanOverride) {
+  const p = project(px, py, scroll); const z = zOverride !== undefined ? zOverride : G.jumpZ; const lift = z * 90; const lean = leanOverride !== undefined ? leanOverride : G.lean;
   ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(p.x + 4, p.y + 6, 34 * 0.6 * p.s * (1 - z * 0.2), 60 * 0.5 * p.s * (1 - z * 0.2), 0, 0, Math.PI * 2); ctx.fill();
   if (G.air > 0 && G.air < 0.4) { ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 26 * p.s, 14 * p.s, 0, 0, Math.PI * 2); ctx.stroke(); }
   if (G.smoke > 0 || G.armor === 1) { const a = G.armor === 1 ? 0.45 : Math.min(0.5, G.smoke * 0.3); ctx.fillStyle = 'rgba(80,80,80,' + a + ')'; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(p.x - 6 + Math.sin(elapsed * 9 + i) * 6, p.y + 30 + i * 12, 6 + i * 2.5, 0, Math.PI * 2); ctx.fill(); } }
   if (G.slamCd > 0) { ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y + 8, 30 * p.s, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - G.slamCd / T.slam.cooldown)); ctx.stroke(); }
-  ctx.save(); ctx.globalAlpha = alpha; ctx.translate(p.x, p.y - lift); ctx.scale(p.s * (1 + z * 0.25) * (2 - G.sq), p.s * (1 + z * 0.25) * G.sq); ctx.rotate(G.lean * Math.PI / 180);
+  ctx.save(); ctx.globalAlpha = alpha; ctx.translate(p.x, p.y - lift); ctx.scale(p.s * (1 + z * 0.25) * (2 - G.sq), p.s * (1 + z * 0.25) * G.sq); ctx.rotate(lean * Math.PI / 180);
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(0, 4, 44, G.nitro > 0 ? 'rgba(255,210,63,0.5)' : 'rgba(55,230,255,0.45)', 0.9); ctx.restore();
   const body = new Path2D(); body.moveTo(-17, 26); body.lineTo(17, 26); body.lineTo(15, -16); body.lineTo(0, -30); body.lineTo(-15, -16); body.closePath();
   ctx.fillStyle = C.player; ctx.fill(body); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke(body);
@@ -753,7 +861,9 @@ function drawHUD() {
   ctx.font = '700 30px Rajdhani, "Avenir Next Condensed", sans-serif'; ctx.fillStyle = C.ramp; ctx.textAlign = 'left'; ctx.fillText(fmt(G.score), 18, top + 18);
   ctx.font = '600 13px Rajdhani, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillText('BEST ' + fmt(Math.max(G.score, dailyMode ? bestDaily : best)), 18, top + 40);
   const low = G.armor === 1 && Math.sin(elapsed * 8) > 0; for (let i = 0; i < T.armor; i++) rrect(18 + i * 22, top + 52, 18, 8, 3, i < G.armor ? (low ? '#ff3b3b' : C.player) : 'rgba(255,255,255,0.15)');
-  if (G.combo > 1) { const k = clamp(G.comboT / T.combo.window, 0, 1); ctx.textAlign = 'center'; const size = 34 + G.combo * 3; ctx.font = '700 ' + size + 'px Rajdhani, "Avenir Next Condensed", sans-serif'; ctx.fillStyle = C.pickup; ctx.fillText('×' + G.combo, SW / 2, top + 22); rrect(SW / 2 - 40, top + 50, 80, 8, 3, 'rgba(255,255,255,0.15)'); rrect(SW / 2 - 40, top + 50, 80 * k, 8, 3, G.comboT < 0.5 ? '#ff3b3b' : C.pickup); }
+  // combo sits next to the score, in the corner, so the top centre (where threats arrive) stays clear (audit, UI section)
+  if (G.combo > 1) { ctx.font = '700 30px Rajdhani, "Avenir Next Condensed", sans-serif'; const sw = ctx.measureText(fmt(G.score)).width; const cx = 18 + sw + 14; const k = clamp(G.comboT / T.combo.window, 0, 1); ctx.textAlign = 'left'; const size = Math.min(40, 24 + G.combo * 2); ctx.font = '700 ' + size + 'px Rajdhani, "Avenir Next Condensed", sans-serif'; ctx.fillStyle = C.pickup; ctx.fillText('×' + G.combo, cx, top + 18); rrect(cx, top + 36, 56, 6, 3, 'rgba(255,255,255,0.15)'); rrect(cx, top + 36, 56 * k, 6, 3, G.comboT < 0.5 ? '#ff3b3b' : C.pickup); }
+  if (phase === 'over') { ctx.font = '700 13px Rajdhani, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillText('● REPLAY', SW / 2, top + 18); }
   // off-screen threats: red chevrons at the bottom for enemies behind, white at the top for the supply truck
   for (const c of G.cars) { if (!c.alive || c.wrecked) continue; if ((c.kind === 'bruiser' || c.kind === 'gunner') && c.y < G.dist - 300) { const p = project(c.x, G.dist - 280, 0); const x = SW / 2 + (c.x - REF); ctx.fillStyle = 'rgba(255,59,59,' + (0.5 + 0.5 * Math.sin(elapsed * 12)) + ')'; ctx.beginPath(); ctx.moveTo(x, H - 18); ctx.lineTo(x - 12, H - 36); ctx.lineTo(x + 12, H - 36); ctx.closePath(); ctx.fill(); } if (c.kind === 'truck' && !c.loaded && c.y > G.dist + ahead(1)) { const x = SW / 2 + (c.x - REF); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(x, top + 70); ctx.lineTo(x - 10, top + 84); ctx.lineTo(x + 10, top + 84); ctx.closePath(); ctx.fill(); } }
   if (G.vignette > 0) { const g = ctx.createRadialGradient(SW / 2, H / 2, H * 0.3, SW / 2, H / 2, H * 0.75); g.addColorStop(0, 'rgba(255,0,0,0)'); g.addColorStop(1, 'rgba(255,30,30,' + G.vignette * 0.45 + ')'); ctx.fillStyle = g; ctx.fillRect(0, 0, SW, H); }
@@ -761,33 +871,53 @@ function drawHUD() {
   if (G.ghostThumb > 0 && isTouch) { const k = (elapsed * 1.6) % 1; ctx.globalAlpha = 0.7 * Math.sin(k * Math.PI); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(SW / 2 - 70 + k * 140, H * 0.86, 22, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; ctx.font = '700 17px Rajdhani, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('FLICK', SW / 2, H * 0.86 + 44); }
   ctx.restore();
 }
+const noise1 = (t) => Math.sin(t) * 0.6 + Math.sin(t * 2.3 + 1.3) * 0.4;
 function render(dt) {
-  // directional decaying shake: spring back over ~200 ms
-  const sh = G.shake; const k = 180, d = 14; sh.vx += (-k * sh.x - d * sh.vx) * dt; sh.vy += (-k * sh.y - d * sh.vy) * dt; sh.x += sh.vx * dt; sh.y += sh.vy * dt;
-  shakeEl.style.transform = (Math.abs(sh.x) > 0.2 || Math.abs(sh.y) > 0.2) ? `translate(${sh.x}px, ${sh.y}px)` : '';
+  // shake inside the renderer (audit, hard truth 10): a directional kick that decays without overshoot, plus trauma² noise,
+  // capped at 16 pt and 2 degrees, drawn with overscan so the edges never show
+  const k = G.kick; const decay = Math.exp(-dt / 0.08); k.x *= decay; k.y *= decay; G.trauma = Math.max(0, G.trauma - dt * 1.6);
+  const tr = G.trauma * G.trauma; const shx = k.x + 16 * tr * noise1(elapsed * 31), shy = k.y + 16 * tr * noise1(elapsed * 29 + 7), rot = (2 * Math.PI / 180) * tr * noise1(elapsed * 23 + 3);
   if (G.vignette > 0) G.vignette = Math.max(0, G.vignette - dt * 2); if (G.flashT2 > 0) G.flashT2 -= dt; if (G.speedLines > 0) G.speedLines -= dt; if (G.punch > 0) G.punch -= dt;
   const targetZoom = (G.air > 0 ? 1 - 0.15 * G.jumpZ : 1 - 0.05 * clamp((G.speed - T.speed0) / 300, 0, 1)) + (G.punch > 0 ? 0.03 : 0); camZoom += (targetZoom - camZoom) * Math.min(1, dt * 8);
   camLook += (clamp(G.vx / T.maxLateral, -1, 1) * 20 - camLook) * Math.min(1, dt * 4);
-  const scroll = G.dist - ahead(LANE);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  drawRoad(scroll);
+  ctx.save(); ctx.translate(SW / 2 + shx, H / 2 + shy); ctx.rotate(rot); ctx.translate(-SW / 2, -H / 2);
+  if (phase === 'over') renderReplay(); else renderWorld(dt);
+  ctx.restore();
+  if (phase !== 'title') drawHUD();
+}
+// Death replay (audit, hard truth 9): the last 1.5 s before the wreck, at 60% speed, framed with the car high on the screen so
+// the death card's buttons sit below it. Holds on the final frame for half a second, then loops.
+function renderReplay() {
+  const R = G.replay; if (R.count === 0) { renderWorld(0); return; }
+  const span = R.count / 30 / 0.6 + 0.5; const t = G.replayT % span; const idx = Math.min(R.count - 1, Math.floor(t * 0.6 * 30));
+  const f = R.frames[(R.head - R.count + idx + REPLAY_FRAMES * 2) % REPLAY_FRAMES];
+  const scroll = f.y - ahead(0.72);
+  drawRoad(scroll, f.district);
+  for (let i = 0; i < f.n; i++) { const c = f.cars[i]; if (c.y < f.y - 300) continue; drawCar(c, scroll, c.x, c.y); }
+  drawPlayer(scroll, f.x, f.y, 1, f.jumpZ, f.lean);
+}
+function renderWorld(dt) {
+  // interpolate between the last two physics states (audit, "Smooth movement" 2): alpha = accumulator / step
+  const alpha = clamp(G.acc * 120, 0, 1); const rx = lerp(G.px, G.x, alpha), rdist = lerp(G.pdist, G.dist, alpha);
+  const scroll = rdist - ahead(LANE);
+  drawRoad(scroll, G.district);
   const items = [];
   for (const rp of G.ramps) items.push({ y: rp.y, d: () => drawRamp(rp, scroll) });
   for (const b of G.barriers) items.push({ y: b.y, d: () => { if (b.hit) return; const x0 = G.road.laneX(b.y, b.lane0) - T.laneW / 2, x1 = G.road.laneX(b.y, b.lane0 + b.lanes - 1) + T.laneW / 2; const p0 = project(x0, b.y, scroll), p1 = project(x1, b.y, scroll); ctx.fillStyle = '#ff9f1c'; ctx.fillRect(p0.x, p0.y - 8 * p0.s, p1.x - p0.x, 16 * p0.s); ctx.fillStyle = '#222'; for (let x = p0.x; x < p1.x; x += 24 * p0.s) ctx.fillRect(x, p0.y - 8 * p0.s, 12 * p0.s, 16 * p0.s); } });
   for (const b of G.barrels) if (b.alive) items.push({ y: b.y, d: () => { const p = project(b.x, b.y, scroll); ctx.save(); ctx.translate(p.x, p.y); ctx.scale(p.s, p.s); rrect(-8, -11, 16, 22, 3, '#ff9f1c', '#222'); ctx.fillStyle = '#222'; ctx.fillRect(-8, -3, 16, 5); ctx.restore(); } });
   for (const cn of G.cones) if (cn.alive) items.push({ y: cn.y, d: () => { const p = project(cn.x, cn.y, scroll); ctx.save(); ctx.translate(p.x, p.y); ctx.scale(p.s, p.s); ctx.fillStyle = '#ff9f1c'; ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(8, 8); ctx.lineTo(-8, 8); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(-4, -2, 8, 3); ctx.restore(); } });
-  for (const c of G.cars) items.push({ y: c.y, d: () => drawCar(c, scroll) });
+  for (const c of G.cars) items.push({ y: c.y, d: () => drawCar(c, scroll, lerp(c.px, c.x, alpha), lerp(c.py, c.y, alpha)) });
   for (const cr of G.crates) items.push({ y: cr.y, d: () => { const p = project(cr.x, cr.y, scroll); ctx.save(); ctx.translate(p.x, p.y - Math.sin(cr.t * 5) * 4); ctx.scale(p.s, p.s); rrect(-10, -10, 20, 20, 4, cr.kind === 'armor' ? C.player : cr.kind === 'oil' ? '#9b7bff' : C.pickup, '#fff'); glow(0, 0, 24, 'rgba(255,210,63,0.5)', 0.7); ctx.restore(); } });
   items.sort((a, b) => b.y - a.y);
   for (const it of items) { if (it.y < scroll - 120 || it.y > scroll + ahead(1.25)) continue; it.d(); }
   for (const d of G.debris) { const p = project(d.x, d.y, scroll); ctx.fillStyle = d.col; if (d.smoke) { ctx.globalAlpha = d.t; ctx.beginPath(); ctx.arc(p.x, p.y, d.s * p.s, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; } else ctx.fillRect(p.x - d.s / 2, p.y - d.s / 2, d.s * p.s, d.s * p.s * 0.7); }
-  for (const b of G.bullets) { const p = project(b.x, b.y, scroll); ctx.fillStyle = b.knock ? '#ffb070' : '#fff2a8'; ctx.fillRect(p.x - (b.knock ? 3 : 1.5), p.y - 14 * p.s, b.knock ? 6 : 3, 18 * p.s); }
-  for (const m of G.missiles) { const p = project(m.x, m.y, scroll); ctx.fillStyle = C.pickup; ctx.fillRect(p.x - 3, p.y - 12 * p.s, 6, 18 * p.s); glow(p.x, p.y + 10 * p.s, 8, 'rgba(255,160,60,0.9)', 0.8); }
+  for (const b of G.bullets) { const p = project(b.x, lerp(b.py === undefined ? b.y : b.py, b.y, alpha), scroll); ctx.fillStyle = b.knock ? '#ffb070' : '#fff2a8'; ctx.fillRect(p.x - (b.knock ? 3 : 1.5), p.y - 14 * p.s, b.knock ? 6 : 3, 18 * p.s); }
+  for (const m of G.missiles) { const p = project(m.x, lerp(m.py === undefined ? m.y : m.py, m.y, alpha), scroll); ctx.fillStyle = C.pickup; ctx.fillRect(p.x - 3, p.y - 12 * p.s, 6, 18 * p.s); glow(p.x, p.y + 10 * p.s, 8, 'rgba(255,160,60,0.9)', 0.8); }
   for (const s of G.sparks) { const p = project(s.x, s.y, scroll); ctx.fillStyle = `rgba(255,220,120,${1 - s.t / 0.4})`; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
   for (const f of G.fx) { const p = project(f.x, f.y, scroll); const k = f.t / f.life; ctx.save(); ctx.globalCompositeOperation = 'lighter'; if (f.line) { const a = project(f.x0, f.y0, scroll); ctx.strokeStyle = `rgba(255,120,80,${1 - k})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(p.x, p.y); ctx.stroke(); } else if (f.ring) { ctx.strokeStyle = `rgba(200,200,200,${1 - k})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(p.x, p.y, 20 + 50 * k, 10 + 25 * k, 0, 0, Math.PI * 2); ctx.stroke(); } else if (f.burst) { ctx.strokeStyle = `rgba(255,220,100,${1 - k})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, 10 + 30 * k, 0, Math.PI * 2); ctx.stroke(); } else { const R = (f.player ? 90 : 60) * p.s; glow(p.x, p.y, R * (0.5 + k), f.orange ? 'rgba(255,140,30,1)' : 'rgba(255,170,60,1)', (1 - k)); glow(p.x, p.y, R * 0.4 * (0.5 + k), 'rgba(255,245,200,1)', (1 - k)); for (let i = 0; i < 10; i++) { const a = i * 2.4 + f.x; const d = 70 * p.s * k; ctx.fillStyle = `rgba(255,170,60,${1 - k})`; ctx.fillRect(p.x + Math.cos(a) * d - 2, p.y + Math.sin(a) * d * 0.7 - 2, 4, 4); } } ctx.restore(); }
-  if (phase !== 'over') drawPlayer(scroll, G.x, G.dist, phase === 'dying' ? 0.6 : (G.flashT > 0 && Math.floor(elapsed * 16) % 2 === 0 ? 0.3 : 1)); if (G.flashT > 0) G.flashT -= dt;
+  drawPlayer(scroll, rx, rdist, phase === 'dying' ? 0.6 : (G.flashT > 0 && Math.floor(elapsed * 16) % 2 === 0 ? 0.3 : 1)); if (G.flashT > 0) G.flashT -= dt;
   ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; for (const p of G.pops) { const s = project(p.x, p.y, scroll); const k = p.t; ctx.globalAlpha = 1 - k * k; ctx.font = '700 ' + (p.small ? 15 : 21) + 'px Rajdhani, "Avenir Next Condensed", sans-serif'; ctx.fillStyle = p.bad ? '#b8bcc6' : C.pickup; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; ctx.fillText(p.text, s.x, s.y - 24 - k * 40); } ctx.restore();
-  if (phase !== 'title') drawHUD();
 }
 
 // ---------------- loop ----------------
@@ -798,8 +928,9 @@ function frame(t) {
     if (phase === 'countdown') { countdown -= dt; const n = Math.ceil(countdown); if (n <= 0) { phase = 'playing'; hideCallout(); ui.callout.classList.remove('big'); } else callout(String(n), '', 0, true); }
     else if (G.hitStop > 0) G.hitStop -= dt;
     else if (phase === 'title') simulate(dt, false);
-    else if (phase === 'playing') { gun(dt); simulate(dt, true); }
+    else if (phase === 'playing') simulate(dt, true);
     else if (phase === 'dying') { G.deathT += dt; simulate(dt * 0.3, false); if (G.deathT >= 1.2) finishDeath(); }
+    else if (phase === 'over') G.replayT += dt;
     render(dt);
   }
   requestAnimationFrame(frame);
@@ -814,7 +945,7 @@ function fit() {
 window.addEventListener('resize', fit);
 function start() { fit(); refreshSettings(); newRun(false); enterTitle(); try { localStorage.setItem('shunt-runs', String(Number(localStorage.getItem('shunt-runs') || 0) + 1)); } catch (e) {} requestAnimationFrame(frame); }
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start); else start();
-window.__shunt = { get phase() { return phase; }, get G() { return G; }, input, fireSpecial, trySlam, startPlaying: () => { newRun(false); startPlaying(); } };
+window.__shunt = { get phase() { return phase; }, get G() { return G; }, get T() { return T; }, input, fireSpecial, trySlam, slamTarget, startPlaying: () => { newRun(false); startPlaying(); } };
 })();
 </script>
 </body>
