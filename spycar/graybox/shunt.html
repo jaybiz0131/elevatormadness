@@ -139,6 +139,10 @@ const T = {
   // Roads with real turns (audit, Sprint C): constant-curvature arcs joined by 120 pt transitions; combat straights with gentle
   // sweepers alternate with technical sectors of hard corners and hairpins. Grip speed in a corner is sqrt(grip × radius).
   corner: { warn: 2.2, transition: 120, chevronEvery: 60, trafficSlow: 0.45, driftBonus: 1.0, driftGrip: 1.3, crestSpeed: 600, rumbleEvery: 0.08 },
+  // Downhill drops (audit, Sprint D): every fifth sector the highway tips over a mountain edge for a 30–45 s drop in a chase camera.
+  drop: { blend: 1.2, behind: 130, camH: 140, horizon: 0.36, fov: 70, fovFast: 90, speed0: 900, speedMax: 1400, over: 1500, gravityOver: 4000,
+          kickerEvery: [3500, 6000], air: { small: 1.5, medium: 2.4, big: 3.6, huge: 5 }, heat: { trick: 0.22, chain: 0.1, clean: 0.05, star: 0.08 }, overdrive: 8,
+          tricks: { front: [300, 0.8], back: [300, 0.8], roll: [250, 0.6], spin: [500, 0.9], pose: [200, 0.5] }, star: 150, rivals: [3, 5], rival: 300, fall: 450 },
   fireRate: 6, bulletSpeed: 1100, gunRange: 520, gunHalfLane: 26,
   // Slam (audit, "The Slam, corrected"): 600 pt/s for 0.11 s is about one lane; a flick is 60 stage pt in under 100 ms from a
   // thumb that moved less than 10 pt in the previous 120 ms; it only fires with an enemy within 1.4 lanes on that side and 60 pt ahead or behind
@@ -152,10 +156,10 @@ const T = {
   combo: { window: 2.5, max: 8 },
   // score by cause (audit, "Give the kills back to the player"): a wreck the player caused pays base × the cause multiplier;
   // the car is the main weapon, so Slam, shunt, ram, wall and oil kills pay 3× a gun kill; enemy-on-enemy accidents pay nothing
-  score: { weak: 100, bruiser: 250, gunner: 250, armored: 400, cause: { gun: 1, missile: 1, slam: 3, shunt: 3, ram: 3, rail: 3, wall: 3, oil: 3, stomp: 3, chain: 2, barrel: 2 },
+  score: { weak: 100, bruiser: 250, gunner: 250, armored: 400, rival: 300, cause: { gun: 1, missile: 1, slam: 3, shunt: 3, ram: 3, rail: 3, wall: 3, oil: 3, stomp: 3, chain: 2, barrel: 2, edge: 3 },
            civilian: -100, crate: 250, graze: 10, grazeCap: 3, truckLoad: 100, clean: 120, closeCall: 25, shuntEnemy: 100, barrelDouble: 150, distancePer: 100 },
   graceSeconds: 30,   // damage halved for the first 30 s only; no free pip; armor comes from the supply truck only
-  sizes: { player: [34, 60, 1.0], civ: [34, 58, 0.8], weak: [30, 52, 0.8], bruiser: [40, 70, 1.2], gunner: [40, 76, 1.3], armored: [120, 150, 3.0], truck: [56, 110, 3.0] },
+  sizes: { player: [34, 60, 1.0], civ: [34, 58, 0.8], weak: [30, 52, 0.8], bruiser: [40, 70, 1.2], gunner: [40, 76, 1.3], armored: [120, 150, 3.0], truck: [56, 110, 3.0], rival: [36, 62, 1.0] },
 };
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -184,7 +188,7 @@ class Road {
   // road space (s along the road, x across it, centre always REF). A table integrated every 20 pt gives heading and world position
   // for rendering: forward = (sin psi, cos psi), right = (cos psi, -sin psi).
   constructor(seed) {
-    this.seed = seed; this.pieces = []; this.corners = []; this.crests = []; this.sectors = []; this.end = -2400; this.curSector = null;
+    this.seed = seed; this.pieces = []; this.corners = []; this.crests = []; this.sectors = []; this.drops = []; this.end = -2400; this.curSector = null;
     this.step = 20; this.s0 = -2400; this.n = 0; this.cap = 4096; this.psi = new Float64Array(this.cap); this.X = new Float64Array(this.cap); this.Y = new Float64Array(this.cap);
     this.pi = 0; this.ci = 0; this.out = { center: REF, lanes: 4, width: 4 * T.laneW, k: 0, sector: null, corner: null, elev: 0, slope: 0 };
     this.fr = { psi: 0, X: 0, Y: 0 }; this.ensure(3000);
@@ -201,9 +205,24 @@ class Road {
     const i = this.sectors.length; const rng = mulberry32(hashI(this.seed, 1000 + i));
     let kind, len, lanes;
     if (i === 0) { kind = 'combat'; len = 9000 - this.end; lanes = 4; }   // lead-in straight: the first hairpin lands around 20 s in
+    else if (i % 5 === 0) { kind = 'drop'; len = 38000 + rng() * 14000; lanes = 3; }   // every fifth sector, about every 100 s: a downhill drop, 30-45 s long
     else { kind = this.sectors[i - 1].kind === 'combat' ? 'technical' : 'combat'; len = kind === 'combat' ? 14000 + rng() * 7000 : 7000 + rng() * 5000; lanes = kind === 'combat' ? 4 + Math.floor(rng() * 2) : 2 + Math.floor(rng() * 2); }
     const sector = { kind, s0: this.end, s1: this.end + len, lanes, lanes0: i ? this.sectors[i - 1].lanes : 4, index: i }; this.sectors.push(sector); this.curSector = sector;
-    if (kind === 'combat') {
+    if (kind === 'drop') {
+      // three routes across the road: lane 0 the fast safe road (small kickers), lane 1 the risky shortcut (big kickers and the one
+      // huge jump), lane 2 the hidden route (collectible stars). Gentle sweepers only; the slope does the rest.
+      sector.gate = sector.s0 - 1200; sector.blendS = sector.s0 - 500; sector.tunnel = sector.s1 - 500; sector.kickers = []; sector.stars = []; sector.index = i; sector.dropIndex = this.drops.length; this.drops.push(sector);
+      let cursor = sector.s0 + 900; const hugeAt = sector.s0 + len * (0.5 + rng() * 0.15); let hugeDone = false;
+      while (cursor < sector.s1 - 1500) {
+        const gapS = T.drop.kickerEvery[0] + rng() * (T.drop.kickerEvery[1] - T.drop.kickerEvery[0]);
+        for (let lane = 0; lane < 3; lane++) { if (rng() < 0.3 && lane !== 1) continue; const size = lane === 0 ? 'small' : lane === 1 ? (rng() < 0.5 ? 'big' : 'medium') : 'medium'; sector.kickers.push({ s: cursor + lane * 160, lane, size, air: T.drop.air[size], used: false }); }
+        if (!hugeDone && cursor > hugeAt) { hugeDone = true; sector.kickers.push({ s: cursor + 800, lane: 1, size: 'huge', air: T.drop.air.huge, used: false }); }
+        cursor += gapS;
+      }
+      for (let st = sector.s0 + 1500; st < sector.s1 - 1200; st += 1200) sector.stars.push({ s: st, lane: 2, taken: false });
+      let d = rng() < 0.5 ? -1 : 1; while (this.end < sector.s1 - 2000) { this.addStraight(1200 + rng() * 1500); this.addCorner('sweeper', 1500 + rng() * 1000, 15 + rng() * 25, d); d = rng() < 0.5 ? -d : d; }
+      this.addStraight(sector.s1 - this.end); sector.s1 = this.end; sector.tunnel = sector.s1 - 500;
+    } else if (kind === 'combat') {
       while (this.end < sector.s1 - 2600) { const st = 1500 + rng() * 2000; if (st > 2300 && rng() < 0.6) this.crests.push({ s: this.end + st / 2, h: 40 }); this.addStraight(st); this.addCorner('sweeper', 1200 + rng() * 800, 20 + rng() * 25, rng() < 0.5 ? -1 : 1); }
       this.addStraight(sector.s1 - this.end);
     } else {
@@ -226,6 +245,7 @@ class Road {
     // crests: a 400 pt bump; the slope says whether the car is climbing or over the top
     const C = this.crests; let j = Math.min(this.ci, Math.max(0, C.length - 1)); while (j > 0 && s < C[j].s - 200) j--; while (j + 1 < C.length && s > C[j].s + 200) j++; this.ci = j;
     o.elev = 0; o.slope = 0; if (C.length && Math.abs(s - C[j].s) < 200) { const u = (s - C[j].s) / 200; o.elev = C[j].h * 0.5 * (1 + Math.cos(Math.PI * u)); o.slope = -C[j].h * 0.5 * Math.PI / 200 * Math.sin(Math.PI * u); }
+    if (sec.kind === 'drop') { const u = s - sec.s0; o.elev = -0.3 * u + 60 * Math.sin(u / 600) + 25 * Math.sin(u / 230); o.slope = -0.3 + 0.1 * Math.cos(u / 600) + 0.11 * Math.cos(u / 230); }   // the mountainside: a steady fall with rolling bumps
     return o;
   }
   integrate(sMax) {
@@ -239,6 +259,7 @@ class Road {
     f.psi = this.psi[i] + (this.psi[i + 1] - this.psi[i]) * t; f.X = this.X[i] + (this.X[i + 1] - this.X[i]) * t; f.Y = this.Y[i] + (this.Y[i + 1] - this.Y[i]) * t; return f;
   }
   world(x, s, out) { const f = this.frame(s); const d = x - REF; out.X = f.X + Math.cos(f.psi) * d; out.Y = f.Y - Math.sin(f.psi) * d; return out; }
+  dropNear(s) { for (const d of this.drops) { if (!d.done && s >= d.gate - 100 && s < d.s1 + 600) return d; } return null; }
   cornerAhead(s, within) { for (let i = Math.max(0, this.ci2 || 0); i < this.corners.length; i++) { const c = this.corners[i]; if (c.s1 < s - 200) { this.ci2 = i; continue; } if (c.s0 > s + within) return null; if (c.s1 >= s) return c; } return null; }
   laneCount(y) { return Math.round(this.at(y).lanes); }
   laneX(y, i) { const a = this.at(y); const n = Math.round(a.lanes); i = clamp(i, 0, n - 1); return a.center - a.width / 2 + (i + 0.5) * (a.width / n); }
@@ -266,14 +287,19 @@ function roadYaw(s) { return G.road.frame(s).psi - cam.psi; }   // how a thing s
 const audio = {
   ctx: null, master: null, sfx: null, musicG: null, engine: null, engineGain: null, layers: [], nextBeat: 0, beat: 0,
   init() { if (this.ctx) return; try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } const c = this.ctx;
-    this.master = c.createGain(); this.master.connect(c.destination); this.sfx = c.createGain(); this.sfx.gain.value = S.sound ? 1 : 0; this.sfx.connect(this.master); this.musicG = c.createGain(); this.musicG.gain.value = S.music ? 0.5 : 0; this.musicG.connect(this.master);
+    this.master = c.createGain(); this.master.connect(c.destination); this.sfx = c.createGain(); this.sfx.gain.value = S.sound ? 1 : 0; this.sfx.connect(this.master); this.musicG = c.createGain(); this.musicG.gain.value = S.music ? 0.5 : 0; this.musicF = c.createBiquadFilter(); this.musicF.type = 'lowpass'; this.musicF.frequency.value = 18000; this.musicG.connect(this.musicF); this.musicF.connect(this.master);
     const g = c.createGain(); g.gain.value = 0; const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 400; const o1 = c.createOscillator(), o2 = c.createOscillator(); o1.type = 'sawtooth'; o2.type = 'square'; o1.frequency.value = 70; o2.frequency.value = 35; o1.connect(f); o2.connect(f); f.connect(g); g.connect(this.sfx); o1.start(); o2.start(); this.engine = [o1, o2, f]; this.engineGain = g; },
   resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
   // continuous driving layers: tyre squeal (rises with slip angle) and the rail screech, from one looping noise buffer
   initDrive() { if (this.drive || !this.ctx) return; const c = this.ctx; const n = c.sampleRate, buf = c.createBuffer(1, n, n), d = buf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; const src = c.createBufferSource(); src.buffer = buf; src.loop = true;
     const sq = c.createBiquadFilter(); sq.type = 'bandpass'; sq.frequency.value = 1100; sq.Q.value = 6; const sg = c.createGain(); sg.gain.value = 0; src.connect(sq); sq.connect(sg); sg.connect(this.sfx);
-    const sc = c.createBiquadFilter(); sc.type = 'highpass'; sc.frequency.value = 2600; const cg = c.createGain(); cg.gain.value = 0; src.connect(sc); sc.connect(cg); cg.connect(this.sfx); src.start();
-    this.drive = { sq, sg, cg }; },
+    const sc = c.createBiquadFilter(); sc.type = 'highpass'; sc.frequency.value = 2600; const cg = c.createGain(); cg.gain.value = 0; src.connect(sc); sc.connect(cg); cg.connect(this.sfx);
+    const wf = c.createBiquadFilter(); wf.type = 'lowpass'; wf.frequency.value = 400; const wg = c.createGain(); wg.gain.value = 0; src.connect(wf); wf.connect(wg); wg.connect(this.sfx); src.start();
+    this.drive = { sq, sg, cg, wf, wg }; },
+  stinger(n) { this.tone('square', 440 * Math.pow(1.2, n), 660 * Math.pow(1.2, n), 0.18, 0.1); this.tone('triangle', 880 * Math.pow(1.2, n), 880 * Math.pow(1.2, n), 0.3, 0.08, 0.12); },
+  crashLand() { this.noise(0.6, 0.9, 1400); this.tone('sawtooth', 160, 40, 0.5, 0.25); this.tone('sine', 55, 25, 0.6, 0.4); },
+  setMuffle(on) { if (!this.ctx) return; this.musicF.frequency.setTargetAtTime(on ? 380 : 18000, this.ctx.currentTime, on ? 0.2 : 0.05); },
+  setWind(k) { if (!this.ctx) return; this.initDrive(); const t = this.ctx.currentTime; this.drive.wg.gain.setTargetAtTime(0.14 * k, t, 0.2); this.drive.wf.frequency.setTargetAtTime(300 + 500 * k, t, 0.2); },
   setDrive(slip01, scrape01) { if (!this.ctx) return; this.initDrive(); const t = this.ctx.currentTime; this.drive.sg.gain.setTargetAtTime(0.12 * slip01, t, 0.05); this.drive.sq.frequency.setTargetAtTime(900 + 700 * slip01, t, 0.05); this.drive.cg.gain.setTargetAtTime(0.1 * scrape01, t, 0.05); },
   turbo(tier) { this.noise(0.35, 0.3 + 0.15 * tier, 1500 + 800 * tier); this.tone('sawtooth', 180 * tier, 500 * tier, 0.3, 0.07); },
   draft() { this.noise(0.5, 0.25, 1200); this.tone('square', 600, 900, 0.08, 0.06, 0.5); },
@@ -347,6 +373,7 @@ function newRun(reseed) {
   G = { road, rng: mulberry32(seed ^ 0x5bd1e995), t: 0, acc: 0, dist: 0, pdist: 0, speed: 0, cruise: T.drive.cruise, fwd: 0, x: REF, px: REF, vx: 0, targetX: REF, lean: 0, sq: 1,
         heading: 0, phi: 0, slip: 0, slipping: false, drifting: false, driftDir: 0, driftT: 0, driftTier: 0, driftCharge: 0, driftBank: 0, driftDirty: false, driftExitT: 0, wobble: 0,
         turbo: 0, turboT: 0, slipT: 0, slipBoostT: 0, braking: false, burnout: 0, popT: 0, puffAcc: 0, sparkAcc: 0, puffs: [], ribbons: [], ribL: null, ribR: null, slideVx: 0, rumbleT: 0, cornerCalls: 0, hairpins: 0, cornerLog: [], teach: null, teachT: 0, pulsed: false,
+        view: 0, viewTarget: 0, drop: null, drops: 0, heat: 0, overdrive: 0, trick: null, trickQueue: [], tricksThisJump: 0, trickLog: [], tricksDone: 0, jumpAir: 0, pose: 0, poseDone: false, spinAcc: 0, spinDir: 0, stars: 0, falls: 0, blackT: 0, tumble: 0, trickPop: null, trickPopT: 0, bigAir: false, dropTaught: false,
         drifts: 0, driftSlams: 0, turbos: 0, driftPoints: 0, driftTierMax: 0, topSpeed: 0, speedSum: 0, speedN: 0, districtsPassed: 0,
         armor: T.armor, invuln: 0, damageAcc: 0, armorLost: 0, score: 0, combo: 0, comboT: 0, comboPeak: 1, kills: 0, passiveWrecks: 0, gunKills: 0, carKills: 0, civHits: 0, slams: 0, flicks: 0, flickMisses: 0, stomps: 0, distScore: 0,
         cars: [], bullets: [], missiles: [], crates: [], ramps: [], slicks: [], barrels: [], cones: [], medians: [], gaps: [], barriers: [], signs: [], debris: [], marks: [], fx: [], pops: [], sparks: [], queue: [],
@@ -363,27 +390,32 @@ const TRAIL = 24;   // ring of recent thumb samples {x, t(ms, event timeStamp)}
 const input = {
   id: null, anchor: null, carAnchor: 0, cur: null, keys: {}, trail: [], trailN: 0, flickT: -1e9, lastKeyTap: { k: null, t: -9 }, brake: false, padId: null,
   reset() { this.id = null; this.anchor = null; this.cur = null; this.trailN = 0; this.brake = false; this.padId = null; ui.pad.classList.remove('held'); },
-  push(x, t) { if (this.trail.length < TRAIL) this.trail.push({ x, t }); const i = this.trailN % TRAIL; this.trail[i].x = x; this.trail[i].t = t; this.trailN++; },
+  push(x, t, y) { if (this.trail.length < TRAIL) this.trail.push({ x, t, y: 0 }); const i = this.trailN % TRAIL; this.trail[i].x = x; this.trail[i].t = t; this.trail[i].y = y || 0; this.trailN++; },
   sample(back) { return this.trail[(this.trailN - 1 - back + TRAIL * 2) % TRAIL]; },   // back = 0 is the newest
   // carAnchor is the car's target as an offset from the road centre, so no input means holding the lane while the road wanders
-  down(id, x, y, ts) { if (this.id !== null) return; this.id = id; this.anchor = { x, y }; this.cur = { x, y }; this.carAnchor = G ? G.targetX - G.road.at(G.dist).center : 0; this.trailN = 0; this.push(x, ts);
+  down(id, x, y, ts) { if (this.id !== null) return; this.id = id; this.anchor = { x, y }; this.cur = { x, y }; this.carAnchor = G ? G.targetX - G.road.at(G.dist).center : 0; this.trailN = 0; this.push(x, ts, y); this.lastDirX = 0; this.lastDirY = 0;
     if (S.tapSlam && G && phase === 'playing') { if (Math.abs(x - this.carAnchorScreen()) > 90) { /* tap far from the car: a Slam toward that side */ this.pendingTapSlam = x < SW / 2 ? -1 : 1; this.tapT = now; } } },
   carAnchorScreen() { return SW / 2 + (G.x - REF); },
   // Flick (audit): at least 60 stage pt in under 100 ms, from a thumb that moved less than 10 pt in the 120 ms before that, judged on
   // event timestamps rather than the frame clock. A detected flick asks for a contextual Slam; with no enemy beside the car it is
   // simply a fast lane change, which the relative drag already delivers.
-  move(id, x, y, ts) { if (id !== this.id) return; this.cur = { x, y }; this.push(x, ts);
+  move(id, x, y, ts) { if (id !== this.id) return; const prev = this.cur; this.cur = { x, y }; this.push(x, ts, y);
+    // in the air during a drop the same thumb draws tricks: a circle is a flat 360, judged on the turning of the thumb's path
+    const air = G && phase === 'playing' && G.air > 0 && G.drop;
+    if (air && prev) { const dx = x - prev.x, dy = y - prev.y; if (Math.hypot(dx, dy) >= 6) { const ang = Math.atan2(dy, dx); if (this.lastDirX || this.lastDirY) { let d = ang - Math.atan2(this.lastDirY, this.lastDirX); while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; if (Math.sign(d) !== Math.sign(G.spinAcc)) G.spinAcc = 0; G.spinAcc += d; if (Math.abs(G.spinAcc) >= 5.2) { startTrick('spin', Math.sign(G.spinAcc)); G.spinAcc = 0; } } this.lastDirX = dx; this.lastDirY = dy; } }
     if (ts - this.flickT < 250) return;   // one flick per gesture: the thumb is still moving after a flick, so nothing counts as quiet for a while
     const n = Math.min(this.trailN, TRAIL); let start = null;
-    for (let b = 1; b < n; b++) { const p = this.sample(b); if (ts - p.t > T.slam.flickMs) break; if (Math.abs(x - p.x) >= T.slam.flickPt) start = b; }
+    for (let b = 1; b < n; b++) { const p = this.sample(b); if (ts - p.t > T.slam.flickMs) break; if (Math.abs(x - p.x) >= T.slam.flickPt || (air && Math.abs(y - p.y) >= T.slam.flickPt)) start = b; }
     if (start === null) return;
     const s0 = this.sample(start); let quiet = true;
-    for (let b = start + 1; b < n; b++) { const p = this.sample(b); if (s0.t - p.t > T.slam.quietMs) break; if (Math.abs(p.x - s0.x) >= T.slam.quietPt) { quiet = false; break; } }
+    for (let b = start + 1; b < n; b++) { const p = this.sample(b); if (s0.t - p.t > T.slam.quietMs) break; if (Math.abs(p.x - s0.x) >= T.slam.quietPt || (air && Math.abs(p.y - s0.y) >= T.slam.quietPt)) { quiet = false; break; } }
     if (!quiet) return;
+    this.flickT = ts;
+    if (air) { const dx = x - s0.x, dy = y - s0.y; if (Math.abs(dy) > Math.abs(dx)) startTrick(dy < 0 ? 'front' : 'back', 1); else startTrick('roll', Math.sign(dx)); return; }
     if (G && phase === 'playing') G.flicks++;
-    this.flickT = ts; trySlam(Math.sign(x - s0.x)); },
+    trySlam(Math.sign(x - s0.x)); },
   up(id) { if (id === this.id) { if (this.pendingTapSlam && now - this.tapT < 0.15) trySlam(this.pendingTapSlam); this.pendingTapSlam = 0; if (G) this.carAnchor = G.targetX - G.road.at(G.dist).center; this.id = null; this.anchor = null; this.cur = null; this.trailN = 0; } },
-  key(k) { if (k === 'left' || k === 'right') { const dir = k === 'left' ? -1 : 1; if (this.lastKeyTap.k === k && now - this.lastKeyTap.t < 0.25) trySlam(dir); this.lastKeyTap = { k, t: now }; } if (k === 'slamL') trySlam(-1); if (k === 'slamR') trySlam(1); },
+  key(k) { const air = G && phase === 'playing' && G.air > 0 && G.drop; if (k === 'left' || k === 'right') { const dir = k === 'left' ? -1 : 1; if (this.lastKeyTap.k === k && now - this.lastKeyTap.t < 0.25) { if (air) startTrick('roll', dir); else trySlam(dir); } this.lastKeyTap = { k, t: now }; } if (k === 'slamL') { if (air) startTrick('roll', -1); else trySlam(-1); } if (k === 'slamR') { if (air) startTrick('roll', 1); else trySlam(1); } },
   target(rc, dt) {
     if (this.keys.left || this.keys.right) { this.carAnchor += ((this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0)) * T.maxLateral * S.sens * dt; return rc + this.carAnchor; }
     if (!this.anchor) return rc + this.carAnchor;
@@ -404,8 +436,8 @@ stage.addEventListener('pointerdown', e => {
 stage.addEventListener('pointermove', e => { const list = e.getCoalescedEvents ? e.getCoalescedEvents() : null; if (list && list.length) { for (const ce of list) { const p = stagePoint(ce); input.move(ce.pointerId, p.x, p.y, ce.timeStamp || e.timeStamp); } } else { const p = stagePoint(e); input.move(e.pointerId, p.x, p.y, e.timeStamp); } });
 const upH = e => input.up(e.pointerId);
 stage.addEventListener('pointerup', upH); stage.addEventListener('pointercancel', upH);
-const KEYS = { ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', ' ': 'fire', j: 'fire', q: 'slamL', e: 'slamR', Shift: 'brake', s: 'brake', ArrowDown: 'brake' };
-window.addEventListener('keydown', e => { const k = KEYS[e.key]; if (!k) { if (e.key === 'p' || e.key === 'Escape') togglePause(); return; } e.preventDefault(); audio.init(); audio.resume(); if (e.repeat) return; if (phase === 'title') { newRun(false); startPlaying(); } if (phase === 'over' && k === 'fire') { restartAndPlay(false); return; } if (k === 'fire') fireSpecial(); else input.key(k); input.keys[k] = true; if (k === 'brake') { input.brake = true; ui.pad.classList.add('held'); } });
+const KEYS = { ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', ' ': 'fire', j: 'fire', q: 'slamL', e: 'slamR', Shift: 'brake', s: 'brake', ArrowDown: 'brake', w: 'front', ArrowUp: 'front', x: 'back', z: 'spin' };
+window.addEventListener('keydown', e => { const k = KEYS[e.key]; if (!k) { if (e.key === 'p' || e.key === 'Escape') togglePause(); return; } e.preventDefault(); audio.init(); audio.resume(); if (e.repeat) return; if (phase === 'title') { newRun(false); startPlaying(); } if (phase === 'over' && k === 'fire') { restartAndPlay(false); return; } if (k === 'fire') fireSpecial(); else if (k === 'front' || k === 'back' || k === 'spin') startTrick(k, 1); else input.key(k); input.keys[k] = true; if (k === 'brake') { input.brake = true; ui.pad.classList.add('held'); } });
 window.addEventListener('keyup', e => { const k = KEYS[e.key]; if (k) { e.preventDefault(); input.keys[k] = false; if (k === 'brake') { input.brake = false; ui.pad.classList.remove('held'); } } });
 // pedal pad: hold to brake; hold while steering to drift; release after a drift for the mini-turbo
 ui.pad.addEventListener('pointerdown', e => { e.preventDefault(); audio.init(); audio.resume(); input.brake = true; input.padId = e.pointerId; ui.pad.classList.add('held'); try { ui.pad.setPointerCapture(e.pointerId); } catch (err) {} });
@@ -423,7 +455,7 @@ function showCard(kind) {
   if (kind === 'pause') { ui.title.textContent = 'Paused'; ui.score.textContent = fmt(G.score); ui.lines.textContent = ''; ui.primary.textContent = 'RESUME'; ui.a.textContent = 'RESTART'; ui.b.textContent = 'SETTINGS'; ui.c.hidden = false; ui.c.textContent = 'QUIT TO TITLE'; }
   if (kind === 'over') { const isBest = G.score > (dailyMode ? bestDaily : best); ui.title.textContent = G.cause || 'Wrecked'; ui.score.textContent = fmt(G.score); ui.newBest.hidden = !isBest; const earned = Math.round(G.score * 0.1);
     // no "next car at 5,000" promise: the garage does not exist yet (audit, UI section)
-    ui.lines.innerHTML = 'BEST ' + fmt(Math.max(G.score, dailyMode ? bestDaily : best)) + ' &nbsp;·&nbsp; WRECKS ' + G.kills + ' &nbsp;·&nbsp; SLAMS ' + G.slams + ' &nbsp;·&nbsp; COMBO ×' + G.comboPeak + ' &nbsp;·&nbsp; ' + Math.round(G.t) + ' s<br>DRIFTS ' + G.drifts + (G.driftSlams ? ' &nbsp;·&nbsp; DRIFT SLAMS ' + G.driftSlams : '') + ' &nbsp;·&nbsp; TOP ' + Math.round(G.topSpeed) + ' pt/s' + (G.hairpins ? ' &nbsp;·&nbsp; HAIRPINS ' + G.hairpins : '') + '<br>' + (G.civHits ? G.civHits + ' civilian' + (G.civHits > 1 ? 's' : '') + ' hit &nbsp;·&nbsp; ' : '') + '+' + fmt(earned) + ' cash';
+    ui.lines.innerHTML = 'BEST ' + fmt(Math.max(G.score, dailyMode ? bestDaily : best)) + ' &nbsp;·&nbsp; WRECKS ' + G.kills + ' &nbsp;·&nbsp; SLAMS ' + G.slams + ' &nbsp;·&nbsp; COMBO ×' + G.comboPeak + ' &nbsp;·&nbsp; ' + Math.round(G.t) + ' s<br>DRIFTS ' + G.drifts + (G.driftSlams ? ' &nbsp;·&nbsp; DRIFT SLAMS ' + G.driftSlams : '') + ' &nbsp;·&nbsp; TOP ' + Math.round(G.topSpeed) + ' pt/s' + (G.hairpins ? ' &nbsp;·&nbsp; HAIRPINS ' + G.hairpins : '') + (G.drops ? ' &nbsp;·&nbsp; DROPS ' + G.drops + ' &nbsp;·&nbsp; TRICKS ' + G.tricksDone + ' &nbsp;·&nbsp; STARS ' + G.stars : '') + '<br>' + (G.civHits ? G.civHits + ' civilian' + (G.civHits > 1 ? 's' : '') + ' hit &nbsp;·&nbsp; ' : '') + '+' + fmt(earned) + ' cash';
     ui.primary.textContent = 'DRIVE AGAIN'; ui.a.textContent = 'NEW ROAD'; ui.b.textContent = 'TITLE'; ui.c.hidden = false; ui.c.textContent = 'SETTINGS'; }
   if (kind === 'settings') { ui.title.textContent = 'Settings'; ui.lines.textContent = ''; ui.primary.textContent = 'BACK'; ui.a.hidden = true; ui.b.hidden = true; ui.c.hidden = true; refreshSettings(); return; }
   ui.a.hidden = false; ui.b.hidden = false;
@@ -512,6 +544,7 @@ function spawnEnemy() {
   G.lastSpawnBurst.push(G.t); if (G.lastSpawnBurst.length > 8) G.lastSpawnBurst.shift();
 }
 function director() {
+  if (G.drop) { if (G.t - G.lastEvent > 4 && G.drop.state === 'drop') event(); return; }   // the drop runs itself: kickers, stars and rivals
   const minute = G.t / 60; const technical = G.road.at(G.dist).sector.kind === 'technical'; const cap = technical ? 2 : minute < 1 ? 2 : minute < 3 ? 3 : minute < 5 ? 4 : 5;
   const onScreen = G.cars.filter(c => c.alive && !c.wrecked && c.kind !== 'truck' && c.y > G.dist - 300 && c.y < G.dist + 900);
   const enemies = onScreen.filter(c => c.kind !== 'civ').length;
@@ -550,6 +583,7 @@ function simulate(dt, playing) {
   if (playing) { if (G.scripted) script(); else director(); }
   audio.setEngine(clamp((G.speed - 300) / 600, 0, 1) + (G.air > 0 ? 0.2 : 0) + (G.burnout > 0 ? 0.6 : 0), playing);
   audio.setDrive(playing && G.air <= 0 ? clamp((Math.abs(G.slip) * 180 / Math.PI - 8) / 30, 0, 1) + (G.burnout > 0 ? 0.6 : 0) : 0, playing && G.scraping ? 1 : 0);
+  audio.setWind(playing && G.drop ? clamp((G.speed - 700) / 700, 0, 1) + (G.air > 0 ? 0.4 : 0) : 0); audio.setMuffle(playing && G.drop && G.air > 0 && G.jumpAir >= 2.4);
   audio.music(dt, G.wave === 'pressure' ? (minute > 1 ? 2 : 1) : 0);
   if (playing && G.armor <= 0 && phase === 'playing') die();
 }
@@ -572,7 +606,9 @@ function physics(dt, playing) {
   // rails: scrape = sparks, small speed loss, capped graze points (bug 6)
   const left = rc - rw / 2 + T.sizes.player[0] / 2, right = rc + rw / 2 - T.sizes.player[0] / 2;
   let scraping = false;
-  if (G.x < left) { G.x = left; G.vx = Math.max(G.vx, 0); scraping = true; } if (G.x > right) { G.x = right; G.vx = Math.min(G.vx, 0); scraping = true; }
+  const onMountain = G.drop && G.drop.state === 'drop';
+  if (onMountain) { if (playing && G.air <= 0 && G.tumble <= 0 && (G.x < left - 14 || G.x > right + 14)) fallOff(); G.x = clamp(G.x, left - 14, right + 14); }
+  else { if (G.x < left) { G.x = left; G.vx = Math.max(G.vx, 0); scraping = true; } if (G.x > right) { G.x = right; G.vx = Math.min(G.vx, 0); scraping = true; } }
   G.scraping = scraping && G.air <= 0 && playing; if (G.scraping && G.drifting) G.driftDirty = true;
   if (scraping && G.air <= 0 && playing) { G.grazeT += dt; spark(G.x + (G.x <= left + 0.5 ? -17 : 17), G.dist, 1); G.boost = Math.max(G.boost - 40 * dt, -40); if (G.grazeT > 0.25 && G.grazePaid < T.score.grazeCap) { G.grazeT = 0; G.grazePaid++; addScore(T.score.graze, G.x, G.dist, true); } } else { G.grazeT = 0; if (!scraping) G.grazePaid = 0; }
   // median / barrier for the player
@@ -586,7 +622,7 @@ function physics(dt, playing) {
   if (playing) { G.topSpeed = Math.max(G.topSpeed, G.speed); G.speedSum += G.speed * dt; G.speedN += dt; driveEffects(dt); }
   if (playing) { G.distScore += (G.dist - prevDist); while (G.distScore >= T.score.distancePer) { G.distScore -= T.score.distancePer; G.score += 1; } }
   // jump
-  if (G.air > 0) { G.air -= dt; const k = 1 - G.air / G.airTotal; G.jumpZ = Math.sin(k * Math.PI) * (G.crestAir ? 0.35 : 1); if (G.air <= 0) { const crest = G.crestAir; G.crestAir = false; if (crest) { G.jumpZ = 0; G.sq = 0.94; audio.land(); buzz(15); } else land(); } }
+  if (G.air > 0) { G.air -= dt; const k = 1 - G.air / G.airTotal; G.jumpZ = Math.sin(k * Math.PI) * (G.crestAir ? 0.35 : 1); if (G.air <= 0) { const crest = G.crestAir; G.crestAir = false; if (crest) { G.jumpZ = 0; G.sq = 0.94; audio.land(); buzz(15); } else if (G.drop && G.drop.state === 'drop') landDrop(); else land(); } }
   // hill crests: at speed the car goes light over the top and gets a little air
   if (playing && G.air <= 0 && G.speed > T.corner.crestSpeed) { const C = G.road.crests; for (let i = Math.max(0, G.road.ci - 1); i < C.length; i++) { const cs = C[i].s; if (cs > G.dist + 50) break; if (prevDist < cs && G.dist >= cs) { G.air = G.airTotal = 0.25 + 0.25 * clamp((G.speed - 600) / 300, 0, 1); G.crestAir = true; audio.launch(); buzz([10, 20]); break; } } }
   // rumble strip on the inside of a corner: a buzz and a light judder
@@ -613,12 +649,14 @@ function physics(dt, playing) {
     } else if (c.kind === 'bruiser' || c.kind === 'gunner') {
       if (c.lane >= G.road.laneCount(c.y)) c.lane = G.road.laneCount(c.y) - 1;
       enemyAI(c, dt, playing);
-    }
+    } else if (c.kind === 'rival') rivalAI(c, dt, playing);
     if (c.wrecked || c.shunted || c.spinOut > 0) { const kk = G.road.at(c.y).k; c.vx += -Math.sign(kk) * c.speed * c.speed * Math.abs(kk) * dt; }   // no grip: the corner throws it outward
     c.x += c.vx * dt; c.vx *= Math.exp(-dt * 2.5);
     c.y += c.speed * dt;
     // rails and walls: a car moving sideways fast enough wrecks on them
-    if (c.x < l || c.x > r) { if ((Math.abs(c.vx) > T.shuntThreshold || c.slammed) && c.kind !== 'civ' && c.kind !== 'truck') { wreck(c, c.slammed ? 'slam' : 'rail'); continue; } c.x = clamp(c.x, l, r); c.vx *= -0.2; }
+    if (c.falling) { c.fallT = (c.fallT || 0) + dt; if (c.fallT > 1.5) c.alive = false; continue; }
+    if (G.road.at(c.y).sector.kind === 'drop') { if (c.x < l - 14 || c.x > r + 14) { wreck(c, 'edge', c.credit); c.falling = true; c.fallT = 0; continue; } }
+    else if (c.x < l || c.x > r) { if ((Math.abs(c.vx) > T.shuntThreshold || c.slammed) && c.kind !== 'civ' && c.kind !== 'truck') { wreck(c, c.slammed ? 'slam' : 'rail'); continue; } c.x = clamp(c.x, l, r); c.vx *= -0.2; }
     for (const m of G.medians) if (c.y > m.y0 - 30 && c.y < m.y1 + 30) { const mx0 = G.road.laneX(c.y, m.lane0) - 6, mx1 = G.road.laneX(c.y, m.lane0 + m.lanes - 1) + 6; if (c.x + hw > mx0 && c.x - hw < mx1) { if ((Math.abs(c.vx) > T.shuntThreshold || c.slammed) && c.kind !== 'civ' && c.kind !== 'truck') { wreck(c, 'wall'); break; } c.x = c.x < (mx0 + mx1) / 2 ? mx0 - hw : mx1 + hw; c.vx = 0; } }
     if (c.y < G.dist - 700 || c.y > G.dist + 2600) c.alive = false;
   }
@@ -660,7 +698,91 @@ function physics(dt, playing) {
   // districts
   if (G.dist > G.nextDistrictY - G.speed * 3 && G.signShown !== G.district + 1) { G.signShown = G.district + 1; G.signs.push({ y: G.nextDistrictY - 100, text: DISTRICTS[(G.district + 1) % 4].sign, big: true }); }
   if (G.dist > G.nextDistrictY) { G.district = (G.district + 1) % 4; G.districtsPassed++; G.nextDistrictY += T.drive.cruise * T.districtEvery; }
+  if (playing) dropStep(dt, prevDist);
   if (playing) recordReplay(dt);   // last 1.5 s at 30 Hz into the pre-allocated ring, shown on the death card
+}
+// ---------------- downhill drops (audit, Sprint D) ----------------
+// The drop is a road sector: the camera blends to a chase view at the gate, gravity takes the car past 1,400 pt/s, kickers every
+// 3-5 s give air, tricks drawn with the thumb fill the Heat meter, a full meter is 8 s of Overdrive, and the tunnel at the end
+// brings the top-down view back. Rivals come down with you; the road has no rails, only the edge.
+function dropStep(dt, prevDist) {
+  const sec = G.road.dropNear(G.dist);
+  if (sec && !G.drop) G.drop = { sector: sec, state: 'gate', t: 0, rivalsSpawned: false, signed: false };
+  if (!G.drop) { G.viewTarget = 0; G.view = Math.max(0, G.view - dt / T.drop.blend); return; }
+  const d = G.drop; d.t += dt; const dsec = d.sector;
+  if (d.state === 'gate') { if (!d.signed && G.dist > dsec.gate - 400) { d.signed = true; G.signs.push({ y: dsec.gate, text: 'DROP AHEAD', big: true }); callout('Drop ahead', '', 1200); event(); }
+    if (G.dist >= dsec.blendS) { d.state = 'blend'; G.viewTarget = 1; G.drops++; audio.tone('sine', 110, 220, 1.2, 0.12); buzz([20, 40, 80]); if (!dsec.rivalsSpawned) { dsec.rivalsSpawned = true; spawnRivals(dsec); } } }
+  if (d.state === 'blend' && G.dist >= dsec.s0) { d.state = 'drop'; }
+  if (d.state === 'drop' && G.dist >= dsec.tunnel) { d.state = 'tunnel'; G.viewTarget = 0; G.blackT = 0.6; callout('Tunnel', '', 700); }
+  if (d.state === 'tunnel' && G.dist >= dsec.s1 + 200) { dsec.done = true; G.drop = null; G.heat = 0; G.overdrive = 0; for (const c of G.cars) if (c.kind === 'rival' && !c.wrecked) c.alive = false; return; }
+  // rivals: three to five come down with you; when fewer than two are left another joins from behind
+  if (d.state === 'drop' && G.dist < dsec.tunnel - 3000) { d.rivalT = (d.rivalT || 0) - dt; if (d.rivalT <= 0) { d.rivalT = 5; const alive = G.cars.filter(c => c.kind === 'rival' && c.alive && !c.wrecked).length; if (alive < 2) { const c = spawnCar('rival', Math.floor(G.rng() * 3), -380); c.factor = 1.02 + G.rng() * 0.1; c.hp = 5; c.tint = ['#ff6b35', '#b56bff', '#ff3b9a', '#8bff5a', '#ffb347'][Math.floor(G.rng() * 5)]; c.routeLane = c.lane; c.air = 0; c.airTotal = 0; c.z = 0; c.bumpT = 0; c.rearWarn = 1; } } }
+  G.view += clamp(G.viewTarget - G.view, -dt / T.drop.blend, dt / T.drop.blend);
+  if (d.state !== 'drop') return;
+  // kickers in the player's path
+  for (const k of dsec.kickers) { if (k.used || k.s < G.dist - 200 || k.s > G.dist + 50) continue; const kx = G.road.laneX(k.s, k.lane); if (prevDist < k.s && G.dist >= k.s && Math.abs(G.x - kx) < T.laneW * 0.5 && G.air <= 0) { k.used = true; launchKicker(k); } }
+  for (const st of dsec.stars) { if (st.taken || Math.abs(st.s - G.dist) > 40) continue; if (Math.abs(G.x - G.road.laneX(st.s, st.lane)) < 24) { st.taken = true; G.stars++; G.heat = Math.min(1, G.heat + T.drop.heat.star); addScore(T.drop.star, G.x, G.dist, false, 'STAR'); audio.chime(); buzz(10); G.fx.push({ x: G.x, y: G.dist, t: 0, life: 0.4, burst: true }); event(); } }
+  // tricks in the air
+  if (G.air > 0) { if (G.trick) { const tr = G.trick; tr.t += dt; if (tr.t >= tr.dur) finishTrick(); }
+    else if (G.trickQueue.length) { G.trick = G.trickQueue.shift(); G.trick.t = 0; }
+    if (input.brake && input.id !== null && !G.poseDone) { G.pose += dt; if (G.pose >= 0.4) { G.poseDone = true; G.pose = 0; startTrick('pose', 1); } } else G.pose = 0;
+    // the first drop teaches one trick: time slows on the first jump until the swipe
+    if (!G.dropTaught && !G.trick && G.tricksThisJump === 0 && G.jumpAir >= 1.5 && G.teachT <= 0) { G.teachT = 2; G.slowmo = 2; G.slowmoRate = 0.3; G.teach = 'trick'; callout('Swipe up', 'to flip', 1800); } }
+  if (G.teach === 'trick' && G.trick) { G.dropTaught = true; G.teach = null; G.teachT = 0; G.slowmo = 0; hideCallout(); }
+  if (G.overdrive > 0) { G.overdrive -= dt; G.speedLines = 0.2; if (G.overdrive <= 0) { callout('Overdrive over', '', 700); } }
+  if (G.tumble > 0) G.tumble -= dt;
+  if (G.trickPopT > 0) G.trickPopT -= dt;
+}
+function spawnRivals(sec) {
+  const n = T.drop.rivals[0] + Math.floor(G.rng() * (T.drop.rivals[1] - T.drop.rivals[0] + 1));
+  for (let i = 0; i < n; i++) { const lane = i % 3; const c = spawnCar('rival', lane, 300 + i * 220); c.factor = 0.92 + G.rng() * 0.14; c.hp = 5; c.tint = ['#ff6b35', '#b56bff', '#ff3b9a', '#8bff5a', '#ffb347'][i % 5]; c.routeLane = lane; c.air = 0; c.airTotal = 0; c.z = 0; c.bumpT = 0; }
+}
+function rivalAI(c, dt, playing) {
+  const target = G.drop && G.drop.state === 'drop' ? (T.drop.speed0 + (T.drop.speedMax - T.drop.speed0) * clamp((c.y - G.drop.sector.s0) / T.drop.gravityOver, 0, 1)) * c.factor : G.cruise * c.factor;
+  c.speed += (target - c.speed) * Math.min(1, dt * 1.5);
+  if (c.air > 0) { c.air -= dt; const k = 1 - c.air / c.airTotal; c.z = Math.sin(k * Math.PI); if (c.air <= 0) c.z = 0; }
+  else if (G.drop) { for (const k of G.drop.sector.kickers) { if (Math.abs(k.s - c.y) < c.speed * dt + 2 && k.lane === c.routeLane && c.y <= k.s) { c.air = c.airTotal = k.air * 0.8; break; } } }
+  if (!playing || c.spinOut > 0) return;
+  // keep the route, and when a kicker is coming and the player is near, lean over to bump them off their line
+  const tx = G.road.laneX(c.y, c.routeLane); const nearPlayer = Math.abs(c.y - G.dist) < 140;
+  if (c.bumpT > 0) { c.bumpT -= dt; c.x += Math.sign(G.x - c.x) * 110 * dt; }
+  else { c.x += (tx - c.x) * Math.min(1, dt * 2.5); if (nearPlayer && G.drop && G.rng() < dt * 0.4) c.bumpT = 0.6; }
+  if (G.rng() < dt * 0.15) c.routeLane = clamp(c.routeLane + (G.rng() < 0.5 ? -1 : 1), 0, 2);
+}
+function launchKicker(k) {
+  const speedK = clamp(G.speed / 1100, 0.7, 1.25); G.air = G.airTotal = G.jumpAir = k.air * speedK; G.tricksThisJump = 0; G.poseDone = false; G.spinAcc = 0; G.bigAir = k.size === 'huge' || G.jumpAir >= 3;
+  if (k.size === 'huge') { G.slowmo = 0.3; G.slowmoRate = 0.3; callout('Huge', '', 500, true); }
+  audio.launch(); buzz([10, 20, 30, 40]); event();
+}
+function startTrick(name, dir) {
+  if (!G || phase !== 'playing' || G.air <= 0 || !G.drop) return;
+  const spec = T.drop.tricks[name]; if (!spec) return;
+  const tr = { name, dir, pts: spec[0], dur: spec[1], t: 0 };
+  if (G.trick) { if (G.trickQueue.length < 2) G.trickQueue.push(tr); } else G.trick = tr;
+  audio.tone('triangle', 500, 900, 0.1, 0.06);
+}
+function finishTrick() {
+  const tr = G.trick; G.trick = null; G.tricksThisJump++; G.tricksDone++;
+  const airK = 1 + Math.min(2, G.jumpAir) / 4, chainK = 1 + 0.5 * (G.tricksThisJump - 1), sigK = (G.tricksThisJump >= 3 && G.overdrive > 0) ? 2.5 : 1;
+  const pts = Math.round(tr.pts * airK * chainK * sigK); addScore(pts, G.x, G.dist, false, '');
+  G.trickPop = (tr.name === 'front' ? 'FRONT FLIP' : tr.name === 'back' ? 'BACKFLIP' : tr.name === 'roll' ? 'BARREL ROLL' : tr.name === 'spin' ? '360 SPIN' : 'STUNT POSE') + (G.tricksThisJump > 1 ? '  ×' + G.tricksThisJump : '') + '  +' + fmt(pts); G.trickPopT = 1.2; G.trickLog.push(tr.name);
+  addHeat(T.drop.heat.trick + T.drop.heat.chain * (G.tricksThisJump - 1)); audio.stinger(G.tricksThisJump); buzz(15);
+}
+function addHeat(h) { G.heat = Math.min(1, G.heat + h); if (G.heat >= 1 && G.overdrive <= 0) { G.overdrive = T.drop.overdrive; G.heat = 0; callout('Overdrive', 'double points', 1200, true); audio.nitro(); audio.stinger(4); buzz([30, 30, 30, 30, 120]); G.punch = 0.12; G.speedLines = 1; } }
+function fallOff() {
+  G.falls++; G.tumble = 1.0; G.blackT = 0.45; G.trick = null; G.trickQueue.length = 0; G.combo = 0; G.comboT = 0;
+  damage(1, null, 'Fell off the mountain'); G.speed = Math.min(G.speed, T.drop.fall); const a = G.road.at(G.dist); G.x = clamp(G.x, REF - a.width / 2 + 30, REF + a.width / 2 - 30); G.targetX = G.x; input.carAnchor = G.x - REF; G.vx = 0; G.heading = G.phi = 0;
+  audio.crashLand(); kickShake(0, 0, 1); callout('Off the edge', '', 900);
+}
+// landing in a drop: wheels down within 25° (trick finished) is a boost; a trick almost done costs speed; a trick mid-air is a tumble
+function landDrop() {
+  const unfinished = G.trick; const p = unfinished ? unfinished.t / unfinished.dur : 1; G.trickQueue.length = 0;
+  if (unfinished && p < 0.72) { G.trick = null; G.tumble = 0.8; G.blackT = 0.2; damage(1, null, 'Crashed a landing'); G.speed = Math.min(G.speed, T.drop.fall); G.combo = 0; G.comboT = 0; audio.crashLand(); kickShake(0, 0, 1); G.pops.push({ x: G.x, y: G.dist, text: 'CRASH LANDING', t: 0, bad: true }); G.trickPopT = 0; }
+  else if (unfinished) { G.trick = null; G.speed *= 0.7; G.pops.push({ x: G.x, y: G.dist, text: 'SLOPPY LANDING', t: 0, bad: true }); audio.land(); kickShake(0, 6, 0.4); }
+  else { const n = G.tricksThisJump; G.boost = n ? 250 : 150; G.speedLines = 0.8; addHeat(T.drop.heat.clean); G.punch = 0.08; audio.land(); audio.tone('sine', 60, 40, 0.3, 0.3); kickShake(0, 4, 0.3); buzz(40); if (n) addScore(100 * n, G.x, G.dist, false, 'CLEAN LANDING'); if (n >= 3) { G.bestMoment = G.t; callout('Signature', '', 800, true); } }
+  // landing on a rival
+  for (const c of G.cars) { if (!c.alive || c.wrecked || c.kind !== 'rival') continue; if (Math.abs(c.x - G.x) < c.w / 2 + 10 && Math.abs(c.y - G.dist) < c.l / 2 + 20) { wreck(c, 'stomp', true); G.stomps++; } }
+  G.jumpZ = 0; G.sq = 0.88; G.bigAir = false; G.fx.push({ x: G.x, y: G.dist, t: 0, life: 0.4, ring: true }); event();
 }
 const isAlive = c => c.alive;
 function creditCar(c, how) { c.credit = true; c.how = how; c.creditT = 1.5; }
@@ -677,18 +799,21 @@ function driveSpeed(dt, playing) {
   if (!playing) { G.speed += (G.cruise * 0.5 - G.speed) * Math.min(1, dt * 2); G.braking = false; return; }
   if (G.burnout > 0) { G.burnout -= dt; G.speed = 0; G.braking = false; if (G.burnout <= 0) { G.speed = 320; callout('Go', '', 600, true); audio.launch(); buzz([10, 30]); } return; }
   let target = G.cruise;
+  if (G.drop && G.drop.state === 'drop') target = T.drop.speed0 + (T.drop.speedMax - T.drop.speed0) * clamp((G.dist - G.drop.sector.s0) / T.drop.gravityOver, 0, 1);   // gravity keeps building on the slope
+  if (G.overdrive > 0) target = T.drop.over;
+  if (G.tumble > 0) target = Math.min(target, T.drop.fall);
   if (G.turboT > 0) { G.turboT -= dt; target += G.turbo; if (G.turboT <= 0) G.popT = 0.35; }
   if (G.slipBoostT > 0) { G.slipBoostT -= dt; target += D.slipBoost; }
   if (G.nitro > 0) { G.nitro -= dt; target = D.nitro; if (G.nitro <= 0) G.popT = 0.5; }
   if (G.detour > 0) { G.detour -= dt; target *= 0.8; }
-  target = Math.min(target, G.nitro > 0 ? D.nitro : D.top);
+  target = Math.min(target, G.overdrive > 0 ? T.drop.over : G.nitro > 0 ? D.nitro : (G.drop && G.drop.state === 'drop') ? T.drop.speedMax + 150 : D.top);
   const braking = input.brake && !G.drifting && G.air <= 0;
   if (braking) { if (!G.braking) audio.brake(); G.braking = true; G.speed = Math.max(D.minSpeed, G.speed - D.brake * dt); }
   else { G.braking = false; const accel = D.top / D.throttle; if (G.speed < target) G.speed = Math.min(target, G.speed + accel * dt); else G.speed += (target - G.speed) * Math.min(1, dt * 1.5); }
   if (G.drifting) G.speed -= G.speed * T.drift.loss * dt;
   // transient boost (set by landings, scrapes and hits) applied over about a third of a second
   if (G.boost !== 0) { const k = Math.min(1, dt * 3); G.speed += G.boost * k; G.boost -= G.boost * k; if (Math.abs(G.boost) < 2) G.boost = 0; }
-  G.speed = clamp(G.speed, G.air > 0 ? G.speed : 0, D.nitro);
+  G.speed = clamp(G.speed, G.air > 0 ? G.speed : 0, T.drop.over);
   if (G.popT > 0) G.popT -= dt;
 }
 // Steering: the thumb sets a target lateral position; the car reaches it by yawing (30° in grip, 240°/s), and sideways speed is
@@ -867,7 +992,7 @@ function slamTarget(dir) {
   return null;
 }
 function trySlam(dir) {
-  if (!G || phase !== 'playing' || G.slamCd > 0 || G.slamT > 0) return false;
+  if (!G || phase !== 'playing' || G.slamCd > 0 || G.slamT > 0 || G.air > 0) return false;
   const target = slamTarget(dir); if (!target) { G.flickMisses++; return false; }
   // the burst covers about one lane (0.11 s at 600 pt/s); a target sitting a little further out gets a slightly longer burst so the Slam connects
   const need = Math.abs(target.x - G.x) - (target.w + T.sizes.player[0]) / 2 + 8;
@@ -902,9 +1027,9 @@ function wreck(c, how, credit) {
   G.fx.push({ x: c.x, y: c.y, t: 0, life: 0.6, big: true }); addMark(c.x, c.y, 3, false);
   for (let i = 0; i < 4; i++) addDebris(c.x, c.y, (G.rng() * 2 - 1) * 260, c.speed + (G.rng() - 0.3) * 200, 1 + G.rng(), '#3a2a2a', 6 + G.rng() * 6, false);
   if (!credit) { G.passiveWrecks++; audio.wreck(); kickShake(0, 0, 0.35); event(); return; }
-  const base = c.kind === 'bruiser' ? T.score.bruiser : c.kind === 'gunner' ? T.score.gunner : c.kind === 'armored' ? T.score.armored : T.score.weak;
+  const base = c.kind === 'bruiser' ? T.score.bruiser : c.kind === 'gunner' ? T.score.gunner : c.kind === 'armored' ? T.score.armored : c.kind === 'rival' ? T.score.rival : T.score.weak;
   const mul = T.score.cause[how] || 1;
-  const label = how === 'stomp' ? 'STOMP' : how === 'chain' ? 'CHAIN WRECK' : how === 'slam' ? 'SLAM KILL' : how === 'shunt' ? 'SHUNT' : how === 'ram' ? 'RAMMED' : how === 'oil' ? 'SPUN OUT' : how === 'wall' || how === 'rail' ? 'INTO THE WALL' : how === 'barrel' ? 'BLASTED' : '';
+  const label = how === 'stomp' ? 'STOMP' : how === 'chain' ? 'CHAIN WRECK' : how === 'slam' ? 'SLAM KILL' : how === 'shunt' ? 'SHUNT' : how === 'ram' ? 'RAMMED' : how === 'oil' ? 'SPUN OUT' : how === 'wall' || how === 'rail' ? 'INTO THE WALL' : how === 'barrel' ? 'BLASTED' : how === 'edge' ? 'OFF THE EDGE' : '';
   G.kills++; if (how === 'gun' || how === 'missile') G.gunKills++; else G.carKills++; if (G.wreckLog) G.wreckLog.push(G.t.toFixed(1) + ' ' + c.kind + ' ' + how + ' ' + (c.state || ''));
   G.combo = Math.min(T.combo.max, G.combo + 1); G.comboT = T.combo.window; G.comboPeak = Math.max(G.comboPeak, G.combo);
   addScore(base * mul, c.x, c.y, false, label);
@@ -924,7 +1049,7 @@ function explodeBarrel(b, credit) {
   event();
 }
 function addScore(base, x, y, quiet, label) {
-  const mul = quiet ? 1 : Math.max(1, G.combo); const p = Math.round(base * mul); G.score = Math.max(0, G.score + p);
+  const mul = (quiet ? 1 : Math.max(1, G.combo)) * (G.overdrive > 0 && base > 0 ? 2 : 1); const p = Math.round(base * mul); G.score = Math.max(0, G.score + p);   // Overdrive doubles everything
   if (x !== undefined) G.pops.push({ x, y, text: (p < 0 ? '' : '+') + fmt(p) + (label ? ' ' + label : ''), t: 0, bad: p < 0, small: quiet && !label });
 }
 function spark(x, y, n) { for (let i = 0; i < n; i++) { const s = pool.sparks.pop() || {}; s.x = x; s.y = y; s.vx = (G.rng() * 2 - 1) * 260; s.vy = -G.speed * 0.5 + (G.rng() * 2 - 1) * 120; s.t = 0; s.col = null; G.sparks.push(s); } }
@@ -1061,6 +1186,7 @@ function drawCar(c, scroll, cx, cy) {
   if (c.wrecked) { ctx.rotate(roadYaw(cy) + c.spin); const fl = 1 - 0.5 * Math.abs(Math.sin(c.flip * Math.PI * 2)); ctx.scale(fl, 1); ctx.globalAlpha = 0.9; rrect(-w / 2, -l / 2, w, l, 4, '#3a2a2a', '#111'); if (c.debrisT > 0.5) { ctx.fillStyle = 'rgba(255,120,40,' + (c.debrisT - 0.5) + ')'; ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); return; }
   ctx.rotate(roadYaw(cy) + (c.lean || 0) * Math.PI / 180 + (c.spin || 0));
   if (c.kind === 'truck') { rrect(-w / 2, -l / 2, w, l, 6, C.truck, '#eafff0'); if (!c.loaded) { const g = ctx.createLinearGradient(0, -l / 2 - 30, 0, -l / 2 + 30); g.addColorStop(0, '#bfffd6'); g.addColorStop(1, '#1f8f48'); ctx.fillStyle = g; ctx.fillRect(-w / 2 + 6, -l / 2 - 30, w - 12, 60); ctx.strokeStyle = C.pickup; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-12, -l / 2 - 14); ctx.lineTo(0, -l / 2 + 2); ctx.lineTo(12, -l / 2 - 14); ctx.stroke(); } ctx.fillStyle = '#1c2a22'; ctx.fillRect(-w / 2 + 8, l / 2 - 30, w - 16, 22); ctx.globalCompositeOperation = 'lighter'; glow(0, l / 2 + 10, 14, 'rgba(255,210,63,0.9)', 0.4 + 0.4 * Math.sin(elapsed * 6)); ctx.restore(); return; }
+  if (c.kind === 'rival') { rrect(-w / 2, -l / 2, w, l, 7, c.tint || '#ff6b35', '#fff'); rrect(-w / 2 + 6, -l / 2 + 12, w - 12, 16, 4, 'rgba(20,20,30,0.6)'); ctx.fillStyle = '#fff'; ctx.fillRect(-3, -l / 2 + 30, 6, l - 40); ctx.restore(); return; }
   if (isCiv) { rrect(-w / 2, -l / 2, w, l, 10, c.tint, 'rgba(255,255,255,0.8)'); rrect(-w / 2 + 6, -l / 2 + 12, w - 12, 16, 4, 'rgba(60,70,90,0.5)'); if (c.blink > 0 && Math.floor(c.blink * 8) % 2 === 0) { ctx.fillStyle = '#ffb347'; ctx.fillRect(c.blinkDir < 0 ? -w / 2 - 3 : w / 2 - 2, -l / 2 + 4, 5, 8); } if (c.honk > 0) { ctx.fillStyle = '#fff'; ctx.font = '700 14px Rajdhani'; ctx.textAlign = 'center'; ctx.fillText('!', 0, -l / 2 - 8); } ctx.restore(); return; }
   if (c.kind === 'armored') { rrect(-w / 2, -l / 2, w, l, 6, '#20242b', C.enemyAccent, 3); ctx.fillStyle = '#2e333b'; ctx.fillRect(-w / 2 + 10, -l / 2 + 12, w - 20, l - 40); ctx.fillStyle = C.enemyAccent; ctx.fillRect(-w / 2 + 4, -4, w - 8, 8); for (const sx of [-w / 2 + 8, w / 2 - 18]) { ctx.fillStyle = C.enemyAccent; ctx.fillRect(sx, l / 2 - 10, 10, 5); } ctx.globalCompositeOperation = 'lighter'; glow(-w / 2 + 12, l / 2 - 6, 14, 'rgba(255,59,59,0.9)', 0.8); glow(w / 2 - 12, l / 2 - 6, 14, 'rgba(255,59,59,0.9)', 0.8); ctx.restore(); return; }
   // enemies: dark body, red roof stripe, glowing red headlights (ahead = +y = screen up)
@@ -1107,6 +1233,10 @@ function drawHUD() {
   // combo sits next to the score, in the corner, so the top centre (where threats arrive) stays clear (audit, UI section)
   if (G.combo > 1) { ctx.font = '700 30px Rajdhani, "Avenir Next Condensed", sans-serif'; const sw = ctx.measureText(fmt(G.score)).width; const cx = 18 + sw + 14; const k = clamp(G.comboT / T.combo.window, 0, 1); ctx.textAlign = 'left'; const size = Math.min(40, 24 + G.combo * 2); ctx.font = '700 ' + size + 'px Rajdhani, "Avenir Next Condensed", sans-serif'; ctx.fillStyle = C.pickup; ctx.fillText('×' + G.combo, cx, top + 18); rrect(cx, top + 36, 56, 6, 3, 'rgba(255,255,255,0.15)'); rrect(cx, top + 36, 56 * k, 6, 3, G.comboT < 0.5 ? '#ff3b3b' : C.pickup); }
   if (phase === 'over') { ctx.font = '700 13px Rajdhani, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillText('● REPLAY', SW / 2, top + 18); }
+  // drops: the Heat meter along the bottom edge, the trick name high on the screen where it never covers the landing zone
+  if (G.drop && G.view > 0.2) { const y = H - 10 - (window.safeBottom || 0); rrect(18, y - 3, SW - 36, 6, 3, 'rgba(255,255,255,0.15)'); rrect(18, y - 3, (SW - 36) * (G.overdrive > 0 ? 1 : G.heat), 6, 3, G.overdrive > 0 ? (Math.sin(elapsed * 20) > 0 ? '#ffd23f' : '#ff7a2a') : G.heat > 0.7 ? '#ff7a2a' : C.pickup); ctx.font = '700 11px Rajdhani, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.textAlign = 'left'; ctx.fillText(G.overdrive > 0 ? 'OVERDRIVE ' + G.overdrive.toFixed(1) : 'HEAT', 18, y - 12);
+    if (G.trickPopT > 0 && G.trickPop) { ctx.font = '700 22px Rajdhani, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = C.pickup; ctx.globalAlpha = Math.min(1, G.trickPopT * 3); ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 6; ctx.fillText(G.trickPop, SW / 2, top + 120); ctx.globalAlpha = 1; ctx.shadowBlur = 0; }
+    if (G.air > 0 && G.jumpAir >= 1.5) { ctx.font = '700 13px Rajdhani, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fillText('AIR ' + G.air.toFixed(1), SW / 2, top + 96); } }
   // off-screen threats: red chevrons at the bottom for enemies behind, white at the top for the supply truck
   for (const c of G.cars) { if (!c.alive || c.wrecked) continue; if ((c.kind === 'bruiser' || c.kind === 'gunner') && c.y < G.dist - 300) { const x = SW / 2 + (c.x - REF); ctx.fillStyle = 'rgba(255,59,59,' + (0.5 + 0.5 * Math.sin(elapsed * 12)) + ')'; ctx.beginPath(); ctx.moveTo(x, H - 18); ctx.lineTo(x - 12, H - 36); ctx.lineTo(x + 12, H - 36); ctx.closePath(); ctx.fill(); } if (c.kind === 'truck' && !c.loaded && c.y > G.dist + ahead(1)) { const x = SW / 2 + (c.x - REF); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(x, top + 70); ctx.lineTo(x - 10, top + 84); ctx.lineTo(x + 10, top + 84); ctx.closePath(); ctx.fill(); } }
   if (G.vignette > 0) { const g = ctx.createRadialGradient(SW / 2, H / 2, H * 0.3, SW / 2, H / 2, H * 0.75); g.addColorStop(0, 'rgba(255,0,0,0)'); g.addColorStop(1, 'rgba(255,30,30,' + G.vignette * 0.45 + ')'); ctx.fillStyle = g; ctx.fillRect(0, 0, SW, H); }
@@ -1120,7 +1250,7 @@ function render(dt) {
   // capped at 16 pt and 2 degrees, drawn with overscan so the edges never show
   const k = G.kick; const decay = Math.exp(-dt / 0.08); k.x *= decay; k.y *= decay; G.trauma = Math.max(0, G.trauma - dt * 1.6);
   const tr = G.trauma * G.trauma; const shx = k.x + 16 * tr * noise1(elapsed * 31), shy = k.y + 16 * tr * noise1(elapsed * 29 + 7), rot = (2 * Math.PI / 180) * tr * noise1(elapsed * 23 + 3);
-  if (G.vignette > 0) G.vignette = Math.max(0, G.vignette - dt * 2); if (G.flashT2 > 0) G.flashT2 -= dt; if (G.speedLines > 0) G.speedLines -= dt; if (G.punch > 0) G.punch -= dt;
+  if (G.vignette > 0) G.vignette = Math.max(0, G.vignette - dt * 2); if (G.flashT2 > 0) G.flashT2 -= dt; if (G.speedLines > 0) G.speedLines -= dt; if (G.punch > 0) G.punch -= dt; if (G.blackT > 0) G.blackT -= dt;
   // show more road at speed: zoom out up to 20% and let the car sit lower; pull out 5% and roll 5° into a drift
   const targetZoom = (G.air > 0 ? 1 - 0.15 * G.jumpZ : 1 - 0.2 * clamp((G.speed - 480) / 420, 0, 1)) + (G.punch > 0 ? 0.04 : 0) - (G.drifting ? 0.05 : 0); camZoom += (targetZoom - camZoom) * Math.min(1, dt * 6);
   const targetRoll = G.drifting ? -G.driftDir * 5 * Math.PI / 180 : 0; camRoll += (targetRoll - camRoll) * Math.min(1, dt * 5);
@@ -1128,8 +1258,9 @@ function render(dt) {
   camLook += (clamp(G.vx / T.maxLateral, -1, 1) * 20 - camLook) * Math.min(1, dt * 4);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.save(); ctx.translate(SW / 2 + shx, H * 0.7 + shy); ctx.rotate(rot + (phase === 'over' ? 0 : camRoll)); ctx.translate(-SW / 2, -H * 0.7);
-  if (phase === 'over') renderReplay(); else renderWorld(dt);
+  if (phase === 'over') renderReplay(); else { const mix = smooth(G.view); if (mix < 0.999) renderWorld(dt); if (mix > 0.001) { if (mix < 0.999) ctx.globalAlpha = mix; renderChase(dt); ctx.globalAlpha = 1; } }
   ctx.restore();
+  if (G.blackT > 0) { ctx.fillStyle = 'rgba(0,0,0,' + clamp(G.blackT * 2, 0, 1) + ')'; ctx.fillRect(0, 0, SW, H); }
   if (phase !== 'title') drawHUD();
 }
 // Death replay (audit, hard truth 9): the last 1.5 s before the wreck, at 60% speed, framed with the car high on the screen so
@@ -1142,6 +1273,60 @@ function renderReplay() {
   drawRoad(scroll, f.district);
   for (let i = 0; i < f.n; i++) { const c = f.cars[i]; if (c.y < f.y - 300) continue; drawCar(c, scroll, c.x, c.y); }
   drawPlayer(scroll, f.x, f.y, 1, f.jumpZ, f.lean);
+}
+// ---------------- chase renderer for the drops: a pseudo-3D road behind the car ----------------
+// The camera rides 130 pt behind and 140 pt above the car, heading where the road heads. Everything goes from road space to
+// world space to camera space (forward f, right r) as in the top-down view, then through a true pinhole: scale = F / f,
+// x = centre + r × scale, y = horizon + (camera height − elevation) × scale. The field of view widens from 70° to 90° with speed.
+const CH = { sx: new Float64Array(160), lx: new Float64Array(160), rx: new Float64Array(160), y: new Float64Array(160), s: new Float64Array(160), f: new Float64Array(160), sc: new Float64Array(160), elev: new Float64Array(160) };
+let chaseX = REF, chasePsi = 0;
+function renderChase(dt) {
+  const D = T.drop; const alpha = clamp(G.acc * 120, 0, 1); const rx = lerp(G.px, G.x, alpha), rdist = lerp(G.pdist, G.dist, alpha);
+  const air = G.jumpZ; const behind = D.behind + 30 * air * (G.bigAir ? 1.4 : 0.7), camH = D.camH + 70 * air * (G.bigAir ? 1.6 : 1);   // big air: the camera rises with the car and eases back to show the height
+  chaseX += (rx - chaseX) * Math.min(1, dt * 6);
+  const camS = rdist - behind; const fovDeg = D.fov + (D.fovFast - D.fov) * clamp((G.speed - 900) / 500, 0, 1); const F = (SW / 2) / Math.tan(fovDeg / 2 * Math.PI / 180);
+  const here = G.road.frame(camS).psi, lead = G.road.frame(rdist + 0.3 * G.speed).psi; const psiT = here + clamp(lead - here, -0.3, 0.3); chasePsi += (psiT - chasePsi) * Math.min(1, dt * 5);
+  setCamera(camS, chasePsi); const camElev = G.road.at(camS).elev + camH; const horizonY = H * D.horizon + 12 * air;
+  const projC = (x, s, elev) => { G.road.world(x, s, WP); const dx = WP.X - cam.X, dy = WP.Y - cam.Y; const f = dx * cam.fx + dy * cam.fy, r = dx * cam.rx + dy * cam.ry; if (f < 8) return null; const sc = F / f; return { x: SW / 2 + (r - (chaseX - REF)) * sc, y: horizonY + (camElev - elev) * sc, sc, f }; };
+  // sky, sun, and two mountain silhouettes that slide with the camera heading
+  const sky = ctx.createLinearGradient(0, -OV, 0, horizonY); sky.addColorStop(0, '#6fa8ff'); sky.addColorStop(1, '#e9f1ff'); ctx.fillStyle = sky; ctx.fillRect(-OV, -OV, SW + 2 * OV, horizonY + OV);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; glow(SW * 0.75 - chasePsi * 200, horizonY - 120, 70, 'rgba(255,240,200,0.9)', 0.8); ctx.restore();
+  for (const layer of [[0.55, '#8fa8c8', 170, 1.7], [0.8, '#5c7493', 110, 2.6]]) { const [k, col, hgt, freq] = layer; ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(-OV, horizonY + 2); for (let x = -OV; x <= SW + OV; x += 12) { const u = (x + chasePsi * 400 * k) / 100; const yv = horizonY - hgt * (0.35 + 0.3 * Math.sin(u * freq) + 0.2 * Math.sin(u * freq * 2.7 + 1) + 0.15 * Math.sin(u * freq * 5.1 + 2)) * k; ctx.lineTo(x, yv); } ctx.lineTo(SW + OV, horizonY + 2); ctx.closePath(); ctx.fill(); }
+  ctx.fillStyle = '#5a6b60'; ctx.fillRect(-OV, horizonY, SW + 2 * OV, H + OV - horizonY);   // the mountainside below the horizon
+  // road samples, near to far, stored then painted far to near
+  let n = 0; for (let s = camS + 20; s < camS + 5200 && n < 160; s += s - camS < 600 ? 20 : s - camS < 1600 ? 40 : 100) { const a = G.road.at(s); const elev = a.elev; const pl = projC(REF - a.width / 2, s, elev); const pr = projC(REF + a.width / 2, s, elev); const pc = projC(REF, s, elev); if (!pl || !pr || !pc) break; CH.lx[n] = pl.x; CH.rx[n] = pr.x; CH.y[n] = (pl.y + pr.y) / 2; CH.sx[n] = pc.x; CH.s[n] = s; CH.f[n] = pc.f; CH.sc[n] = pc.sc; CH.elev[n] = elev; n++; }
+  const Dd = DISTRICTS[G.district];
+  for (let i = n - 2; i >= 0; i--) {
+    const sA = CH.s[i]; const band = Math.floor(sA / 320) % 2 === 0; const w0 = CH.rx[i] - CH.lx[i], w1 = CH.rx[i + 1] - CH.lx[i + 1];
+    // snow shoulders and the drop beyond the edge
+    quad4(CH.lx[i] - w0 * 0.5, CH.y[i], CH.rx[i] + w0 * 0.5, CH.y[i], CH.rx[i + 1] + w1 * 0.5, CH.y[i + 1], CH.lx[i + 1] - w1 * 0.5, CH.y[i + 1], band ? '#e8edf2' : '#dde3ea');
+    quad4(CH.lx[i], CH.y[i], CH.rx[i], CH.y[i], CH.rx[i + 1], CH.y[i + 1], CH.lx[i + 1], CH.y[i + 1], band ? Dd.dark : Dd.road);
+    quad4(CH.lx[i] - 3 * CH.sc[i], CH.y[i], CH.lx[i] + 3 * CH.sc[i], CH.y[i], CH.lx[i + 1] + 3 * CH.sc[i + 1], CH.y[i + 1], CH.lx[i + 1] - 3 * CH.sc[i + 1], CH.y[i + 1], '#f6f6f6'); quad4(CH.rx[i] - 3 * CH.sc[i], CH.y[i], CH.rx[i] + 3 * CH.sc[i], CH.y[i], CH.rx[i + 1] + 3 * CH.sc[i + 1], CH.y[i + 1], CH.rx[i + 1] - 3 * CH.sc[i + 1], CH.y[i + 1], '#f6f6f6');
+    if (Math.floor(sA / 40) % 2 === 0) for (const k of [1, 2]) { const x0 = CH.lx[i] + w0 * k / 3, x1 = CH.lx[i + 1] + w1 * k / 3; quad4(x0 - 1.5 * CH.sc[i], CH.y[i], x0 + 1.5 * CH.sc[i], CH.y[i], x1 + 1.5 * CH.sc[i + 1], CH.y[i + 1], x1 - 1.5 * CH.sc[i + 1], CH.y[i + 1], C.lane); }
+    if (G.drop && G.drop.sector && sA >= G.drop.sector.tunnel - 40) { quad4(CH.lx[i] - w0 * 0.1, CH.y[i], CH.rx[i] + w0 * 0.1, CH.y[i], CH.rx[i + 1] + w1 * 0.1, CH.y[i + 1], CH.lx[i + 1] - w1 * 0.1, CH.y[i + 1], '#121418'); }   // the tunnel mouth
+    // kickers and stars on this stretch
+    if (G.drop && G.drop.sector) { for (const k of G.drop.sector.kickers) { if (k.s < sA || k.s >= CH.s[i + 1]) continue; const a = G.road.at(k.s); const kx = G.road.laneX(k.s, k.lane); const hw = T.laneW * 0.48; const hgt = k.size === 'huge' ? 44 : k.size === 'big' ? 30 : k.size === 'medium' ? 22 : 14; const p0 = projC(kx - hw, k.s - 100, a.elev), p1 = projC(kx + hw, k.s - 100, a.elev), p2 = projC(kx + hw, k.s, a.elev + hgt), p3 = projC(kx - hw, k.s, a.elev + hgt); if (p0 && p1 && p2 && p3) { quad4(p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, k.size === 'huge' ? '#ffd23f' : k.used ? '#9aa3b2' : '#f4f6f8'); const q0 = projC(kx - hw, k.s, a.elev), q1 = projC(kx + hw, k.s, a.elev); if (q0 && q1) quad4(p3.x, p3.y, p2.x, p2.y, q1.x, q1.y, q0.x, q0.y, '#5b6370'); } }
+      for (const st of G.drop.sector.stars) { if (st.taken || st.s < sA || st.s >= CH.s[i + 1]) continue; const a = G.road.at(st.s); const p = projC(G.road.laneX(st.s, st.lane), st.s, a.elev + 24 + Math.sin(elapsed * 4) * 6); if (!p) continue; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(elapsed * 2); ctx.fillStyle = C.pickup; const r = 10 * p.sc; ctx.fillRect(-r, -r, 2 * r, 2 * r); ctx.restore(); glow(p.x, p.y, 20 * p.sc, 'rgba(255,210,63,0.6)', 0.8); } }
+  }
+  // cars and the player, far to near; a car's height above the road is its jump
+  const sprites = [];
+  for (const c of G.cars) { if (!c.alive || c.y < camS + 30) continue; const a = G.road.at(c.y); const z = (c.z || 0) * 90 - (c.falling ? (c.fallT || 0) * 300 : 0); const p = projC(lerp(c.px, c.x, alpha), lerp(c.py, c.y, alpha), a.elev + z); if (p) sprites.push({ f: p.f, d: () => drawCarChase(c, p, c.tint || (c.kind === 'civ' ? '#cfe6ff' : c.kind === 'weak' ? '#3a3d46' : '#1a1b1f'), c.wrecked, 0, 0, 0) }); }
+  { const a = G.road.at(rdist); const p = projC(rx, rdist, a.elev + G.jumpZ * 110 * (G.bigAir ? 1.6 : 1)); if (p && phase !== 'over') { const tr = G.trick; const k = tr ? tr.t / tr.dur : 0; const pitch = tr && (tr.name === 'front' || tr.name === 'back') ? (tr.name === 'front' ? 1 : -1) * k * Math.PI * 2 : 0; const roll = tr && tr.name === 'roll' ? tr.dir * k * Math.PI * 2 : 0; const yaw = tr && tr.name === 'spin' ? tr.dir * k * Math.PI * 2 : (G.lean * Math.PI / 180) * 0.5; sprites.push({ f: p.f, d: () => { drawCarChase({ kind: 'player', w: 34, l: 60 }, p, C.player, false, pitch, roll, yaw, tr && tr.name === 'pose'); if (G.jumpZ > 0) { ctx.fillStyle = 'rgba(0,0,0,0.3)'; const ps = projC(rx, rdist, a.elev); if (ps) { ctx.beginPath(); ctx.ellipse(ps.x, ps.y, 20 * ps.sc, 8 * ps.sc, 0, 0, Math.PI * 2); ctx.fill(); } } } }); } }
+  sprites.sort((a, b) => b.f - a.f); for (const sp of sprites) sp.d();
+  // speed lines at drop speed and the pops
+  if (G.speed > 1000 || G.speedLines > 0) { const k = clamp((G.speed - 1000) / 400, 0, 1) + (G.speedLines > 0 ? 0.5 : 0); ctx.strokeStyle = 'rgba(255,255,255,' + Math.min(0.6, k * 0.4) + ')'; ctx.lineWidth = 2; for (let i = 0; i < 14; i++) { const ang = (i / 14) * Math.PI * 2 + elapsed * 0.3; const r0 = 180 + ((elapsed * 1200 + i * 97) % 300); ctx.beginPath(); ctx.moveTo(SW / 2 + Math.cos(ang) * r0, horizonY + 40 + Math.sin(ang) * r0 * 0.9); ctx.lineTo(SW / 2 + Math.cos(ang) * (r0 + 70), horizonY + 40 + Math.sin(ang) * (r0 + 70) * 0.9); ctx.stroke(); } }
+  ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; for (const p of G.pops) { const a = G.road.at(p.y); const s = projC(p.x, p.y, a.elev); if (!s) continue; const k = p.t; ctx.globalAlpha = 1 - k * k; ctx.font = '700 ' + (p.small ? 15 : 21) + 'px Rajdhani, "Avenir Next Condensed", sans-serif'; ctx.fillStyle = p.bad ? '#b8bcc6' : C.pickup; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; ctx.fillText(p.text, s.x, s.y - 40 - k * 40); } ctx.restore();
+}
+// a car seen from behind: body, roof, tail lights; tricks rotate it (pitch foreshortens and shows the underside, roll the side, yaw spins)
+function drawCarChase(c, p, col, wrecked, pitch, roll, yaw, pose) {
+  const sc = p.sc; const w = c.w * sc * 1.15, h = c.w * 0.62 * sc * 1.15;
+  ctx.save(); ctx.translate(p.x, p.y - h * 0.5); ctx.rotate(yaw || 0);
+  const cp = Math.cos(pitch || 0), cr = Math.cos(roll || 0); ctx.scale(Math.max(0.15, Math.abs(cr)), Math.max(0.15, Math.abs(cp)));
+  const under = cp < 0 || cr < 0; const body = wrecked ? '#3a2a2a' : under ? '#2b2f36' : col;
+  rrect(-w / 2, -h / 2, w, h, 4 * sc, body, under ? '#111' : 'rgba(255,255,255,0.7)', 1.2 * sc);
+  if (!under && !wrecked) { rrect(-w * 0.34, -h * 0.5 - h * 0.45, w * 0.68, h * 0.5, 3 * sc, c.kind === 'player' ? C.playerDark : 'rgba(30,34,42,0.85)'); ctx.fillStyle = c.kind === 'player' && G.braking ? '#ff5a5a' : '#8a1d1d'; ctx.fillRect(-w / 2 + 3 * sc, h * 0.1, w * 0.2, h * 0.18); ctx.fillRect(w / 2 - 3 * sc - w * 0.2, h * 0.1, w * 0.2, h * 0.18); }
+  if (pose) { ctx.fillStyle = '#ffd23f'; ctx.fillRect(w / 2 - 2 * sc, -h * 0.9, 4 * sc, h * 0.5); }
+  ctx.restore();
 }
 function renderWorld(dt) {
   // interpolate between the last two physics states (audit, "Smooth movement" 2): alpha = accumulator / step
@@ -1195,7 +1380,7 @@ function fit() {
 window.addEventListener('resize', fit);
 function start() { fit(); refreshSettings(); newRun(false); enterTitle(); try { localStorage.setItem('shunt-runs', String(Number(localStorage.getItem('shunt-runs') || 0) + 1)); } catch (e) {} requestAnimationFrame(frame); }
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start); else start();
-window.__shunt = { get phase() { return phase; }, get G() { return G; }, get T() { return T; }, get S() { return S; }, input, fireSpecial, trySlam, slamTarget, startPlaying: () => { newRun(false); startPlaying(); } };
+window.__shunt = { get phase() { return phase; }, get G() { return G; }, get T() { return T; }, get S() { return S; }, input, fireSpecial, trySlam, slamTarget, startTrick, startPlaying: () => { newRun(false); startPlaying(); }, skipTo: (s) => { G.dist = G.pdist = s; G.road.ensure(s + 3000); G.nextDistrictY = Math.max(G.nextDistrictY, s + 5000); } };
 })();
 </script>
 </body>
