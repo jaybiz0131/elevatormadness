@@ -24,6 +24,8 @@ export function createThreeRenderer(canvas, opts = {}) {
   const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, alpha: false });
   // ?lite=1: half resolution, no shadows, no post: for headless bots on software GL, where the sim must run at pace
   const LITE = new URLSearchParams(location.search).get('lite') === '1';
+  // ?cam=pitch,dist,fov overrides the road camera for comparison shots (e.g. ?cam=47,76,42)
+  { const c = new URLSearchParams(location.search).get('cam'); if (c) { const [p, d, f] = c.split(',').map(Number); if (p) CAM.pitch = p; if (d) CAM.dist = d; if (f) CAM.fov = f; } }
   renderer.shadowMap.enabled = !LITE; renderer.shadowMap.type = PCFShadowMap; renderer.toneMapping = 0; renderer.autoClear = true; renderer.info.autoReset = false;
   const scene = new Scene();
   const roadCam = new RoadCamera(view.SW / H); const camera = roadCam.cam;

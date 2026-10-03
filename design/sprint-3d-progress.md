@@ -31,3 +31,15 @@ Stop Point 1: waiting on Jack's answers (look choice, iPhone ?bench=1 screenshot
 - `tools/pipeline` pattern: run recordings, replays, hairpins, postcards, bench, check, soak sequentially from one shell script.
 - Replays: `graybox/replays/base-*.json` (flag off, Sprint C baselines) and `shunt/replays/wall-*.json` (flag on, step 6 baselines)
   must both match on every build; `replays/beauty.json` is the bench and postcard run (seed 3, flag off, 90 s).
+
+## Sprint 4 (driving v2 + weapons on buttons), in progress
+Jack's calls after Stop Point 1: the sim is open again. Done in step A (commit "Sprint 4 step A"):
+- GAS (hold) to 1,300 pt/s, coast back to cruise, BRAKE to 260 then stop and reverse to -220 while held (`T.drive`).
+- The 360: pad held + thumb dragged a lane past the road edge for 0.4 s at speed > 480 → spin at 420°/s, pays 300 + tier-3 turbo (`T.spin`).
+- FIRE (hold): rotary guns spin up 0.3 s, 12 rounds/s along the heading with 10° aim assist, heat → 1.4 s rest (`T.rotary`); bullets carry vx, vy.
+- SPECIAL (tap) fires the special (missiles/oil/nitro). Keys: W/Up gas, S/Down/Shift brake, Space/J/F fire, K/X special.
+- Hero car (hero.js) is the player model; gun pods slide out with G.gunSpin; muzzle glow at the tips. Camera pulls back to 1,300.
+- Replay format version 2 (off, brake, gas, fire, special, slam, flicks, p); v1 replays still load (fire → special). Old shunt
+  baselines retired; new ones recorded with `--sync` bots (sim-paced) into replays/.
+- `?lite=1` (half res, no shadows/post) for headless bots; `?cam=pitch,dist,fov` for camera comparison shots.
+- This container's SwiftShader is ~4 fps at full quality: use `--sync` for every bot; never two browsers at once.
