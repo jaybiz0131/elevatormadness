@@ -15,15 +15,18 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const out = process.argv[2] || path.join(here, 'out');
 const seconds = parseFloat(process.argv[3] || '120');
 const mode = process.argv[4] || 'active';
+// --seed=N fixes the run seed; --record=path writes the per-step input replay and state hashes when the run ends
+const opt = Object.fromEntries(process.argv.slice(5).filter(a => a.startsWith('--')).map(a => { const [k, v] = a.slice(2).split('='); return [k, v === undefined ? true : v]; }));
+const seed = opt.seed !== undefined ? Number(opt.seed) : null;
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error' && !/ERR_CERT|net::/.test(m.text())) errors.push('console: ' + m.text()); });
-await page.goto('file://' + path.join(here, 'index.html'));
+await page.goto('file://' + path.join(here, 'index.html') + (seed !== null ? '?seed=' + seed : ''));
 await page.waitForTimeout(600);
 await page.screenshot({ path: path.join(out, 'shunt-title.png') });
-await page.evaluate(() => { window.__shunt.startPlaying(); window.__shunt.G.wreckLog = []; });
+await page.evaluate(({ rec, mode }) => { window.__shunt.startPlaying(); window.__shunt.G.wreckLog = []; if (rec) window.__shunt.record(mode); }, { rec: !!opt.record, mode });
 let samples = 0, twoPlus = 0, maxGap = 0, sweepN = 0, sweepSlamsBefore = 0;
 const t0 = Date.now();
 let sweepTimer = 0, pointerDown = false, driftTimer = 0, cornerShot = false;
@@ -83,4 +86,5 @@ console.log('time with 2+ cars on screen:', (100 * twoPlus / Math.max(1, samples
 console.log('longest gap with no event:', maxGap.toFixed(2), 's  (target <= 3 s)');
 console.log('wreck log:', await page.evaluate(() => (window.__shunt.G.wreckLog || []).join(' ; ')));
 console.log('errors', errors.length ? errors : 'none');
+if (opt.record) { const fs = await import('node:fs'); const r = await page.evaluate((mode) => window.__shunt.exportReplay(mode), mode); fs.writeFileSync(opt.record, JSON.stringify(r)); console.log('replay written:', opt.record, 'steps', r.steps, 'runs', r.runs.length, 'hashes', r.hashes.length / 2, 'seed', r.seed); }
 await browser.close();
