@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Sky } from './sky.js';
 import { createPost } from './post.js';
 import { LOOKS } from './looks.js';
+import { buildHero } from './hero.js';
 // profile points are [x along the car from the nose (0) to the tail (1), height in metres]; the car is `length` metres long
 export const DESIGNS = [
   { name: 'A  Wedge', length: 4.5, width: 1.95, paint: '#37e6ff', body: [[0, 0.32], [0.02, 0.5], [0.42, 0.78], [0.98, 0.92], [1, 0.42], [0.96, 0.3]], cabin: [[0.4, 0.78], [0.5, 1.12], [0.78, 1.14], [0.9, 0.95]], cabinW: 0.72, wheel: 0.33, spoiler: 0.0, fins: false, pop: true },
@@ -38,13 +39,17 @@ export function createStudio(canvas, opts = {}) {
   const scene = new Scene(); const P = Object.assign({}, LOOKS[opts.look || 'night']); const sky = new Sky(scene, renderer);
   const key = new DirectionalLight(new Color('#dfe8ff'), 3.4); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -30; key.shadow.camera.right = 30; key.shadow.camera.top = 30; key.shadow.camera.bottom = -30; key.position.set(12, 20, 10); scene.add(key); scene.add(key.target);
   const hemi = new HemisphereLight(new Color('#6a7ab8'), new Color('#2a2630'), 1.6); scene.add(hemi);
+  const rim = new DirectionalLight(new Color('#7fd8ff'), 2.2); rim.position.set(-14, 9, -18); scene.add(rim);   // cool edge light from behind, for the tail views
   const SUN = new Vector3(12, 20, 10).normalize(); sky.apply(P, SUN); scene.fog.density = 0.0; 
   const floor = new Mesh(new PlaneGeometry(200, 200), new MeshStandardMaterial({ color: new Color('#343a4a'), roughness: 0.3, metalness: 0.1, envMapIntensity: 1 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
   const mats = { paint: null, glass: new MeshStandardMaterial({ color: new Color('#223a5a'), roughness: 0.12, metalness: 0.4, envMapIntensity: 2.0 }), tyre: new MeshStandardMaterial({ color: new Color('#101214'), roughness: 0.9 }), rim: new MeshStandardMaterial({ color: new Color('#b8c0cc'), roughness: 0.3, metalness: 0.9 }), rim2: new MeshBasicMaterial({ color: new Color(0.3, 2.2, 2.6) }), head: new MeshBasicMaterial({ color: new Color(3, 2.8, 2.2) }), tail: new MeshBasicMaterial({ color: new Color(3, 0.4, 0.4) }), trim: new MeshStandardMaterial({ color: new Color('#1a1e26'), roughness: 0.5, metalness: 0.5 }) };
-  const cars = []; const gap = 7;
-  DESIGNS.forEach((d, i) => { const m = Object.assign({}, mats, { paint: new MeshStandardMaterial({ color: new Color('#37e6ff'), roughness: 0.3, metalness: 0.45, envMapIntensity: 1.3 }) }); const car = buildCar(d, m); car.position.set((i - (DESIGNS.length - 1) / 2) * gap, 0, 0); scene.add(car); cars.push(car); });
+  const cars = []; const plates = []; const gap = 7;
+  const HEROES = [{ name: 'H1  White, cyan lights', paint: '#f4f6fa' }, { name: 'H2  Cyan', paint: '#37e6ff' }, { name: 'H3  Dark, cyan roof', paint: '#141820', paint2: '#37e6ff', roughness: 0.4, metalness: 0.5 }];
+  const designs = opts.hero ? HEROES : DESIGNS;
+  if (opts.hero) HEROES.forEach((h, i) => { const car = buildHero(h); car.position.set((i - (HEROES.length - 1) / 2) * gap, 0, 0); scene.add(car); cars.push(car); });
+  else DESIGNS.forEach((d, i) => { const m = Object.assign({}, mats, { paint: new MeshStandardMaterial({ color: new Color('#37e6ff'), roughness: 0.3, metalness: 0.45, envMapIntensity: 1.3 }) }); const car = buildCar(d, m); car.position.set((i - (DESIGNS.length - 1) / 2) * gap, 0, 0); scene.add(car); cars.push(car); });
   // name plates
-  for (let i = 0; i < DESIGNS.length; i++) { const c = document.createElement('canvas'); c.width = 512; c.height = 96; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.font = '700 56px Rajdhani, Arial, sans-serif'; x.textAlign = 'center'; x.fillText(DESIGNS[i].name, 256, 66); const t = new CanvasTexture(c); t.colorSpace = SRGBColorSpace; const plate = new Mesh(new PlaneGeometry(5, 0.95), new MeshBasicMaterial({ map: t, transparent: true })); plate.rotation.x = -Math.PI / 2; plate.position.set(cars[i].position.x, 0.02, -4.0); scene.add(plate); }
+  for (let i = 0; i < designs.length; i++) { const c = document.createElement('canvas'); c.width = 512; c.height = 96; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.font = '700 56px Rajdhani, Arial, sans-serif'; x.textAlign = 'center'; x.fillText(designs[i].name, 256, 66); const t = new CanvasTexture(c); t.colorSpace = SRGBColorSpace; const plate = new Mesh(new PlaneGeometry(5, 0.95), new MeshBasicMaterial({ map: t, transparent: true })); plate.rotation.x = -Math.PI / 2; plate.position.set(cars[i].position.x, 0.02, -4.0); scene.add(plate); plates.push(plate); }
   const camera = new PerspectiveCamera(32, 1, 0.5, 400); scene.add(camera);
   const post = createPost(renderer, scene, camera, P); post.apply(P); renderer.toneMappingExposure = 1.3;
   function view(kind) {
@@ -54,8 +59,8 @@ export function createStudio(canvas, opts = {}) {
     camera.updateProjectionMatrix();
   }
   // one car per frame: the others hide; 'front' is a low three-quarter view of the nose, 'top' is the gameplay angle (55 degrees down)
-  function focus(i, kind) { cars.forEach((c, j) => c.visible = j === i); const c = cars[i].position; if (kind === 'top') { camera.fov = 36; camera.position.set(c.x + 0.8, 9.5, c.z + 6.6); camera.lookAt(c.x, 0.2, c.z); } else if (kind === 'rear') { camera.fov = 32; camera.position.set(c.x - 5.5, 2.4, c.z + 7.5); camera.lookAt(c.x, 0.7, c.z); } else { camera.fov = 32; camera.position.set(c.x + 5.8, 2.2, c.z - 7.2); camera.lookAt(c.x, 0.7, c.z); } camera.updateProjectionMatrix(); }
+  function focus(i, kind) { cars.forEach((c, j) => c.visible = j === i); plates.forEach((p, j) => p.visible = j === i && kind === 'top'); const c = cars[i].position; if (kind === 'top') { camera.fov = 36; camera.position.set(c.x + 0.8, 7.6, c.z + 5.3); camera.lookAt(c.x, 0.2, c.z); } else if (kind === 'rear') { camera.fov = 30; camera.position.set(c.x - 4.6, 1.5, c.z + 6.0); camera.lookAt(c.x, 0.6, c.z + 0.3); } else { camera.fov = 30; camera.position.set(c.x + 4.8, 1.5, c.z - 6.0); camera.lookAt(c.x, 0.6, c.z - 0.3); } camera.updateProjectionMatrix(); }
   function resize(w, h) { renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); post.composer.setSize(w, h); }
   function render() { post.composer.render(0.016); }
-  return { renderer, scene, camera, cars, view, focus, resize, render, DESIGNS };
+  return { renderer, scene, camera, cars, view, focus, resize, render, DESIGNS: designs };
 }
