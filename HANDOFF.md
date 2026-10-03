@@ -14,7 +14,13 @@ Written at the pause before the three.js renderer port. Read this first, then `d
 | branch `claude/ios-game-creation-ryso4h` | this commit | Working branch ("main" for this project). History already contains D and E (not rewritten). |
 | `origin/main` | `b0446c1` | The repo's default branch. Still only the original Elevator Madness game. Nothing from this project is on it. |
 
-To start the port from Sprint C: `git checkout -b <new-branch> canvas-sprint-c`, then copy this file over.
+To start the port from Sprint C: `git checkout -b <new-branch> 2c9dc9f`, then copy this file over.
+
+The tag `canvas-sprint-c` could not be pushed from the session that wrote this file: the container's git
+proxy answered every tag push with HTTP 403 while branch pushes worked. Unless someone has created it since,
+it does not exist on GitHub; use the hash `2c9dc9f`. To create it: `git tag -a canvas-sprint-c 2c9dc9f -m
+"Shunt gray-box, canvas renderer, audit Sprints A-C" && git push origin canvas-sprint-c` from a machine
+with normal GitHub access, or draft a GitHub release with that tag name targeting commit `2c9dc9f`.
 
 ## File map
 
