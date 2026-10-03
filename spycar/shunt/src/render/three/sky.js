@@ -34,5 +34,6 @@ export function buildLut(grade) {
   for (let i = 0; i < n * n * n; i++) { const r0 = d[i * 4], g0 = d[i * 4 + 1], b0 = d[i * 4 + 2]; let c = [r0, g0, b0];
     const l = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; for (let k = 0; k < 3; k++) { let v = l + (c[k] - l) * sat; v = (v - 0.5) * contrast + 0.5; v = Math.pow(Math.max(0, v), 1 / gamma[k]) * gain[k] + lift[k]; c[k] = Math.min(1, Math.max(0, v)); }
     d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; }
-  lut.needsUpdate = true; return lut;
+  // 8-bit: iPhones cannot filter float textures linearly, and a float LUT then samples as black and blacks out the whole frame
+  lut.convertToUint8(); lut.needsUpdate = true; return lut;
 }
