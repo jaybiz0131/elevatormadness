@@ -1,6 +1,6 @@
 // Title, pause, death and settings cards. `app` carries the run and the bests; `screen` is what is showing.
 import { S } from '../settings.js';
-import { fmt } from '../sim/constants.js';
+import { fmt, localDate } from '../sim/constants.js';
 import { $, ui } from './dom.js';
 let screenNow = 'title', settingsFromNow = 'title';
 export function screen() { return screenNow; }

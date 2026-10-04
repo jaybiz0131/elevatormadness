@@ -44,14 +44,14 @@
   #fire.hot { border-color: #ff8a3c; box-shadow: 0 0 14px rgba(255,120,40,0.6); }
   #gas.left { right: auto; left: 18px; } #fire.left { right: auto; left: 26px; } #pad.left { right: auto; left: 128px; }
   #gas[hidden], #fire[hidden] { display: none; }
-  #special { right: 132px; bottom: calc(134px + env(safe-area-inset-bottom, 0px)); } #special.left { right: auto; left: 132px; }
-  #special { position: absolute; right: 30px; bottom: calc(140px + env(safe-area-inset-bottom, 0px)); width: 76px; height: 76px; border-radius: 38px; border: 3px solid rgba(255,255,255,0.35); background: rgba(20,24,30,0.88); color: var(--fg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; transition: transform 0.3s, opacity 0.3s; }
+  #special { position: absolute; right: 132px; bottom: calc(134px + env(safe-area-inset-bottom, 0px)); width: 76px; height: 76px; border-radius: 38px; border: 3px solid rgba(255,255,255,0.35); background: rgba(20,24,30,0.88); color: var(--fg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; transition: transform 0.3s, opacity 0.3s; }
   #special[hidden] { display: flex; opacity: 0; transform: translateY(40px) scale(0.6); }
   #special.armed { border-color: var(--pickup); box-shadow: 0 0 18px rgba(255,210,63,0.55); }
+  #special.empty { opacity: 0.45; }
   #special.pulse { animation: pulse 0.6s 2; }
   #special svg { width: 32px; height: 32px; }
   #special .pips { display: flex; gap: 3px; } #special .pips i { width: 7px; height: 7px; border-radius: 4px; background: var(--pickup); display: block; }
-  #special.left { right: auto; left: 30px; }
+  #special.left { right: auto; left: 132px; }
   @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
   #card { position: absolute; inset: 0; background: rgba(0,0,0,0.6); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 28px; box-sizing: border-box; }
   #card[hidden] { display: none; }

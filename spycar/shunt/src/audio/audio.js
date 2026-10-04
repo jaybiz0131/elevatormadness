@@ -1,11 +1,21 @@
 // Web Audio: engine and drive layers read G each frame; one-shot sounds arrive as sim events.
 import { S } from '../settings.js';
+// 0.1 s of silence, 8 kHz mono 8-bit PCM, as a data URI (the media element that holds the playback session on iOS)
+const le16 = n => String.fromCharCode(n & 255, (n >> 8) & 255), le32 = n => le16(n & 0xffff) + le16(n >>> 16);
+const SILENT_WAV = 'data:audio/wav;base64,' + btoa('RIFF' + le32(36 + 800) + 'WAVEfmt ' + le32(16) + le16(1) + le16(1) + le32(8000) + le32(8000) + le16(1) + le16(8) + 'data' + le32(800) + '\x80'.repeat(800));
 export const audio = {
   ctx: null, master: null, sfx: null, musicG: null, engine: null, engineGain: null, layers: [], nextBeat: 0, beat: 0,
   init() { if (this.ctx) return; try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } const c = this.ctx;
     this.master = c.createGain(); this.master.connect(c.destination); this.sfx = c.createGain(); this.sfx.gain.value = S.sound ? 1 : 0; this.sfx.connect(this.master); this.musicG = c.createGain(); this.musicG.gain.value = S.music ? 0.5 : 0; this.musicG.connect(this.master);
     const g = c.createGain(); g.gain.value = 0; const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 400; const o1 = c.createOscillator(), o2 = c.createOscillator(); o1.type = 'sawtooth'; o2.type = 'square'; o1.frequency.value = 70; o2.frequency.value = 35; o1.connect(f); o2.connect(f); f.connect(g); g.connect(this.sfx); o1.start(); o2.start(); this.engine = [o1, o2, f]; this.engineGain = g; },
-  resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  resume() { if (this.ctx && this.ctx.state !== 'running') { try { this.ctx.resume(); } catch (e) {} } },
+  // Mobile unlock, called from real user gestures (touchend, click, keydown): resume the context, start a silent buffer (the iOS
+  // unlock), and loop a silent <audio> element so the page counts as media playback and the ring/silent switch no longer mutes it.
+  unlock() { this.init(); this.resume(); if (!this.ctx) return;
+    if (!this.unlocked) { try { const b = this.ctx.createBuffer(1, 1, 22050); const s = this.ctx.createBufferSource(); s.buffer = b; s.connect(this.ctx.destination); s.start(0); } catch (e) {}
+      try { if (!this.el) { const el = document.createElement('audio'); el.setAttribute('playsinline', ''); el.setAttribute('webkit-playsinline', ''); el.loop = true; el.volume = 0.01; el.src = SILENT_WAV; this.el = el; } const p = this.el.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+      if (this.ctx.state === 'running') this.unlocked = true; } },
+  state() { return this.ctx ? this.ctx.state + (this.unlocked ? ' unlocked' : '') + (this.el && !this.el.paused ? ' media' : '') : 'no ctx'; },
   // continuous driving layers: tyre squeal (rises with slip angle) and the rail screech, from one looping noise buffer
   initDrive() { if (this.drive || !this.ctx) return; const c = this.ctx; const n = c.sampleRate, buf = c.createBuffer(1, n, n), d = buf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; const src = c.createBufferSource(); src.buffer = buf; src.loop = true;
     const sq = c.createBiquadFilter(); sq.type = 'bandpass'; sq.frequency.value = 1100; sq.Q.value = 6; const sg = c.createGain(); sg.gain.value = 0; src.connect(sq); sq.connect(sg); sg.connect(this.sfx);
