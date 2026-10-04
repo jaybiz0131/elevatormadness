@@ -57,3 +57,9 @@ hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mo
   explosion). `tools/calls.mjs [t] [look]` prints one frame's draw calls by pass and object type (cars are the biggest cost: ~70).
 - Next: Stop 2 Cars (top-view sheet of five original enemy designs for Jack's approval before building), then Stop 3 (UI, showroom
   title, tune panel, fonts, draw calls under 150).
+- Stop 2 (hero import approved; enemies will be Jack's Meshy GLBs, not code): `carModel.js` fits, measures and paints any car GLB
+  (one draw per body); `heroModel.js` adds the spinning wheel set at the measured radius (0.302 m) and the side-intake paint;
+  `enemyModels.js` loads `assets/models/<dart|ram|turret-van|bulwark|mule>.glb` into one InstancedMesh per type (see
+  `assets/models/README.md`); types without a file keep the placeholder boxes. Outline follows the imported body. Smoke starts at
+  1.1 m; missile exhaust grows 1 to 2.6 m. `tools/heroshots.mjs <out> [query] [views]` takes gameplay, rear three-quarter, top-down.
+  Next: Jack's Dart GLB (set its nose in ENEMY_NOSE after a side-view check), then the other four; Stop 3.

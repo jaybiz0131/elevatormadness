@@ -7,7 +7,7 @@ const here = path.dirname(fileURLToPath(import.meta.url)); const pageFile = path
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error' && !/ERR_CERT|vibrate/.test(m.text())) errors.push('console: ' + m.text()); });
-await page.goto('file://' + pageFile + '?seed=3&look=' + (process.argv[3] || 'night')); await page.waitForTimeout(800);
+await page.goto('file://' + pageFile + '?seed=3&look=' + (process.argv[3] || 'night')); await page.waitForFunction(() => window.__shunt && window.__shunt.renderer && window.__shunt.renderer().state.modelsReady, null, { timeout: 60000 }); await page.waitForTimeout(800);
 await page.evaluate(() => window.__shunt.startPlaying());
 await page.waitForFunction(() => window.__shunt.G.t > 4, null, { timeout: 120000 });
 // the zoo: every kind of car, a wreck, pickups, a barrel, cones, a crate on a ramp, a roadblock, a median, an oil slick, bullets, missiles, smoke, sparks, an explosion

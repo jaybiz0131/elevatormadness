@@ -15,10 +15,10 @@ for (const [name, q] of VIEWS) {
   // one frame's draw calls for the hero alone (main pass and shadow pass), counted by object name
   const r = await page.evaluate(() => new Promise((res) => { const R = window.__shunt.renderer(); const gl = R.renderer; const orig = gl.renderBufferDirect.bind(gl); let hero = 0, heroShadow = 0; const heroObjs = new Set(); R.cars.player.traverse(o => heroObjs.add(o));
     gl.renderBufferDirect = function (camera, scene, geometry, material, object, group) { if (heroObjs.has(object)) { if (material.isMeshDepthMaterial || material.isMeshDistanceMaterial) heroShadow++; else hero++; } return orig(camera, scene, geometry, material, object, group); };
-    requestAnimationFrame(() => { hero = 0; heroShadow = 0; requestAnimationFrame(() => { gl.renderBufferDirect = orig; res({ hero, heroShadow, stats: R.stats(), info: R.state.heroInfo || null, heroError: R.state.heroError || null }); }); }); }));
+    requestAnimationFrame(() => { hero = 0; heroShadow = 0; requestAnimationFrame(() => { gl.renderBufferDirect = orig; res({ hero, heroShadow, stats: R.stats(), info: R.state.heroInfo || null, enemies: R.state.enemyInfo || null, heroError: R.state.heroError || null }); }); }); }));
   await page.screenshot({ path: path.join(out, `hero-${name}.png`) });
   console.log(name, JSON.stringify({ heroCalls: r.hero, heroShadowCalls: r.heroShadow, frameCalls: r.stats.calls, frameTris: r.stats.triangles, errors }));
-  if (name === 'gameplay') console.log('hero', JSON.stringify(r.info), r.heroError || '');
+  if (name === 'gameplay') console.log('hero', JSON.stringify(r.info), r.heroError || '', '\nenemies', JSON.stringify(r.enemies));
   await page.close();
 }
 await browser.close();

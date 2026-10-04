@@ -17,6 +17,7 @@ import { Sky, buildLut } from './sky.js';
 import { createPost } from './post.js';
 import { LOOKS, lookFor } from './looks.js';
 import { loadHeroModel, HERO_GLB_URL } from './heroModel.js';
+import { loadEnemyModels } from './enemyModels.js';
 const V = new Vector3(), V2 = new Vector3(), SUN = new Vector3();
 function rainTexture() { const c = document.createElement('canvas'); c.width = 256; c.height = 256; const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 256, 256); let a = 7; const rng = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 1; for (let i = 0; i < 90; i++) { const px = rng() * 256, py = rng() * 256, l = 14 + rng() * 26; x.globalAlpha = 0.3 + rng() * 0.6; x.beginPath(); x.moveTo(px, py); x.lineTo(px + 2, py + l); x.stroke(); } const t = new CanvasTexture(c); t.wrapS = t.wrapT = RepeatWrapping; t.colorSpace = SRGBColorSpace; return t; }
 const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -95,8 +96,9 @@ export function createThreeRenderer(canvas, opts = {}) {
   // the imported hero: loaded before the shader prewarm so its material compiles with the rest; ?hero=code keeps the code hero
   const HERO_MODE = new URLSearchParams(location.search).get('hero') === 'code' ? 'code' : 'glb';
   async function loadHero() { if (!HERO_GLB_URL || state.heroInfo) return; try { const m = await loadHeroModel(); if (m) { cars.setHeroModel(m, HERO_MODE === 'code'); state.heroInfo = m.userData.info; } } catch (e) { state.heroError = String(e && e.message || e).slice(0, 120); } }
+  async function loadEnemies() { if (state.enemyInfo) return; const map = await loadEnemyModels(scene); cars.setEnemyModels(map); state.enemyInfo = Object.fromEntries(Object.entries(map).map(([k, v]) => [k, v.info || v])); }
   async function prewarm() {
-    await loadHero();
+    await loadHero(); await loadEnemies(); state.modelsReady = true;
     // every material compiled before play: one of each car kind in the scene, every batch with one instance, then one composer frame
     const temp = []; for (const k of Object.keys(cars.geo)) { const m = cars.acquire(k); m.userData.kind = k; temp.push(m); }
     fx.begin(); fx.glow(0, 0, 0, 1, 1, 1, 1, 0); fx.puff(0, 0, 0, 1, 0); fx.shadow(V.set(0, 0, 0), 1, 1); fx.ring(0, 0, 0, 1, 0xffffff, 0, 1); fx.spark(0, 0, 0, 0, 0, 0); fx.poolAt(0, 0, 0, 1, 1, 1, 0, 1); fx.cone(0, 0, 0, 1, 1, 1, 1, 0); fx.end();

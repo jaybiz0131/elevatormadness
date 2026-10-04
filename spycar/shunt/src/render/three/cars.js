@@ -1,7 +1,7 @@
 // Placeholder cars: boxes with the 2D build's class colours (player cyan, enemies black with red, civilians pastel, trucks green,
 // the armored truck dark with red). One merged vertex-coloured geometry per kind, one draw call per car, pooled meshes. Headlights,
 // tail lights, blinkers, the Bruiser tell arrow, the Gunner sight line and hit flashes are additive glows and markers batched by fx.
-import { BoxGeometry, Mesh, MeshStandardMaterial, Color, Vector3, Float32BufferAttribute, Group } from 'three';
+import { BoxGeometry, Mesh, MeshStandardMaterial, Color, Vector3, Float32BufferAttribute, Group, Object3D } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { T, REF, lerp } from '../../sim/constants.js';
 import { M, toWorld } from './scale.js';
@@ -26,7 +26,7 @@ function carGeometry(kind) {
 }
 export class CarSystem {
   constructor(scene) {
-    this.scene = scene; this.geo = {}; this.mat = {}; this.free = {}; this.live = []; this.pos = new Vector3(); this.meshOf = new Map(); this.stamp = 0;
+    this.scene = scene; this.inst = {}; this.proxy = new Object3D(); this.geo = {}; this.mat = {}; this.free = {}; this.live = []; this.pos = new Vector3(); this.meshOf = new Map(); this.stamp = 0;
     for (const k of ['player', 'civ', 'weak', 'bruiser', 'gunner', 'armored', 'truck']) { this.geo[k] = carGeometry(k); this.free[k] = []; }
     for (const [k, c] of Object.entries(KIND_COL)) this.mat[k] = new MeshStandardMaterial({ color: new Color(c), vertexColors: true, roughness: 0.55, metalness: 0.25 });
     for (let i = 0; i < CIV_TINTS.length; i++) this.mat['civ' + i] = new MeshStandardMaterial({ color: new Color(CIV_TINTS[i]), vertexColors: true, roughness: 0.6, metalness: 0.2 });
@@ -35,22 +35,30 @@ export class CarSystem {
     this.codeHero = buildHero({ paint: '#f4f6fa', emissive: '#bfeeff', emissiveIntensity: 0.22, envMapIntensity: 2.2, metalness: 0.25 }); this.codeHero.traverse(o => { o.frustumCulled = false; });
     this.player = new Group(); this.player.add(this.codeHero); this.player.userData.pods = this.codeHero.userData.pods; this.heroGlb = null; scene.add(this.player);
     // readability: a cyan silhouette drawn only where the depth test fails, so the player shows through whatever covers it
-    const outline = new Mesh(this.geo.player, new MeshStandardMaterial({ color: CYAN, emissive: CYAN, emissiveIntensity: 1.5, transparent: true, opacity: 0.55, depthFunc: 4 /* GreaterDepth */, depthWrite: false })); outline.renderOrder = 30; outline.position.y = -0.35; this.player.add(outline);
+    this.outline = new Mesh(this.geo.player, new MeshStandardMaterial({ color: CYAN, emissive: CYAN, emissiveIntensity: 1.5, transparent: true, opacity: 0.55, depthFunc: 4 /* GreaterDepth */, depthWrite: false })); this.outline.renderOrder = 30; this.outline.position.y = -0.35; this.player.add(this.outline);
   }
   // swap in the imported hero (or back to the code hero with useCode); the gun pods only exist on the code hero
-  setHeroModel(mesh, useCode = false) { if (this.heroGlb) this.player.remove(this.heroGlb); this.heroGlb = mesh; if (mesh) this.player.add(mesh); this.codeHero.visible = useCode || !mesh; if (mesh) mesh.visible = !useCode; this.player.userData.pods = this.codeHero.visible ? this.codeHero.userData.pods : []; }
+  // swap in the imported hero (or back to the code hero with useCode); the gun pods only exist on the code hero; the see-through
+  // outline takes the shape of whichever body shows (the imported body's own geometry, or the old box for the code hero)
+  setHeroModel(mesh, useCode = false) { if (this.heroGlb) this.player.remove(this.heroGlb); this.heroGlb = mesh; if (mesh) this.player.add(mesh); this.codeHero.visible = useCode || !mesh; if (mesh) mesh.visible = !useCode; this.player.userData.pods = this.codeHero.visible ? this.codeHero.userData.pods : [];
+    const glb = mesh && !useCode; this.outline.geometry = glb ? mesh.userData.body.geometry : this.geo.player; this.outline.position.y = glb ? 0 : -0.35; this.outline.scale.setScalar(glb ? 1.015 : 1); }
+  // the imported enemy types (enemyModels.js): one InstancedMesh per type
+  setEnemyModels(map) { for (const [k, v] of Object.entries(map)) if (v.mesh) this.inst[k] = v.mesh; }
+  emit(im, o, tint) { if (im.count >= im.instanceMatrix.count) return; o.updateMatrix(); im.setMatrixAt(im.count, o.matrix); im.instanceColor.setXYZ(im.count, tint, tint, tint); im.count++; }
   acquire(kind) { let m = this.free[kind].pop(); if (!m) { m = new Mesh(this.geo[kind], this.mat[kind]); m.castShadow = true; m.frustumCulled = false; } this.scene.add(m); return m; }
   release(m) { this.scene.remove(m); this.free[m.userData.kind].push(m); }
   place(mesh, G, x, s, yaw, lift) { toWorld(G.road, x, s, this.pos); mesh.position.copy(this.pos); mesh.position.y += lift; mesh.rotation.set(0, -(G.road.frame(s).psi + yaw), 0, 'YXZ'); }
   // cars that exist this frame get a mesh; the rest go back to the pool. c.mesh is render-side only (the hash never reads it).
   update(G, alpha, fx, elapsed) {
     const stamp = ++this.stamp;   // no per-frame allocation: meshes seen this frame carry the stamp
+    for (const k in this.inst) this.inst[k].count = 0;
     for (const c of G.cars) {
-      if (!c.alive) continue; let m = this.meshOf.get(c); if (!m) { m = this.acquire(c.kind); m.userData.kind = c.kind; this.meshOf.set(c, m); }
+      // a type with an imported model is placed through a proxy and written into its InstancedMesh; the rest use pooled meshes
+      if (!c.alive) continue; const inst = this.inst[c.kind]; let m; if (inst) m = this.proxy; else { m = this.meshOf.get(c); if (!m) { m = this.acquire(c.kind); m.userData.kind = c.kind; this.meshOf.set(c, m); } }
       m.userData.stamp = stamp; const cx = lerp(c.px, c.x, alpha), cy = lerp(c.py, c.y, alpha); const w = c.w * M, l = c.l * M;
-      if (c.wrecked) { m.material = this.mat.wreck; this.place(m, G, cx, cy, c.spin, 0); m.rotation.z = Math.sin(c.flip * Math.PI * 2) * 0.5; m.rotation.x = Math.sin(c.flip * Math.PI) * 0.2; if (c.debrisT > 0.5) fx.glow(m.position.x, m.position.y + 1, m.position.z, 2.5, 1, 0.5, 0.15, (c.debrisT - 0.5)); fx.shadow(m.position, w, l); continue; }
+      if (c.wrecked) { m.material = this.mat.wreck; this.place(m, G, cx, cy, c.spin, 0); m.rotation.z = Math.sin(c.flip * Math.PI * 2) * 0.5; m.rotation.x = Math.sin(c.flip * Math.PI) * 0.2; if (inst) this.emit(inst, m, 0.28); if (c.debrisT > 0.5) fx.glow(m.position.x, m.position.y + 1, m.position.z, 2.5, 1, 0.5, 0.15, (c.debrisT - 0.5)); fx.shadow(m.position, w, l); continue; }
       m.material = c.kind === 'civ' ? this.mat['civ' + Math.max(0, CIV_TINTS.indexOf(c.tint))] : this.mat[c.kind]; m.rotation.z = 0; m.rotation.x = 0;
-      this.place(m, G, cx, cy, (c.lean || 0) * Math.PI / 180 + (c.spin || 0), 0); fx.shadow(m.position, w, l);
+      this.place(m, G, cx, cy, (c.lean || 0) * Math.PI / 180 + (c.spin || 0), 0); fx.shadow(m.position, w, l); if (inst) this.emit(inst, m, 1);
       const p = m.position;
       const fx_ = Math.sin(-m.rotation.y), fz_ = -Math.cos(-m.rotation.y); const rx = Math.cos(-m.rotation.y), rz = Math.sin(-m.rotation.y);
       if (c.kind === 'truck') { if (!c.loaded) fx.glow(p.x - fx_ * l * 0.5, p.y + 2.6, p.z - fz_ * l * 0.5, 1.2, 1, 0.82, 0.25, 0.4 + 0.4 * Math.sin(elapsed * 6)); continue; }
@@ -64,8 +72,12 @@ export class CarSystem {
       if (c.kind === 'gunner' && c.state === 'sight') fx.sightLine(G, c.sightX, c.y, c.sightX, c.y + 700, 0.5 + 0.5 * Math.sin(elapsed * 30));
     }
     for (const [c, m] of this.meshOf) if (m.userData.stamp !== stamp) { this.release(m); this.meshOf.delete(c); }
+    for (const k in this.inst) { const im = this.inst[k]; if (im.count) { im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; } }
   }
   updatePlayer(G, rx, rdist, fx, st, elapsed) {
+    // the imported hero turns its wheels with the road speed and lights its tail bar under braking
+    const dtE = Math.min(0.1, Math.max(0, elapsed - (this.lastE ?? elapsed))); this.lastE = elapsed;
+    if (this.heroGlb && this.heroGlb.visible) this.heroGlb.userData.tick(dtE, (st.phase === 'over' ? 0 : G.speed) * M, !!(G.in && G.in.brake) || !!G.braking);
     const m = this.player; const z = G.jumpZ; const lift = z * 3.5; const lean = (st.lean !== undefined ? st.lean : G.lean) * Math.PI / 180;
     this.place(m, G, rx, rdist, lean, lift); m.scale.set((2 - G.sq), G.sq, 1 + z * 0.1);
     // the rotary pods slide out as the barrels spin up; the barrels turn with the spin; a muzzle flash at the tips when a round leaves
