@@ -49,3 +49,11 @@ Stop 1 Environment, Stop 2 Cars, Stop 3 UI and performance; report and wait for 
 original, from role descriptions only (no real makes, no spy-franchise cues), top-view sheet of all five shown before building;
 hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mood board. Approved for Stop 3: showroom title screen
 (hero car slowly turning, lit to show the paint) inside the 150 draw-call budget.
+- Stop 1 Environment (done, waiting on Jack's go-ahead): dark wet road (shader grain, damp sheen, puddles, light streaks for neon,
+  lamps and car lights), real smoke (billow atlas, rotation, self-shadow, ground fade), prop kit `render/three/kit.js` replacing the
+  box props (one merged draw per prop type), buildings turned to run along the street with shopfronts, awnings and roof units, street
+  lamps at every light pool, debug readout (Settings > Debug readout or `?debug=1`: FPS, draw calls, triangles).
+  Postcard moments re-picked for the current driving (`tools/shots.mjs`; `--only=a,b` for a subset; the wreck shot waits for a visible
+  explosion). `tools/calls.mjs [t] [look]` prints one frame's draw calls by pass and object type (cars are the biggest cost: ~70).
+- Next: Stop 2 Cars (top-view sheet of five original enemy designs for Jack's approval before building), then Stop 3 (UI, showroom
+  title, tune panel, fonts, draw calls under 150).

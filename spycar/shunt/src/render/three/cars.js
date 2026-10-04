@@ -52,7 +52,7 @@ export class CarSystem {
       if (c.kind === 'truck') { if (!c.loaded) fx.glow(p.x - fx_ * l * 0.5, p.y + 2.6, p.z - fz_ * l * 0.5, 1.2, 1, 0.82, 0.25, 0.4 + 0.4 * Math.sin(elapsed * 6)); continue; }
       if (c.kind === 'civ') { if (c.blink > 0 && Math.floor(c.blink * 8) % 2 === 0) { const sx = c.blinkDir < 0 ? -1 : 1; fx.glow(p.x + rx * sx * w / 2, p.y + 0.9, p.z + rz * sx * w / 2, 0.6, 1, 0.7, 0.28, 0.9); } continue; }
       // enemies: red headlights, brake lights flashing in the tell, a white flash when hit
-      for (const sx of [-1, 1]) fx.glow(p.x + fx_ * l * 0.5 + rx * sx * w * 0.35, p.y + 0.7, p.z + fz_ * l * 0.5 + rz * sx * w * 0.35, c.kind === 'armored' ? 1.1 : 0.9, 1, 0.23, 0.23, 0.9);
+      for (const sx of [-1, 1]) { const hx = p.x + fx_ * l * 0.5 + rx * sx * w * 0.35, hz = p.z + fz_ * l * 0.5 + rz * sx * w * 0.35; fx.glow(hx, p.y + 0.7, hz, c.kind === 'armored' ? 1.1 : 0.9, 1, 0.23, 0.23, 0.9); fx.streak(hx + fx_ * 1.6, p.y, hz + fz_ * 1.6, 1, 0.25, 0.25, 0.5, -m.rotation.y); }
       const brake = c.state === 'tell' && Math.floor(c.t * 12) % 2 === 0; if (brake) for (const sx of [-1, 1]) fx.glow(p.x - fx_ * l * 0.5 + rx * sx * w * 0.35, p.y + 0.8, p.z - fz_ * l * 0.5 + rz * sx * w * 0.35, 0.8, 1, 0.42, 0.42, 1);
       if (c.hitFlash > 0) fx.glow(p.x, p.y + 1, p.z, w * 1.2, 1, 1, 1, 0.8);
       if (c.state === 'tell' || c.state === 'swerve' || c.state === 'sight') { const pulse = 0.55 + 0.45 * Math.sin(elapsed * 18); fx.ring(p.x, p.y + 0.04, p.z, Math.max(w, l) * 0.6, 0xff3b3b, pulse, 1); fx.glow(p.x, p.y + 0.8, p.z, l * 0.8, 1, 0.23, 0.23, 0.35 * pulse); }
@@ -73,6 +73,7 @@ export class CarSystem {
     for (const sx of [-1, 1]) { if (G.flashT2 > 0) fx.glow(p.x + fx_ * l * 0.42 + rx_ * sx * w * 0.5, p.y + 0.6, p.z + fz_ * l * 0.42 + rz_ * sx * w * 0.5, 2.4, 1, 0.85, 0.5, 1); fx.glow(p.x + fx_ * l * 0.5 + rx_ * sx * w * 0.35, p.y + 0.7, p.z + fz_ * l * 0.5 + rz_ * sx * w * 0.35, 1.0, 0.3, 0.95, 1, 0.8); fx.glow(p.x - fx_ * l * 0.5 + rx_ * sx * w * 0.35, p.y + 0.8, p.z - fz_ * l * 0.5 + rz_ * sx * w * 0.35, G.braking ? 1.2 : 0.6, 1, 0.3, 0.3, G.braking ? 1 : 0.6); }
     fx.glow(p.x, p.y + 0.8, p.z, 4.0, G.nitro > 0 ? 1 : 0.22, G.nitro > 0 ? 0.82 : 0.9, G.nitro > 0 ? 0.25 : 1, G.nitro > 0 ? 0.5 : 0.3);
     fx.poolAt(p.x + fx_ * 9, p.y - lift, p.z + fz_ * 9, 1, 0.95, 0.75, 0.22, 6, -m.rotation.y, 2.4);   // headlight pool on the road ahead
+    for (const sx of [-1, 1]) { fx.streak(p.x - fx_ * (l * 0.5 + 1.6) + rx_ * sx * w * 0.35, p.y - lift, p.z - fz_ * (l * 0.5 + 1.6) + rz_ * sx * w * 0.35, 1, 0.12, 0.1, G.in && G.in.brake ? 0.7 : 0.35, -m.rotation.y); fx.streak(p.x + fx_ * (l * 0.5 + 2.5) + rx_ * sx * w * 0.35, p.y - lift, p.z + fz_ * (l * 0.5 + 2.5) + rz_ * sx * w * 0.35, 0.9, 0.95, 1, 0.3, -m.rotation.y, 4.5); }   // tail and head lights on the wet road
     if (G.drifting && st.phase === 'playing') fx.ring(p.x, p.y - lift + 0.03, p.z, 36 * M, G.driftTier >= 3 ? 0xff7a2a : G.driftTier === 2 ? 0xffd23f : 0xffffff, 0.8, Math.min(1, G.driftCharge / T.drift.tiers[2]));
     if (G.slamCd > 0) fx.ring(p.x, p.y - lift + 0.03, p.z, 30 * M, 0xffffff, 0.5, 1 - G.slamCd / T.slam.cooldown);
     if (G.air > 0 && G.air < 0.4) fx.ring(p.x, p.y - lift + 0.03, p.z, 26 * M, 0xffffff, 0.8, 1);

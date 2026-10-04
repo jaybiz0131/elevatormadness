@@ -40,7 +40,7 @@ export function createThreeRenderer(canvas, opts = {}) {
   let post = createPost(renderer, scene, camera, P);
   const state = { scale: 1, cap: 1, frameMs: 16, lost: false, chroma: 0, fovKick: 0, elapsed: 0, postError: null, glError: null, frames: 0 };
   function applyLook() {
-    const az = P.sunAzimuth * Math.PI / 180, el = Math.max(3, P.sunElevation) * Math.PI / 180; SUN.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)); fx.setSun(SUN);
+    const az = P.sunAzimuth * Math.PI / 180, el = Math.max(3, P.sunElevation) * Math.PI / 180; SUN.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)); fx.setSun(SUN); fx.setLook(P);
     key.color.set(P.sunColor); key.intensity = P.sunIntensity; hemi.color.set(P.hemiSky); hemi.groundColor.set(P.hemiGround); hemi.intensity = P.hemiIntensity;
     sky.apply(P, SUN); city.setLook(P); road.setLook(P); renderer.toneMappingExposure = P.exposure; post.apply(P);
     post.setLut(buildLut({ sat: P.gradeSat, contrast: P.gradeContrast, lift: [P.gradeLift + P.gradeWarm * 0.5, P.gradeLift, P.gradeLift - P.gradeWarm * 0.5], gain: [1 + P.gradeWarm * 0.6, 1, 1 - P.gradeWarm * 0.6] }), P.lutStrength);

@@ -75,7 +75,7 @@ Height fog: the fog factor is multiplied by exp(−0.045 × height), so the stre
 
 | Effect | Numbers |
 |---|---|
-| Tyre smoke | sim puffs, 0.5 m → 3 m over 1.4 s, 55% → 0 alpha, lit by the key direction, sorted back to front, 700 cap (800 with wreck smoke) |
+| Tyre smoke (Sprint C Stop 1) | sim puffs, 0.5 m → 3 m over 1.4 s on an ease-out (billows fast, then hangs), 90% → 0 alpha, colour #ebebf2; a 2x2 atlas of billowy shapes (procedural, 256 px), each puff turns slowly from its sim seed; lit as ambient (look's sky x 0.35 x hemi + fog x 0.4 + 0.26) plus the key light (sun colour x min(1, 0.3 x intensity), halved below the horizon) through a two-tap self-shadow toward the sun; the bottom fades over 0.5 m above the road (no hard line); sorted back to front; 600 tyre puffs cap, 800 with wreck and steam smoke |
 | Skid marks | ring buffer of 2,000 segments, 45 cm wide, fading over 15 s |
 | Drift sparks | points, additive, bright enough to bloom; colour by tier (white, gold, orange) |
 | Explosion | flash + fireball glow (HDR, blooms), 12 debris pieces on ballistic arcs, 6 rising smoke puffs, ground shockwave ring, shake 0.8 |
@@ -89,3 +89,21 @@ Height fog: the fog factor is multiplied by exp(−0.045 × height), so the stre
 | Trigger | 0.3 s accumulated over 1.02 × the grip budget in a hard corner, not braking, not drifting, once per corner |
 | Hit | car put against the outer rail, speed × 0.45, 0.8 s grind at minimum speed with sparks, half an armor pip, kick 10, trauma 0.8, hit-stop 80 ms, "Too fast: brake or drift" |
 | Gate (20 hairpins, synchronous bots) | brake-or-drift 2.02 s per hairpin, floor-it 2.59 s: 0.57 s faster (need 0.5); floor-it hits 20 of 20 (need 80%) |
+
+## Wet road (Sprint C Stop 1)
+- Asphalt colour is the district colour x 0.38 (night City: about #121318), lane paint #c4c9d2, sidewalk #2c2f38, shoulder plane x 0.6.
+- Shader-only grain, no textures: world-space value noise at 0.4 m and 3 m moves albedo 0.82 to 1.12 and drives the damp sheen.
+- Wetness per look (`wet`: night 1.0, dusk 0.4, blue hour 0.8): damp asphalt roughness 0.32 and 25% darker; puddles (value-noise mask,
+  top 50% of the noise ramped over 0.16) roughness 0.035 and 45% darker; environment-map intensity 0.4 + 1.4 x wet; metalness 0.1 x wet.
+  Kerbs, walls and paint stay matte.
+- Reflections are additive streaks on the road, all scaled by `wet`: neon tubes 0.7, signs 0.9, street lamps 0.55 (6 m), car head and
+  tail lights (0.9 m wide, 3.5 to 4.5 m long along the car; player tail lights 0.35, 0.7 under braking; enemy headlights red 0.5).
+
+## Prop kit (Sprint C Stop 1, `render/three/kit.js`)
+Every prop is one merged geometry with per-vertex colour and glow, drawn with one shared material (glow x (0.7 + 0.6 x neon)), so a
+multi-part prop is one instanced draw: street lamp (pole, arm, head, lens), rail post with amber reflector, planter tree, billboard,
+chevron board (red hard / yellow soft, pointing into the turn), striped jersey roadblock, jersey median, wedge ramp with a lit lip,
+supply crate with a glowing band, oil drum, traffic cone, overhead gantry, spectators, bollard, bench, vending machine, hydrant,
+overpass pillar and deck (cyan underlight), steam vent grate. Street lamps stand at every lamp light pool (every 160 pt, both sides).
+Buildings run along the street (long side parallel to the road; Stop 1 fixed a 90 degree turn) with a parapet, 2 to 3 roof units, and on
+low-rises a lit shopfront (warm or cool) under an awning.

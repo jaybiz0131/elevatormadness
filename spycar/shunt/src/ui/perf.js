@@ -2,12 +2,28 @@
 // the beauty route, then shows average fps, 1% low, worst frame and the resolution scale it settled on. ?bench=soak: ten minutes,
 // first minute against last. ?shots=1 plays the same run for the postcard tool. Headless numbers are not iPhone numbers.
 import bench from '../../replays/beauty.json';
+import { S } from '../settings.js';
+// the debug readout: frames per second and draw calls for the whole frame (main pass, shadow pass and post), refreshed twice a
+// second; amber when calls pass the 150 budget or fps drops under 55. On from Settings > Debug readout, or ?debug=1.
+const CALL_BUDGET = 150;
+function createDebug(Q, renderer) {
+  const force = Q.get('debug') === '1'; let el = null, t = 0, n = 0, acc = 0;
+  return function (dt, elapsed) {
+    const on = force || S.debug; if (!on) { if (el) el.hidden = true; return; }
+    if (!el) { el = document.createElement('div'); el.id = 'dbg'; document.getElementById('ui').appendChild(el); } el.hidden = false;
+    n++; acc += dt; if (performance.now() - t < 500) return; t = performance.now();
+    const fps = n / Math.max(1e-3, acc); n = 0; acc = 0; const s = renderer.stats ? renderer.stats() : null; const calls = s ? s.calls : 0;
+    el.textContent = `FPS ${fps.toFixed(0)}\nCALLS ${calls}` + (s ? `\nTRIS ${(s.triangles / 1000).toFixed(0)}k` : ''); el.classList.toggle('over', calls > CALL_BUDGET || fps < 55);
+  };
+}
 export function createPerf(Q, renderer, hud) {
   let mode = Q.get('bench'); let show = Q.get('perf') === '1' || !!mode; const shots = Q.get('shots') === '1';
   let el = null; function overlay() { if (el) return; el = document.createElement('div'); el.style.cssText = 'position:absolute;left:12px;top:calc(110px + var(--safe-top,0px));font:600 13px/1.4 monospace;color:#9fe;background:rgba(0,0,0,0.55);padding:6px 8px;border-radius:6px;pointer-events:none;white-space:pre;z-index:5'; document.getElementById('ui').appendChild(el); }
   if (show) overlay();
   const frames = []; let t = 0, acc = 0, n = 0, worst = 0, running = false, results = null, soakStart = 0, loops = 0, lastPerf = 0, minutesDone = false; const minutes = [];
+  const debug = createDebug(Q, renderer);
   function frame(dt, st) {
+    debug(dt, st.elapsed);
     if (!show && !shots) return; const ms = dt * 1000; acc += ms; n++; worst = Math.max(worst, ms); if (running) frames.push(ms);
     const wall = performance.now() / 1000;   // the soak runs on wall time, not the frame-capped elapsed clock
     if (mode === 'soak' && running) { const m = Math.floor((wall - soakStart) / 60); if (!minutes[m]) minutes[m] = { ms: [], mem: [] }; minutes[m].ms.push(ms); if (performance.memory && n % 60 === 0) minutes[m].mem.push(performance.memory.usedJSHeapSize); }
