@@ -16,6 +16,7 @@ import { City } from './city.js';
 import { Sky, buildLut } from './sky.js';
 import { createPost } from './post.js';
 import { LOOKS, lookFor } from './looks.js';
+import { loadHeroModel, HERO_GLB_URL } from './heroModel.js';
 const V = new Vector3(), V2 = new Vector3(), SUN = new Vector3();
 function rainTexture() { const c = document.createElement('canvas'); c.width = 256; c.height = 256; const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 256, 256); let a = 7; const rng = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 1; for (let i = 0; i < 90; i++) { const px = rng() * 256, py = rng() * 256, l = 14 + rng() * 26; x.globalAlpha = 0.3 + rng() * 0.6; x.beginPath(); x.moveTo(px, py); x.lineTo(px + 2, py + l); x.stroke(); } const t = new CanvasTexture(c); t.wrapS = t.wrapT = RepeatWrapping; t.colorSpace = SRGBColorSpace; return t; }
 const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -24,8 +25,9 @@ export function createThreeRenderer(canvas, opts = {}) {
   const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, alpha: false });
   // ?lite=1: half resolution, no shadows, no post: for headless bots on software GL, where the sim must run at pace
   const LITE = new URLSearchParams(location.search).get('lite') === '1';
-  // ?cam=pitch,dist,fov overrides the road camera for comparison shots (e.g. ?cam=47,76,42)
-  { const c = new URLSearchParams(location.search).get('cam'); if (c) { const [p, d, f] = c.split(',').map(Number); if (p) CAM.pitch = p; if (d) CAM.dist = d; if (f) CAM.fov = f; } }
+  // ?cam=pitch,dist,fov[,yaw,screenY] overrides the road camera for comparison and close-up shots (e.g. ?cam=47,76,42; a three-quarter
+  // close-up ?cam=18,11,40,35,0.5): yaw orbits the camera round the car in degrees; screenY is where the car sits (1/3 = lower third)
+  { const c = new URLSearchParams(location.search).get('cam'); if (c) { const [p, d, f, y, t] = c.split(',').map(Number); if (p) CAM.pitch = p; if (d) CAM.dist = d; if (f) CAM.fov = f; if (y) CAM.yaw = y; if (t) CAM.lowerThird = t; if (y || t) CAM.fixed = true; } }
   renderer.shadowMap.enabled = !LITE; renderer.shadowMap.type = PCFShadowMap; renderer.toneMapping = 0; renderer.autoClear = true; renderer.info.autoReset = false;
   const scene = new Scene();
   const roadCam = new RoadCamera(view.SW / H); const camera = roadCam.cam;
@@ -90,7 +92,11 @@ export function createThreeRenderer(canvas, opts = {}) {
   function project(x, s, out, lift = 0) { toWorld(roadRef, x, s, V); V.y += lift; V.project(camera); out.x = (V.x + 1) / 2 * view.SW; out.y = (1 - V.y) / 2 * H; out.visible = V.z < 1 && V.x > -1 && V.x < 1 && V.y > -1 && V.y < 1; return out; }
   // how far ahead (in road pt) the top centre of the screen reaches on the ground: the warning-time measure
   function visibleAhead(G) { V.set(0, 1, 0.5).unproject(camera); V2.copy(V).sub(camera.position).normalize(); if (V2.y >= 0) return 3000; const t = -camera.position.y / V2.y; V.copy(camera.position).addScaledVector(V2, t); let best = 0, bd = 1e18; for (let s = G.dist; s < G.dist + 3000; s += 20) { toWorld(G.road, REF, s, V2); const d = (V2.x - V.x) ** 2 + (V2.z - V.z) ** 2; if (d < bd) { bd = d; best = s; } } return best - G.dist; }
+  // the imported hero: loaded before the shader prewarm so its material compiles with the rest; ?hero=code keeps the code hero
+  const HERO_MODE = new URLSearchParams(location.search).get('hero') === 'code' ? 'code' : 'glb';
+  async function loadHero() { if (!HERO_GLB_URL || state.heroInfo) return; try { const m = await loadHeroModel(); if (m) { cars.setHeroModel(m, HERO_MODE === 'code'); state.heroInfo = m.userData.info; } } catch (e) { state.heroError = String(e && e.message || e).slice(0, 120); } }
   async function prewarm() {
+    await loadHero();
     // every material compiled before play: one of each car kind in the scene, every batch with one instance, then one composer frame
     const temp = []; for (const k of Object.keys(cars.geo)) { const m = cars.acquire(k); m.userData.kind = k; temp.push(m); }
     fx.begin(); fx.glow(0, 0, 0, 1, 1, 1, 1, 0); fx.puff(0, 0, 0, 1, 0); fx.shadow(V.set(0, 0, 0), 1, 1); fx.ring(0, 0, 0, 1, 0xffffff, 0, 1); fx.spark(0, 0, 0, 0, 0, 0); fx.poolAt(0, 0, 0, 1, 1, 1, 0, 1); fx.cone(0, 0, 0, 1, 1, 1, 1, 0); fx.end();
@@ -98,7 +104,7 @@ export function createThreeRenderer(canvas, opts = {}) {
     for (const m of temp) cars.release(m); fx.begin(); fx.end();
   }
   // one line for the title card and the frame counter: what the device is running
-  function diag() { let gpu = '?'; try { const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch (e) {} return `${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} · ${String(gpu).slice(0, 40)} · post ${post.config}${state.postError ? ' · post failed: ' + state.postError : ''}${state.glError ? ' · ' + state.glError : ''}${state.lost ? ' · CONTEXT LOST' : ''} · shadow ${key.shadow.mapSize.x} · scale ${state.scale.toFixed(2)}/${state.cap.toFixed(2)} · dpr ${window.devicePixelRatio}`; }
+  function diag() { let gpu = '?'; try { const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch (e) {} return `${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} · ${String(gpu).slice(0, 40)} · post ${post.config}${state.postError ? ' · post failed: ' + state.postError : ''}${state.glError ? ' · ' + state.glError : ''}${state.lost ? ' · CONTEXT LOST' : ''} · hero ${state.heroInfo && HERO_MODE === 'glb' ? 'glb ' + state.heroInfo.triangles + ' tris' : 'code'}${state.heroError ? ' (glb failed: ' + state.heroError + ')' : ''} · shadow ${key.shadow.mapSize.x} · scale ${state.scale.toFixed(2)}/${state.cap.toFixed(2)} · dpr ${window.devicePixelRatio}`; }
   function stats() { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, textures: i.memory.textures, geometries: i.memory.geometries, scale: state.scale, cap: state.cap, frameMs: state.frameMs, programs: i.programs ? i.programs.length : 0 }; }
   function setLook(name) { look = lookFor(name); P = Object.assign({}, LOOKS[look]); if (IS_IOS) P.msaa = 2; applyLook(); }
   function reset() { roadCam.reset(); road.reset(); city.reset(); cars.reset(); fx.reset(); }

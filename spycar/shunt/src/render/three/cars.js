@@ -1,7 +1,7 @@
 // Placeholder cars: boxes with the 2D build's class colours (player cyan, enemies black with red, civilians pastel, trucks green,
 // the armored truck dark with red). One merged vertex-coloured geometry per kind, one draw call per car, pooled meshes. Headlights,
 // tail lights, blinkers, the Bruiser tell arrow, the Gunner sight line and hit flashes are additive glows and markers batched by fx.
-import { BoxGeometry, Mesh, MeshStandardMaterial, Color, Vector3, Float32BufferAttribute } from 'three';
+import { BoxGeometry, Mesh, MeshStandardMaterial, Color, Vector3, Float32BufferAttribute, Group } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { T, REF, lerp } from '../../sim/constants.js';
 import { M, toWorld } from './scale.js';
@@ -31,10 +31,14 @@ export class CarSystem {
     for (const [k, c] of Object.entries(KIND_COL)) this.mat[k] = new MeshStandardMaterial({ color: new Color(c), vertexColors: true, roughness: 0.55, metalness: 0.25 });
     for (let i = 0; i < CIV_TINTS.length; i++) this.mat['civ' + i] = new MeshStandardMaterial({ color: new Color(CIV_TINTS[i]), vertexColors: true, roughness: 0.6, metalness: 0.2 });
     // in-game the paint carries a little cyan self-light so the white reads under the night key light, where a flat white goes slate
-    this.player = buildHero({ paint: '#f4f6fa', emissive: '#bfeeff', emissiveIntensity: 0.22, envMapIntensity: 2.2, metalness: 0.25 }); this.player.traverse(o => { o.frustumCulled = false; }); scene.add(this.player);
+    // the player is a parent group holding the code hero (hero.js) and, once loaded, the imported model (heroModel.js); one shows
+    this.codeHero = buildHero({ paint: '#f4f6fa', emissive: '#bfeeff', emissiveIntensity: 0.22, envMapIntensity: 2.2, metalness: 0.25 }); this.codeHero.traverse(o => { o.frustumCulled = false; });
+    this.player = new Group(); this.player.add(this.codeHero); this.player.userData.pods = this.codeHero.userData.pods; this.heroGlb = null; scene.add(this.player);
     // readability: a cyan silhouette drawn only where the depth test fails, so the player shows through whatever covers it
     const outline = new Mesh(this.geo.player, new MeshStandardMaterial({ color: CYAN, emissive: CYAN, emissiveIntensity: 1.5, transparent: true, opacity: 0.55, depthFunc: 4 /* GreaterDepth */, depthWrite: false })); outline.renderOrder = 30; outline.position.y = -0.35; this.player.add(outline);
   }
+  // swap in the imported hero (or back to the code hero with useCode); the gun pods only exist on the code hero
+  setHeroModel(mesh, useCode = false) { if (this.heroGlb) this.player.remove(this.heroGlb); this.heroGlb = mesh; if (mesh) this.player.add(mesh); this.codeHero.visible = useCode || !mesh; if (mesh) mesh.visible = !useCode; this.player.userData.pods = this.codeHero.visible ? this.codeHero.userData.pods : []; }
   acquire(kind) { let m = this.free[kind].pop(); if (!m) { m = new Mesh(this.geo[kind], this.mat[kind]); m.castShadow = true; m.frustumCulled = false; } this.scene.add(m); return m; }
   release(m) { this.scene.remove(m); this.free[m.userData.kind].push(m); }
   place(mesh, G, x, s, yaw, lift) { toWorld(G.road, x, s, this.pos); mesh.position.copy(this.pos); mesh.position.y += lift; mesh.rotation.set(0, -(G.road.frame(s).psi + yaw), 0, 'YXZ'); }
