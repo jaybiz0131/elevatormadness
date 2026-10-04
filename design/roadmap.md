@@ -1,4 +1,22 @@
-# Shunt roadmap (written 2026-10-03, after Sprint 3D)
+# Shunt roadmap
+
+## Master plan: seven sprints, A to G (Jack's numbering; use this everywhere)
+| Sprint | Scope |
+|--------|-------|
+| A, B | Done before the 3D port (gray-box driving; Sprint B driving constants). |
+| **C (current)** | 3D engine and corners, run as the "Look to 8" stop points. This session: Stop 1 Environment (dark wet road, real smoke, prop kit), Stop 2 Cars (five enemy looks, hero polish, hero top-view design), Stop 3 UI and performance (HUD and title polish, showroom title screen with the hero car turning, tune panel, fonts, under 150 draw calls). |
+| D | Downhill drop plus the first 5-stage mission: drop camera, intro orbit camera, slow-motion kill shot. |
+| E, F, G | Scope to be confirmed with Jack (not written down in the repo). |
+
+Level design rule (Jack, 2026-10-04): every level is written like a film, with a beginning, a middle and an end, building to a climax
+and a payoff. Getting the first level right comes first; it becomes the template for the rest. Camera changes between stages (road,
+drop chase, orbit, slow-motion kill shot) are part of what makes each stage feel different, and of showing off the car.
+
+## Superseded: the 4-to-10 numbering below
+The table below was written by an earlier Claude session on 2026-10-03 with its own sprint numbers (4 to 10). Those numbers are
+not Jack's plan; read them only as a list of ideas, and map the work onto A to G above. The old "Sprint 4" (pedals, FIRE and
+SPECIAL buttons, hero car in game) was done inside Sprint C.
+
 
 Jack's question: how many builds until it comes together? Short answer: **five more sprints to a vertical slice** that
 drives, shoots, crashes and looks the part. Each sprint is one long session like the 3D port (a build, bots, replays, a
@@ -21,7 +39,7 @@ published link and postcards at the end). Two more after that for polish before 
 | 9 | Polish and playtest build | Difficulty curve from bot and human data, daily seed, leaderboard-ready replays, onboarding. |
 | 10 | Store build | Icons, store screenshots, PWA install, analytics, the "first 30 seconds" tuned. |
 
-Sprint 4 is where the fun question gets answered; Sprints 5 and 6 are where it starts to look like the game Jack describes.
+(Old numbering, kept for reference only.)
 
 ## Free roam or rail? My recommendation: a wide corridor, forward goal
 Keep the road as the spine (the generator, the pacing director, the daily seed and the replay system all hang off distance

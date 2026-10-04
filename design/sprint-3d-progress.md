@@ -32,7 +32,7 @@ Stop Point 1: waiting on Jack's answers (look choice, iPhone ?bench=1 screenshot
 - Replays: `graybox/replays/base-*.json` (flag off, Sprint C baselines) and `shunt/replays/wall-*.json` (flag on, step 6 baselines)
   must both match on every build; `replays/beauty.json` is the bench and postcard run (seed 3, flag off, 90 s).
 
-## Sprint 4 (driving v2 + weapons on buttons), in progress
+## Sprint C work: driving v2 and weapons on buttons (commits titled "Sprint 4 ..." used an old numbering; see design/roadmap.md, sprints are A to G)
 Jack's calls after Stop Point 1: the sim is open again. Done in step A (commit "Sprint 4 step A"):
 - GAS (hold) to 1,300 pt/s, coast back to cruise, BRAKE to 260 then stop and reverse to -220 while held (`T.drive`).
 - The 360: pad held + thumb dragged a lane past the road edge for 0.4 s at speed > 480 → spin at 420°/s, pays 300 + tier-3 turbo (`T.spin`).
@@ -43,3 +43,9 @@ Jack's calls after Stop Point 1: the sim is open again. Done in step A (commit "
   baselines retired; new ones recorded with `--sync` bots (sim-paced) into replays/.
 - `?lite=1` (half res, no shadows/post) for headless bots; `?cam=pitch,dist,fov` for camera comparison shots.
 - This container's SwiftShader is ~4 fps at full quality: use `--sync` for every bot; never two browsers at once.
+
+## Sprint C, Look to 8 stop points (session of 2026-10-04)
+Stop 1 Environment, Stop 2 Cars, Stop 3 UI and performance; report and wait for Jack's go-ahead at each. Rules: enemy shapes are
+original, from role descriptions only (no real makes, no spy-franchise cues), top-view sheet of all five shown before building;
+hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mood board. Approved for Stop 3: showroom title screen
+(hero car slowly turning, lit to show the paint) inside the 150 draw-call budget.
