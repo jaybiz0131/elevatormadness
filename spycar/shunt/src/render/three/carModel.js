@@ -13,7 +13,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import MODELS from 'virtual:models';
 export { MODELS };
 const AXES = ['x', 'y', 'z'];
-export async function fitGlb(url, { length, width, nose = 'auto' }) {
+export async function fitGlb(url, { length, width, nose = 'auto', up = null }) {
   const gltf = await new GLTFLoader().loadAsync(url); gltf.scene.updateMatrixWorld(true);
   const parts = [];
   // a textured model keeps its UVs and normals and hands back its first material's base colour and normal maps; an untextured one is
@@ -24,13 +24,14 @@ export async function fitGlb(url, { length, width, nose = 'auto' }) {
   if (!parts.length) throw new Error('no meshes in the model');
   const geo = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);
   const box = new Box3().setFromBufferAttribute(geo.attributes.position); const size = box.getSize(new Vector3()), ctr = box.getCenter(new Vector3());
-  const [lenAx, , upAx] = AXES.slice().sort((a, b) => size[b] - size[a]);
+  // the up axis is the shortest unless set (a van can be taller than it is wide); the length is the longest of the other two
+  const upAx = up || AXES.slice().sort((a, b) => size[a] - size[b])[0]; const lenAx = AXES.filter(a => a !== upAx).sort((a, b) => size[b] - size[a])[0];
   let noseSign;
   if (/^[+-][xyz]$/.test(nose)) noseSign = nose[0] === '+' ? 1 : -1;
   else { const p = geo.attributes.position; const top = box.max[upAx] - size[upAx] * 0.15; const V = new Vector3(); let sum = 0, n = 0; for (let i = 0; i < p.count; i++) { V.fromBufferAttribute(p, i); if (V[upAx] >= top) { sum += V[lenAx] - ctr[lenAx]; n++; } } noseSign = n && sum / n > 0 ? -1 : 1; }
   const unit = (ax, s) => { const v = new Vector3(); v[ax] = s; return v; };
-  const fwd = unit(lenAx, noseSign), up = unit(upAx, 1), right = new Vector3().crossVectors(fwd, up);
-  const rot = new Matrix4().makeBasis(right, up, fwd.clone().negate()).transpose();   // model -> car frame (right, up, back)
+  const fwd = unit(lenAx, noseSign), upV = unit(upAx, 1), right = new Vector3().crossVectors(fwd, upV);
+  const rot = new Matrix4().makeBasis(right, upV, fwd.clone().negate()).transpose();   // model -> car frame (right, up, back)
   geo.translate(-ctr.x, -ctr.y, -ctr.z); geo.applyMatrix4(rot);
   const s2 = new Box3().setFromBufferAttribute(geo.attributes.position).getSize(new Vector3());
   const k = Math.min(length / s2.z, width / s2.x); geo.scale(k, k, k);
@@ -100,18 +101,18 @@ export function carMaterial(brake, key, opts = {}) {
   const T = opts.tex; const m = T ? new MeshPhysicalMaterial({ vertexColors: true, map: T.map, normalMap: T.normalMap, roughness: 1, metalness: 1, clearcoat: opts.clearcoat ?? 1, clearcoatRoughness: opts.clearcoatRoughness ?? 0.05, envMapIntensity: opts.envMapIntensity ?? 1.5 })
     : new MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 1, envMapIntensity: 1.7 });
   if (T && T.normalScale) m.normalScale.copy(T.normalScale);
-  const tint = new Color(opts.tint || '#ffffff');
-  m.onBeforeCompile = (sh) => { sh.uniforms.uBrake = brake; sh.uniforms.uTint = { value: tint };
+  const tint = new Color(opts.tint || '#ffffff'); const tintOn = opts.tint ? 1 : 0;   // without a tint the texture's colours stay as they are
+  m.onBeforeCompile = (sh) => { sh.uniforms.uBrake = brake; sh.uniforms.uTint = { value: tint }; sh.uniforms.uTintOn = { value: tintOn };
     // textured: a faint cyan self-light (0.07 on white panels) keeps the hue at night, when a metal finish mostly shows the navy sky
     if (T) {   // textured: per texel, white panels (bright, colourless) take the tint as glossy metal paint; dark and coloured texels keep
       // the texture's colour with a rougher, less metallic finish; tail lights glow only where the texel is red
-      sh.fragmentShader = 'uniform vec3 uTint;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      sh.fragmentShader = 'uniform vec3 uTint; uniform float uTintOn;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
  vec3 tc = diffuseColor.rgb; float tl = dot(tc, vec3(0.299, 0.587, 0.114)); float ts = max(tc.r, max(tc.g, tc.b)) - min(tc.r, min(tc.g, tc.b));
  float panelW = smoothstep(0.35, 0.6, tl) * (1.0 - smoothstep(0.12, 0.3, ts)); float redW = clamp((tc.r - max(tc.g, tc.b)) * 2.5, 0.0, 1.0);
- diffuseColor.rgb = mix(tc, uTint * (0.55 + 0.45 * tl), panelW);`);
+ diffuseColor.rgb = mix(tc, uTint * (0.55 + 0.45 * tl), panelW * uTintOn);`);
     }
     sh.vertexShader = 'attribute vec4 surf; varying vec4 vSurf;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vSurf = surf;');
-    sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = ' + (T ? 'mix(0.55, 0.2, panelW)' : 'vSurf.x') + ';').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = ' + (T ? 'mix(0.15, 0.45, panelW)' : 'vSurf.y') + ';').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5)' + (T ? ' * (vSurf.w > 0.5 ? max(redW * 1.6, 0.12) : 1.0) + uTint * panelW * 0.07' : '') + ';'); };
+    sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = ' + (T ? 'mix(0.55, 0.2, panelW)' : 'vSurf.x') + ';').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = ' + (T ? 'mix(0.15, 0.45, panelW)' : 'vSurf.y') + ';').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5)' + (T ? ' * (vSurf.w > 0.5 ? max(redW * 1.6, 0.12) : 1.0) + uTint * panelW * 0.07 * uTintOn' : '') + ';'); };
   m.customProgramCacheKey = () => 'car-' + key + (T ? '-tex' : ''); return m;
 }
 // tag a code-built part (the hero's spinning wheels) with a palette entry so it draws with carMaterial
