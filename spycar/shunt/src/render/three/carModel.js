@@ -13,6 +13,15 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import MODELS from 'virtual:models';
 export { MODELS };
 const AXES = ['x', 'y', 'z'];
+// Meshy files can carry zero-length normals (a few dozen vertices in some props); lit, they give NaN, and the bloom then spreads it
+// over the whole frame (a black screen). Each one takes its own triangle's face normal. The geometry is non-indexed (3 per facet).
+export function fixNormals(geo) {
+  const n = geo.attributes.normal, p = geo.attributes.position; if (!n) return 0; let fixed = 0;
+  for (let i = 0; i < n.count; i++) { if (Math.hypot(n.getX(i), n.getY(i), n.getZ(i)) > 0.5) continue; const f = i - (i % 3);
+    const ax = p.getX(f + 1) - p.getX(f), ay = p.getY(f + 1) - p.getY(f), az = p.getZ(f + 1) - p.getZ(f), bx = p.getX(f + 2) - p.getX(f), by = p.getY(f + 2) - p.getY(f), bz = p.getZ(f + 2) - p.getZ(f);
+    let cx = ay * bz - az * by, cy = az * bx - ax * bz, cz = ax * by - ay * bx; const l = Math.hypot(cx, cy, cz) || 1; if (l === 1 && !cx && !cy && !cz) cy = 1; n.setXYZ(i, cx / l, cy / l, cz / l); fixed++; }
+  n.needsUpdate = true; return fixed;
+}
 export async function fitGlb(url, { length, width, nose = 'auto', up = null }) {
   const gltf = await new GLTFLoader().loadAsync(url); gltf.scene.updateMatrixWorld(true);
   const parts = [];
@@ -36,7 +45,7 @@ export async function fitGlb(url, { length, width, nose = 'auto', up = null }) {
   const s2 = new Box3().setFromBufferAttribute(geo.attributes.position).getSize(new Vector3());
   const k = Math.min(length / s2.z, width / s2.x); geo.scale(k, k, k);
   const b3 = new Box3().setFromBufferAttribute(geo.attributes.position); geo.translate(0, -b3.min.y, -(b3.min.z + b3.max.z) / 2);
-  if (!tex || !geo.attributes.normal) geo.computeVertexNormals(); geo.computeBoundingSphere();
+  if (!tex || !geo.attributes.normal) geo.computeVertexNormals(); else fixNormals(geo); geo.computeBoundingSphere();
   const fin = new Box3().setFromBufferAttribute(geo.attributes.position).getSize(new Vector3());
   return { geo, size: fin, tex, info: { textured: !!tex, triangles: geo.attributes.position.count / 3, meshes: parts.length, lengthAxis: lenAx, upAxis: upAx, nose: (noseSign > 0 ? '+' : '-') + lenAx, noseFrom: nose === 'auto' ? 'roof' : 'set', scale: +k.toFixed(3), size: [fin.x, fin.y, fin.z].map(v => +v.toFixed(2)) } };
 }

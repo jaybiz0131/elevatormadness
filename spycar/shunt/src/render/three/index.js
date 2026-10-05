@@ -18,6 +18,8 @@ import { createPost } from './post.js';
 import { LOOKS, lookFor } from './looks.js';
 import { loadHeroModel, HERO_GLB_URL } from './heroModel.js';
 import { loadEnemyModels } from './enemyModels.js';
+import { loadPropModels } from './propModels.js';
+import { MODELS } from './carModel.js';
 const V = new Vector3(), V2 = new Vector3(), SUN = new Vector3();
 function rainTexture() { const c = document.createElement('canvas'); c.width = 256; c.height = 256; const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 256, 256); let a = 7; const rng = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 1; for (let i = 0; i < 90; i++) { const px = rng() * 256, py = rng() * 256, l = 14 + rng() * 26; x.globalAlpha = 0.3 + rng() * 0.6; x.beginPath(); x.moveTo(px, py); x.lineTo(px + 2, py + l); x.stroke(); } const t = new CanvasTexture(c); t.wrapS = t.wrapT = RepeatWrapping; t.colorSpace = SRGBColorSpace; return t; }
 const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -35,7 +37,7 @@ export function createThreeRenderer(canvas, opts = {}) {
   const key = new DirectionalLight(0xffffff, 1); key.castShadow = true; key.shadow.mapSize.set(opts.shadowMap || 2048, opts.shadowMap || 2048); key.shadow.camera.near = 1; key.shadow.camera.far = 500; key.shadow.bias = -0.0006; key.shadow.normalBias = 0.25;
   const SB = 80; key.shadow.camera.left = -SB; key.shadow.camera.right = SB; key.shadow.camera.top = SB; key.shadow.camera.bottom = -SB; scene.add(key); scene.add(key.target);
   const hemi = new HemisphereLight(0x8899ff, 0x202020, 0.6); scene.add(hemi);
-  const sky = new Sky(scene, renderer);
+  const sky = new Sky(scene, renderer); if (MODELS.skyline) sky.addSkyline(MODELS.skyline);
   const road = new RoadMesh(scene), cars = new CarSystem(scene), props = new Props(scene), fx = new FX(scene), city = new City(scene, fx); roadCam.setOccluders(city.group);
   // rain streaks (a ?tune=1 option): a scrolling streak quad in front of the camera
   const rain = new Mesh(new PlaneGeometry(2, 2), new MeshBasicMaterial({ map: rainTexture(), transparent: true, opacity: 0, blending: AdditiveBlending, depthTest: false, depthWrite: false })); rain.renderOrder = 20; rain.frustumCulled = false; camera.add(rain); rain.position.set(0, 0, -1.2); scene.add(camera);
@@ -97,8 +99,9 @@ export function createThreeRenderer(canvas, opts = {}) {
   const HERO_MODE = new URLSearchParams(location.search).get('hero') === 'code' ? 'code' : 'glb';
   async function loadHero() { if (!HERO_GLB_URL || state.heroInfo) return; try { const m = await loadHeroModel(); if (m) { cars.setHeroModel(m, HERO_MODE === 'code'); state.heroInfo = m.userData.info; } } catch (e) { state.heroError = String(e && e.message || e).slice(0, 120); } }
   async function loadEnemies() { if (state.enemyInfo) return; const map = await loadEnemyModels(scene); cars.setEnemyModels(map); state.enemyInfo = Object.fromEntries(Object.entries(map).map(([k, v]) => [k, v.info || v])); }
+  async function loadProps() { if (state.propInfo) return; const r = await loadPropModels(scene); city.setPropModels(r.meshes); props.setPropModels(r.meshes); state.propInfo = r.info; }
   async function prewarm() {
-    await loadHero(); await loadEnemies(); state.modelsReady = true;
+    await loadHero(); await loadEnemies(); await loadProps(); state.modelsReady = true;
     // every material compiled before play: one of each car kind in the scene, every batch with one instance, then one composer frame
     const temp = []; for (const k of Object.keys(cars.geo)) { const m = cars.acquire(k); m.userData.kind = k; temp.push(m); }
     fx.begin(); fx.glow(0, 0, 0, 1, 1, 1, 1, 0); fx.puff(0, 0, 0, 1, 0); fx.shadow(V.set(0, 0, 0), 1, 1); fx.ring(0, 0, 0, 1, 0xffffff, 0, 1); fx.spark(0, 0, 0, 0, 0, 0); fx.poolAt(0, 0, 0, 1, 1, 1, 0, 1); fx.cone(0, 0, 0, 1, 1, 1, 1, 0); fx.end();

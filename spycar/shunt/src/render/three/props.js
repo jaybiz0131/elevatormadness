@@ -38,6 +38,8 @@ export class Props {
     for (const m of this.all) this.group.add(m);
     this.labels = new Map(); this.labelGroup = new Group(); this.group.add(this.labelGroup); this.labelPool = [];
   }
+  // Jack's billboard and roadwork-cone models replace the kit billboard and roadblock (propModels.js)
+  setPropModels(meshes) { this.glb = {}; for (const n of ['billboard', 'cones']) if (meshes[n]) { this.glb[n] = meshes[n]; this.all.push(meshes[n]); } this.hasLampModel = !!meshes.street_lamp; }
   begin() { for (const m of this.all) m.count = 0; this.labelsUsed = 0; }
   put(m, G, x, s, yaw, sx = 1, sy = 1, sz = 1, lift = 0) { if (m.count >= m.instanceMatrix.count) return; toWorld(G.road, x, s, D.position); D.position.y += lift; D.rotation.set(0, -(G.road.frame(s).psi + yaw), 0); D.scale.set(sx, sy, sz); D.updateMatrix(); m.setMatrixAt(m.count++, D.matrix); }
   end() { for (const m of this.all) if (m.count) m.instanceMatrix.needsUpdate = true; for (let i = this.labelsUsed; i < this.labelPool.length; i++) this.labelPool[i].visible = false; }
@@ -55,8 +57,8 @@ export class Props {
       if (s % 120 === 0) for (const side of [-1, 1]) this.put(this.post, G, REF + side * (w / 2 + 11), s, side > 0 ? Math.PI : 0);   // reflector faces the road
       if (s % 160 === 0 && !(a.corner && a.corner.hard)) { const h = seedHash(s); const side = h < 0.5 ? -1 : 1; const kind = Math.floor(h * 1000) % 3; const off = 50 + ((h * 7919) % 1) * 110; const x = REF + side * (w / 2 + off);
         if (kind === 0) this.put(this.tree, G, x, s, h * 6, 1 + h * 0.4, 1 + h * 0.4, 1 + h * 0.4);
-        else if (kind === 1) this.put(this.lamp, G, x, s, side > 0 ? Math.PI : 0);   // the arm reaches over the road
-        else this.put(this.board, G, x, s, 0); }
+        else if (kind === 1) { if (this.hasLampModel) this.put(this.tree, G, x, s, h * 6, 1.2, 1.2, 1.2); else this.put(this.lamp, G, x, s, side > 0 ? Math.PI : 0); }   // the street lamps proper stand at the light pools (city.js)
+        else this.put((this.glb && this.glb.billboard) || this.board, G, x, s, 0); }
     }
     // corner furniture
     for (let i = Math.max(0, road.ci2 || 0); i < road.corners.length; i++) { const cn = road.corners[i]; if (cn.s1 < scroll - 200) continue; if (cn.warnS - 200 > yTop) break;
@@ -71,7 +73,7 @@ export class Props {
     for (const b of G.barrels) if (b.alive && b.y > scroll - 120 && b.y < yTop) this.put(this.barrel, G, b.x, b.y, 0);
     for (const c of G.cones) if (c.alive && c.y > scroll - 120 && c.y < yTop) this.put(this.cone, G, c.x, c.y, 0);
     for (const cr of G.crates) if (cr.y > scroll - 120 && cr.y < yTop) this.put(this.crate, G, cr.x, cr.y, cr.t * 2, 1, 1, 1, 0.3 + Math.sin(cr.t * 5) * 0.3);
-    for (const b of G.barriers) if (!b.hit && b.y > scroll - 120 && b.y < yTop) { const x0 = road.laneX(b.y, b.lane0) - T.laneW / 2, x1 = road.laneX(b.y, b.lane0 + b.lanes - 1) + T.laneW / 2; for (let x = x0 + 12; x < x1; x += 24) this.put(this.block, G, x, b.y, 0, 1.7, 1, 1); }
+    for (const b of G.barriers) if (!b.hit && b.y > scroll - 120 && b.y < yTop) { const x0 = road.laneX(b.y, b.lane0) - T.laneW / 2, x1 = road.laneX(b.y, b.lane0 + b.lanes - 1) + T.laneW / 2; for (let x = x0 + 12; x < x1; x += 24) { if (this.glb && this.glb.cones) this.put(this.glb.cones, G, x, b.y, 0); else this.put(this.block, G, x, b.y, 0, 1.7, 1, 1); } }
     for (const m of G.medians) for (let s = Math.max(m.y0, scroll - 100); s < Math.min(m.y1, yTop); s += 40) { const x0 = road.laneX(s, m.lane0) - 6, x1 = road.laneX(s, m.lane0 + m.lanes - 1) + 6; this.put(this.median, G, (x0 + x1) / 2, s + 20, 0, (x1 - x0) * M, 1, 40 * M); }
     for (const s of G.slicks) this.put(this.slick, G, s.x, s.y, 0, s.r * 1.4 * M, 1, s.r * M, 0.02);
     for (const g of G.gaps) for (let s = Math.max(g.y0, scroll - 100); s < Math.min(g.y1, yTop); s += 40) { const w = road.at(s).width; this.put(this.pit, G, REF + 20, s + 20, 0, (w - 40) * M, 1, 40 * M, 0.03); }

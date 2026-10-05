@@ -5,8 +5,25 @@
 |--------|-------|
 | A, B | Done before the 3D port (gray-box driving; Sprint B driving constants). |
 | **C (current)** | 3D engine and corners, run as the "Look to 8" stop points. This session: Stop 1 Environment (dark wet road, real smoke, prop kit), Stop 2 Cars (five enemy looks, hero polish, hero top-view design), Stop 3 UI and performance (HUD and title polish, showroom title screen with the hero car turning, tune panel, fonts, under 150 draw calls). |
-| D | Downhill drop plus the first 5-stage mission: drop camera, intro orbit camera, slow-motion kill shot. |
-| E, F, G | Scope to be confirmed with Jack (not written down in the repo). |
+| D | Downhill drop plus the first 5-stage mission: drop camera, intro orbit camera, slow-motion kill shot. Level 1 intro, Acts 1 and 2, the boss climax and the payoff (see Level 1 below). |
+| E | Act 3, the city maze (see Level 1 below). Rest of scope to be confirmed with Jack. |
+| F | Supply pit stop with the Mule's arm (see Level 1 below). Rest of scope to be confirmed with Jack. |
+| G | Scope to be confirmed with Jack. |
+
+## Level 1 plan (Jack, 2026-10-05; record only, build in the sprints named)
+Goal: arcade feel on mobile. Quick to start, big moments, readable at a glance, a score to beat. Driving skill raises the score, but a
+weak driver still finishes Level 1 and sees the whole movie: steering assist, soft barrier bounces, generous armor, no hard fail on the
+first run.
+
+| Beat | Sprint | What it is |
+|------|--------|------------|
+| Intro | D | Hero blasts in from the side, drifts hard to a stop, beat, then GO. Camera from a low side angle sweeping into the chase cam. |
+| Act 1: country highway at dusk | D | Open road, learn the controls, the city skyline glowing on the horizon (skyline.jpg backdrop). Lower, more 3D chase camera. |
+| Act 2: the drop | D | Downhill high-speed run into the city, big air, tricks. Camera pulls back and low to show the car airborne. |
+| Act 3: the city | E | The road opens into a compact maze of 3 or 4 blocks with 2 or 3 exit routes. The player turns at intersections; enemies flank from side streets and alleys. Camera rises and zooms out as buildings get taller. Green arrows on the road plus an edge-of-screen pointer guide the way out; any route works. |
+| Climax: boss fight | D | A named villain car (magenta and black): entrance cutscene, on-screen health bar with its name, 2 or 3 attack phases. Replaces the Bulwark showdown; the Bulwark stays a regular heavy enemy. |
+| Payoff | D | Results, unlocks, showroom orbit, play again. |
+| Supply pit stop | F | The Mule extends mule_arm and docks alongside the hero; both race locked together while gear transfers. Never drive into a trailer. (The arm ships folded on the Mule's right side from Sprint C.) |
 
 Level design rule (Jack, 2026-10-04): every level is written like a film, with a beginning, a middle and an end, building to a climax
 and a payoff. Getting the first level right comes first; it becomes the template for the rest. Camera changes between stages (road,

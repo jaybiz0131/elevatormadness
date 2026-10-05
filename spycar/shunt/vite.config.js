@@ -1,4 +1,4 @@
-// Build config: the defaults, plus one virtual module. `virtual:models` embeds every .glb in the repo's assets/models/ as a data
+// Build config: the defaults, plus one virtual module. `virtual:models` embeds every .glb (and .jpg) in the repo's assets/models/ as a data
 // URL, keyed by file name without the extension ({ hero, dart, ... }), so adding or replacing a model file and rebuilding is all a
 // new car needs. Missing files simply are not in the map.
 import fs from 'node:fs';
@@ -11,7 +11,7 @@ function models() {
     resolveId(id) { return id === 'virtual:models' ? '\0virtual:models' : null; },
     load(id) {
       if (id !== '\0virtual:models') return null;
-      const out = {}; if (fs.existsSync(DIR)) for (const f of fs.readdirSync(DIR)) if (f.endsWith('.glb')) { const p = path.join(DIR, f); this.addWatchFile(p); out[f.slice(0, -4)] = 'data:model/gltf-binary;base64,' + fs.readFileSync(p).toString('base64'); }
+      const out = {}; if (fs.existsSync(DIR)) for (const f of fs.readdirSync(DIR)) { const m = /^(.*)\.(glb|jpg)$/.exec(f); if (!m) continue; const p = path.join(DIR, f); this.addWatchFile(p); out[m[1]] = 'data:' + (m[2] === 'glb' ? 'model/gltf-binary' : 'image/jpeg') + ';base64,' + fs.readFileSync(p).toString('base64'); }   // .glb models and .jpg backdrops (skyline.jpg)
       return `export default ${JSON.stringify(out)};`;
     },
   };

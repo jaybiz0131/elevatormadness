@@ -1,7 +1,7 @@
 // Placeholder cars: boxes with the 2D build's class colours (player cyan, enemies black with red, civilians pastel, trucks green,
 // the armored truck dark with red). One merged vertex-coloured geometry per kind, one draw call per car, pooled meshes. Headlights,
 // tail lights, blinkers, the Bruiser tell arrow, the Gunner sight line and hit flashes are additive glows and markers batched by fx.
-import { BoxGeometry, Mesh, MeshStandardMaterial, Color, Vector3, Float32BufferAttribute, Group, Object3D } from 'three';
+import { BoxGeometry, Mesh, MeshStandardMaterial, Color, Vector3, Float32BufferAttribute, Group, Object3D, Matrix4 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { T, REF, lerp } from '../../sim/constants.js';
 import { M, toWorld } from './scale.js';
@@ -27,7 +27,7 @@ function carGeometry(kind) {
 }
 export class CarSystem {
   constructor(scene) {
-    this.scene = scene; this.inst = {}; this.proxy = new Object3D(); this.geo = {}; this.mat = {}; this.free = {}; this.live = []; this.pos = new Vector3(); this.meshOf = new Map(); this.stamp = 0;
+    this.scene = scene; this.inst = {}; this.proxy = new Object3D(); this.attachM = new Matrix4(); this.geo = {}; this.mat = {}; this.free = {}; this.live = []; this.pos = new Vector3(); this.meshOf = new Map(); this.stamp = 0;
     for (const k of ['player', 'civ', 'weak', 'bruiser', 'gunner', 'armored', 'truck']) { this.geo[k] = carGeometry(k); this.free[k] = []; }
     for (const [k, c] of Object.entries(KIND_COL)) this.mat[k] = new MeshStandardMaterial({ color: new Color(c), vertexColors: true, roughness: 0.55, metalness: 0.25 });
     for (let i = 0; i < CIV_TINTS.length; i++) this.mat['civ' + i] = new MeshStandardMaterial({ color: new Color(CIV_TINTS[i]), vertexColors: true, roughness: 0.6, metalness: 0.2 });
@@ -45,14 +45,15 @@ export class CarSystem {
     const glb = mesh && !useCode; this.outline.geometry = glb ? mesh.userData.body.geometry : this.geo.player; this.outline.position.y = glb ? 0 : -0.35; this.outline.scale.setScalar(glb ? 1.015 : 1); }
   // the imported enemy types (enemyModels.js): one InstancedMesh per type
   setEnemyModels(map) { for (const [k, v] of Object.entries(map)) if (v.mesh) this.inst[k] = v.mesh; }
-  emit(im, o, tint) { if (im.count >= im.instanceMatrix.count) return; o.updateMatrix(); im.setMatrixAt(im.count, o.matrix); im.instanceColor.setXYZ(im.count, tint, tint, tint); im.count++; }
+  emit(im, o, tint) { if (im.count >= im.instanceMatrix.count) return; o.updateMatrix(); im.setMatrixAt(im.count, o.matrix); im.instanceColor.setXYZ(im.count, tint, tint, tint); im.count++;
+    const at = im.userData.attach; if (at && at.mesh.count < at.mesh.instanceMatrix.count) { this.attachM.multiplyMatrices(o.matrix, at.local); at.mesh.setMatrixAt(at.mesh.count, this.attachM); at.mesh.instanceColor.setXYZ(at.mesh.count, tint, tint, tint); at.mesh.count++; } }   // an attached part (the Mule's arm)
   acquire(kind) { let m = this.free[kind].pop(); if (!m) { m = new Mesh(this.geo[kind], this.mat[kind]); m.castShadow = true; m.frustumCulled = false; } this.scene.add(m); return m; }
   release(m) { this.scene.remove(m); this.free[m.userData.kind].push(m); }
   place(mesh, G, x, s, yaw, lift) { toWorld(G.road, x, s, this.pos); mesh.position.copy(this.pos); mesh.position.y += lift; mesh.rotation.set(0, -(G.road.frame(s).psi + yaw), 0, 'YXZ'); }
   // cars that exist this frame get a mesh; the rest go back to the pool. c.mesh is render-side only (the hash never reads it).
   update(G, alpha, fx, elapsed) {
     const stamp = ++this.stamp;   // no per-frame allocation: meshes seen this frame carry the stamp
-    for (const k in this.inst) this.inst[k].count = 0; tickEnemyLights(elapsed);
+    for (const k in this.inst) { this.inst[k].count = 0; if (this.inst[k].userData.attach) this.inst[k].userData.attach.mesh.count = 0; } tickEnemyLights(elapsed);
     for (const c of G.cars) {
       // a type with an imported model is placed through a proxy and written into its InstancedMesh; the rest use pooled meshes
       if (!c.alive) continue; const inst = this.inst[c.kind]; let m; if (inst) m = this.proxy; else { m = this.meshOf.get(c); if (!m) { m = this.acquire(c.kind); m.userData.kind = c.kind; this.meshOf.set(c, m); } }
@@ -73,7 +74,7 @@ export class CarSystem {
       if (c.kind === 'gunner' && c.state === 'sight') fx.sightLine(G, c.sightX, c.y, c.sightX, c.y + 700, 0.5 + 0.5 * Math.sin(elapsed * 30));
     }
     for (const [c, m] of this.meshOf) if (m.userData.stamp !== stamp) { this.release(m); this.meshOf.delete(c); }
-    for (const k in this.inst) { const im = this.inst[k]; if (im.count) { im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; } }
+    for (const k in this.inst) { const im = this.inst[k]; for (const m of im.userData.attach ? [im, im.userData.attach.mesh] : [im]) if (m.count) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; } }
   }
   updatePlayer(G, rx, rdist, fx, st, elapsed) {
     // the imported hero turns its wheels with the road speed and lights its tail bar under braking

@@ -2,7 +2,7 @@
 // in enemyShapes.js (which stays the size and silhouette reference). Each is fitted to its sim footprint (T.sizes, unchanged),
 // measured and painted in its role colours by carModel.js, then drawn as one InstancedMesh per type: one draw call per type however
 // many are on screen. A type with no file keeps the placeholder box from cars.js.
-import { InstancedMesh, InstancedBufferAttribute, Color } from 'three';
+import { InstancedMesh, InstancedBufferAttribute, Color, Matrix4, MeshStandardMaterial } from 'three';
 import { T } from '../../sim/constants.js';
 import { M } from './scale.js';
 import { MODELS, fitGlb, findWheels, paintCar, palette, carMaterial } from './carModel.js';
@@ -41,6 +41,14 @@ export async function loadEnemyModels(scene, cap = 24) {
       const mesh = new InstancedMesh(geo, carMaterial(kind === 'truck' ? MULE_PULSE : NO_BRAKE, 'enemy-' + kind, tex ? { tex, clearcoat: 0.5, envMapIntensity: 1.2 } : {}), cap); mesh.count = 0; mesh.castShadow = true; mesh.frustumCulled = false; mesh.name = 'enemy-' + name;
       mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3);   // per instance tint: white, or dark for a wreck
       scene.add(mesh); out[kind] = { mesh, info };
+      if (kind === 'truck' && MODELS.mule_arm) {   // the Mule's arm (mule_arm.glb), folded along the right side, claw forward; it rides on
+        // the Mule's own instance matrix (cars.js emit), one more draw; the side-dock animation comes in Sprint F
+        const arm = await fitGlb(MODELS.mule_arm, { length: 3.2, width: 2, nose: '+x', up: 'y' });
+        const am = new MeshStandardMaterial({ map: arm.tex ? arm.tex.map : null, normalMap: arm.tex ? arm.tex.normalMap : null, roughness: 0.6, metalness: 0.4 });
+        const armMesh = new InstancedMesh(arm.geo, am, cap); armMesh.count = 0; armMesh.castShadow = true; armMesh.frustumCulled = false; armMesh.name = 'enemy-mule-arm';
+        armMesh.instanceColor = new InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3); scene.add(armMesh);
+        mesh.userData.attach = { mesh: armMesh, local: new Matrix4().makeTranslation(size.x / 2 + arm.size.x / 2 - 0.25, 0.9, 0.4) }; info.arm = { triangles: arm.info.triangles, size: arm.info.size };
+      }
     } catch (e) { out[kind] = { error: String(e && e.message || e).slice(0, 120), file: name + '.glb' }; }
   }
   return out;

@@ -53,27 +53,38 @@ export class City {
     this.vent = this.inst(KIT.vent(), kit, 32);
     this.lamp = this.inst(KIT.lamp(), kit, 64);
     this.props = [this.bollard, this.bench, this.vending, this.hydrant, this.pillar, this.beam, this.vent, this.lamp];
+    this.glb = {}; this.sfDepth = 3.4;
     this.vents = []; this.lamps = []; this.signSpots = [];
     this.seed = 0; this.neon = 1; this.wet = 1; this.steam = 0.6;
   }
   inst(geo, mat, n) { const m = new InstancedMesh(geo, mat, n); m.count = 0; m.castShadow = true; m.frustumCulled = false; this.group.add(m); return m; }
   put(m, road, x, s, yaw, sx = 1, sy = 1, sz = 1, lift = 0) { if (m.count >= m.instanceMatrix.count) return; toWorld(road, x, s, D.position); D.position.y += lift; D.rotation.set(0, -(road.frame(s).psi + yaw), 0); D.scale.set(sx, sy, sz); D.updateMatrix(); m.setMatrixAt(m.count++, D.matrix); }
   // one chunk of street: buildings on both sides set back behind a sidewalk, with neon tubes and a sign or two
+  // Jack's prop models (propModels.js): street lamps, storefronts, newsstands, phone booths, rooftop AC and the three landmarks
+  // replace or join the kit pieces; set before the first chunk is built
+  setPropModels(meshes) { for (const n of ['street_lamp', 'storefront', 'newsstand', 'phone_booth', 'rooftop_ac', 'hotel_tower', 'radio_tower', 'parking_garage']) if (meshes[n]) { this.glb[n] = meshes[n]; this.props.push(meshes[n]); }
+    if (this.glb.storefront) { this.glb.storefront.geometry.computeBoundingBox(); const b = this.glb.storefront.geometry.boundingBox; this.sfDepth = b.max.z - b.min.z; } this.reset(); }
   buildChunk(G, k) {
-    const road = G.road, seed = road.seed; const s0 = k * CHUNK; const parts = []; const tubes = []; const signs = []; const tint = new Color();
+    const road = G.road, seed = road.seed; const s0 = k * CHUNK; const parts = []; const tubes = []; const signs = []; const fronts = [], roofs = []; const tint = new Color();
     for (const side of [-1, 1]) {
       let s = s0; let i = 0;
       while (s < s0 + CHUNK - 40) {
         const h1 = hash(seed, Math.round(s) + side * 7, 1), h2 = hash(seed, Math.round(s) + side * 7, 2), h3 = hash(seed, Math.round(s) + side * 7, 3);
-        const len = 120 + h1 * 160; const tower = h3 > 0.72; const depth = tower ? 16 + h2 * 12 : 8 + h2 * 6; const height = tower ? 24 + (h3 - 0.72) * 70 : 5 + h3 * 12;
+        const len = 120 + h1 * 160;
+        // a landmark's plot stays clear of street buildings on its side
+        if (LANDMARKS.some(lm => this.glb[lm.name] && lm.side === side && Math.abs(s + len / 2 - lm.s) < lm.clear)) { s += len + 20 + h2 * 40; i++; continue; }
+        const tower = h3 > 0.72; const depth = tower ? 16 + h2 * 12 : 8 + h2 * 6; const height = tower ? 24 + (h3 - 0.72) * 70 : 5 + h3 * 12;
         const a = road.at(s + len / 2); const w = a.width; const x = REF + side * (w / 2 + (tower ? 330 + 120 * h2 : 66) + depth / 2 / M);
         toWorld(road, x, s + len / 2, V); const yaw = -(road.frame(s + len / 2).psi);
         tint.setHSL(0.6 + h2 * 0.15, 0.25, 0.09 + h1 * 0.06);
         // the box runs along the road (z) with its depth across (x); the road-facing facade is at x = -side * depth / 2
         const L = len * M * 0.92, fx = -side * depth / 2; const local = [building(depth, height, L, 0, 0, 0, tint, Math.floor(h3 * 8) / 8)];
-        if (!tower) { const sw = h1 > 0.5 ? SWATCH.warm : SWATCH.cool; local.push(detail(0.25, 2.6, L * 0.86, fx - side * 0.1, 1.5, 0, sw, WHITE), detail(1.4, 0.18, L * 0.9, fx - side * 0.7, 3.1, 0, SWATCH.roof, tint)); }   // lit shopfront and an awning over it
+        const glbFront = !tower && this.glb.storefront && L >= 7, glbRoof = !tower && this.glb.rooftop_ac;
+        if (glbFront) fronts.push({ x: x - side * (depth / 2 + this.sfDepth / 2 - 1.5) / M, s: s + len / 2, yaw: side * Math.PI / 2 });   // shopfront model, its back 1.5 m into the facade
+        if (glbRoof) for (let r = 0; r < 1; r++) { const hr = hash(seed, Math.round(s) + side * 7 + r * 13, 5); roofs.push({ x: x + side * (hr - 0.5) * depth * 0.4 / M, s: s + len / 2 + (r - 0.5) * L * 0.5 / M, y: height + 0.6, yaw: hr * 6.283 }); }
+        if (!tower && !glbFront) { const sw = h1 > 0.5 ? SWATCH.warm : SWATCH.cool; local.push(detail(0.25, 2.6, L * 0.86, fx - side * 0.1, 1.5, 0, sw, WHITE), detail(1.4, 0.18, L * 0.9, fx - side * 0.7, 3.1, 0, SWATCH.roof, tint)); }   // lit shopfront and an awning over it
         local.push(detail(depth + 0.3, 0.6, L + 0.3, 0, height + 0.3, 0, SWATCH.roof, tint));   // parapet
-        for (let r = 0; r < (tower ? 3 : 2); r++) { const hr = hash(seed, Math.round(s) + side * 7 + r * 13, 5); local.push(detail(1.6 + hr * 1.6, 1.0 + hr, 2 + hr * 2, (hr - 0.5) * depth * 0.5, height + 0.6 + (0.5 + hr / 2), (r - 1) * L * 0.28, SWATCH.roof, tint.clone().multiplyScalar(1.5))); }   // roof units
+        for (let r = 0; r < (tower ? 3 : glbRoof ? 0 : 2); r++) { const hr = hash(seed, Math.round(s) + side * 7 + r * 13, 5); local.push(detail(1.6 + hr * 1.6, 1.0 + hr, 2 + hr * 2, (hr - 0.5) * depth * 0.5, height + 0.6 + (0.5 + hr / 2), (r - 1) * L * 0.28, SWATCH.roof, tint.clone().multiplyScalar(1.5))); }   // roof units
         const g = mergeGeometries(local, false); for (const q of local) q.dispose(); g.rotateY(yaw); g.translate(V.x, 0, V.z); parts.push(g);
         // neon tube along the roof edge facing the road, and a sign on the facade for some buildings
         const nc = new Color(NEON[Math.floor(h1 * NEON.length)]); const inner = x - side * depth / 2 / M;
@@ -83,7 +94,7 @@ export class City {
       }
     }
     const merged = mergeGeometries(parts, false); for (const p of parts) p.dispose(); merged.computeBoundingSphere();
-    const mesh = new Mesh(merged, this.mat); mesh.castShadow = true; mesh.receiveShadow = true; mesh.userData = { tubes, signs }; return mesh;
+    const mesh = new Mesh(merged, this.mat); mesh.castShadow = true; mesh.receiveShadow = true; mesh.userData = { tubes, signs, fronts, roofs }; return mesh;
   }
   update(G, rdist, elapsed, look) {
     const road = G.road; if (this.seed !== road.seed) { this.reset(); this.seed = road.seed; }
@@ -94,6 +105,9 @@ export class City {
     this.tubes.count = 0; let si = 0; for (const p of this.props) p.count = 0;
     const neonOn = this.neon;
     for (const [, m] of this.chunks) {
+      // the detailed models stop about 90 m ahead (beyond that they are specks in the fog): the triangle budget
+      if (this.glb.storefront) for (const f of m.userData.fronts) if (f.s < rdist + 1200) this.put(this.glb.storefront, road, f.x, f.s, f.yaw);
+      if (this.glb.rooftop_ac) for (const r of m.userData.roofs) if (r.s < rdist + 1200) this.put(this.glb.rooftop_ac, road, r.x, r.s, r.yaw, 1, 1, 1, r.y);
       for (const t of m.userData.tubes) { if (this.tubes.count >= 512) break; toWorld(road, t.x, t.s, D.position); D.position.y = t.y; D.rotation.set(0, -(road.frame(t.s).psi), 0); D.scale.set(0.25, 0.25, t.len); D.updateMatrix(); this.tubes.setMatrixAt(this.tubes.count, D.matrix); this.setTubeColor(this.tubes.count, t.col, neonOn); this.tubes.count++;
         this.fx.reflect(G, t.x, t.s, t.col, 0.7 * neonOn * this.wet, t.len); }
       for (const sg of m.userData.signs) { let mesh = this.signPool[si]; if (!mesh) { mesh = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({ transparent: true, side: DoubleSide, depthWrite: false })); mesh.renderOrder = 4; this.signPool.push(mesh); this.group.add(mesh); } si++;
@@ -106,12 +120,13 @@ export class City {
     const sA = Math.floor((rdist - 300) / 20) * 20, sB = rdist + 1400;
     for (let s = sA; s <= sB; s += 20) {
       const a = road.at(s); const w = a.width; const h = hash(road.seed, s / 20, 9);
-      if (s % 160 === 80 && !(a.corner && a.corner.hard)) for (const side of [-1, 1]) { const x = REF + side * (w / 2 + 40), hx = REF + side * (w / 2 + 22); this.put(this.lamp, road, x, s, side > 0 ? Math.PI : 0); this.fx.pool(G, hx, s, 1.0, 0.72, 0.38, 0.16 + 0.08 * neonOn, 3.6); this.fx.reflect(G, hx, s, LAMP_COL, 0.55 * this.wet, 6); }   // street lamps with their light pools and wet-road streaks
+      if (s % 160 === 80 && !(a.corner && a.corner.hard)) for (const side of [-1, 1]) { const x = REF + side * (w / 2 + 40), hx = REF + side * (w / 2 + 22); this.put(this.glb.street_lamp && s < rdist + 1200 ? this.glb.street_lamp : this.lamp, road, x, s, side > 0 ? Math.PI : 0); this.fx.pool(G, hx, s, 1.0, 0.72, 0.38, 0.16 + 0.08 * neonOn, 3.6); this.fx.reflect(G, hx, s, LAMP_COL, 0.55 * this.wet, 6); }   // street lamps with their light pools and wet-road streaks
       if (s % 20 === 0 && !(a.corner && a.corner.hard)) { const side = h < 0.5 ? -1 : 1; const kind = Math.floor(h * 977) % 5; const x = REF + side * (w / 2 + 44 + (h * 31 % 1) * 20);
-        if (kind === 0) this.put(this.bollard, road, x, s, 0); else if (kind === 1 && s % 40 === 0) this.put(this.bench, road, x, s, side > 0 ? Math.PI / 2 : -Math.PI / 2); else if (kind === 2 && s % 60 === 0) this.put(this.vending, road, x + side * 20, s, side > 0 ? -Math.PI / 2 : Math.PI / 2); else if (kind === 3 && s % 40 === 0) this.put(this.hydrant, road, x, s, 0); }
+        if (kind === 0) this.put(this.bollard, road, x, s, 0); else if (kind === 1 && s % 40 === 0) { if (this.glb.phone_booth && s % 80 === 0) this.put(this.glb.phone_booth, road, x, s, side * Math.PI / 2); else this.put(this.bench, road, x, s, side > 0 ? Math.PI / 2 : -Math.PI / 2); } else if (kind === 2 && s % 60 === 0) { if (this.glb.newsstand) this.put(this.glb.newsstand, road, x + side * 10, s, side * Math.PI / 2); else this.put(this.vending, road, x + side * 20, s, side > 0 ? -Math.PI / 2 : Math.PI / 2); } else if (kind === 3 && s % 40 === 0) this.put(this.hydrant, road, x, s, 0); }
       if (s % 3200 === 1600 && !(a.corner)) { for (const side of [-1, 1]) this.put(this.pillar, road, REF + side * (w / 2 + 26), s, 0); this.put(this.beam, road, REF, s, 0, (w + 90) * M, 1, 1, 7); }   // overpass
       if (s % 1200 === 600) { const side = h < 0.5 ? -1 : 1; const x = REF + side * (w / 2 + 24); this.put(this.vent, road, x, s, 0); const n = 6; for (let j = 0; j < n; j++) { const ph = ((elapsed * 0.35 + j / n + h) % 1); toWorld(road, x + (ph * 10 - 2) * side, s + 10, V); this.fx.puff(V.x, V.y + 0.3 + ph * 4.5, V.z, 0.5 + ph * 1.6, (1 - ph) * 0.35 * this.steam, 0.75, 0.78, 0.84); } }
     }
+    for (const lm of LANDMARKS) { const im = this.glb[lm.name]; if (!im || lm.s < rdist - 600 || lm.s > rdist + 2600) continue; const w = road.at(lm.s).width; this.put(im, road, REF + lm.side * (w / 2 + lm.off), lm.s, lm.yaw); }   // set pieces
     for (const p of this.props) if (p.count) p.instanceMatrix.needsUpdate = true;
   }
   setTubeColor(i, col, k) { if (!this.tubes.instanceColor) { this.tubes.instanceColor = new (Object.getPrototypeOf(this.tubes.instanceMatrix).constructor)(new Float32Array(512 * 3), 3); } const b = 0.4 + 2.6 * k; this.tubes.instanceColor.setXYZ(i, col.r * b, col.g * b, col.b * b); }
@@ -119,3 +134,10 @@ export class City {
   reset() { for (const [, m] of this.chunks) { this.group.remove(m); m.geometry.dispose(); } this.chunks.clear(); }
 }
 const LAMP_COL = new Color('#ffd9a0');
+// the three landmarks: one each, at fixed distances along every road (pt), on one side, set back `off` pt from the road edge, turned to
+// face the road; `clear` is the half-length of the plot kept free of street buildings
+const LANDMARKS = [
+  { name: 'radio_tower', s: 4200, side: -1, off: 330, clear: 340, yaw: 0 },
+  { name: 'hotel_tower', s: 9000, side: 1, off: 300, clear: 280, yaw: Math.PI / 2 },
+  { name: 'parking_garage', s: 15000, side: -1, off: 160, clear: 300, yaw: -Math.PI / 2 },
+];
