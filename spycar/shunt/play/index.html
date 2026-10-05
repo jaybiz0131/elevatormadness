@@ -4621,7 +4621,7 @@ void main() { float h = clamp(vDir.y, -0.05, 1.0); float t = pow(1.0 - h, 2.2); 
 @keyframes ghost { 0% { transform: translateX(-40px); } 50% { transform: translateX(40px); } 100% { transform: translateX(-40px); } }
 #hud .pop { position: absolute; transform: translate(-50%, -100%); font-size: 21px; font-weight: 700; color: #ffd23f; text-shadow: 0 1px 4px rgba(0,0,0,0.8); white-space: nowrap; }
 #hud .pop.bad { color: #b8bcc6; } #hud .pop.small { font-size: 15px; } #hud .pop.big { font-size: 28px; color: #fff3a8; text-shadow: 0 0 10px rgba(255,160,40,0.8), 0 2px 4px rgba(0,0,0,0.9); }
-#hud .look { position: absolute; left: 16px; bottom: calc(24px + var(--safe-bottom, 0px)); pointer-events: auto; display: flex; gap: 6px; }
+#hud .look { position: absolute; left: 16px; top: calc(290px + var(--safe-top, 0px)); pointer-events: auto; display: flex; gap: 6px; }
 #hud .look button { height: 32px; padding: 0 10px; border-radius: 16px; border: 0; background: rgba(20,24,30,0.7); color: #f4f6f8; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.08em; }
 #hud .look button.on { background: rgba(55,230,255,0.3); }
 #hud .look[hidden] { display: none; }

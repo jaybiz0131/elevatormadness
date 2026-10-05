@@ -13,7 +13,7 @@ await page.goto('file://' + path.join(here, '..', 'dist', 'shunt.html')); await 
 const info = await page.evaluate((r) => { const sh = window.__shunt; const G = sh.loadReplay(r); const end = r.steps - 120 * 8; while (G.steps < end) sh.runSteps(6); sh.renderFrame(0.05); return { t: G.t, prog: G.prog, finale: G.finale }; }, rep);
 console.log('stepped to', info); await page.screenshot({ path: path.join(out, 'finale.png') });
 await page.evaluate(() => window.__shunt.resume());
-for (let i = 0; i < 200; i++) { const ph = await page.evaluate(() => window.__shunt.phase); if (ph === 'over' || ph === 'victory') break; await page.waitForTimeout(500); if (ph === 'won' && i % 4 === 0) await page.screenshot({ path: path.join(out, 'arrival.png') }); }
+for (let i = 0; i < 1500; i++) { const ph = await page.evaluate(() => window.__shunt.phase); if (ph === 'over' || ph === 'victory') break; await page.waitForTimeout(500); if (ph === 'won' && i % 4 === 0) await page.screenshot({ path: path.join(out, 'arrival.png') }); }
 await page.waitForTimeout(800); await page.screenshot({ path: path.join(out, 'city-reached.png') });
 console.log(await page.evaluate(() => ({ phase: window.__shunt.phase, stars: window.__shunt.G.stars, score: window.__shunt.G.score })));
 await browser.close();
