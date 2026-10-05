@@ -19,6 +19,8 @@
   8 degrees); the player aims by steering.
 - Heavy feel: spin-up whine, deep roar, shell casings, a glowing barrel, camera shake, and a muzzle flash that lights the road.
 - Barrel heat instead of ammo: hold it too long and it overheats briefly.
+- Model: `assets/models/wpn_gatling.glb` (Jack, 2026-10-05, 4,063 triangles; barrels along -X in the file), on `mount_hood`, scaled to
+  the hood. It is very dark: give its cyan trim an emissive boost so it reads on the night road.
 - Handbrake 180: brake plus a hard steer whips the car round to a stop facing backward, so the player can fire behind.
 - This is a sim change (weapons and handling): new baseline replays in the same commit, as for every sim change.
 
@@ -37,6 +39,9 @@ The Mule docks with the hero and bolts the arsenal onto the car in one short cin
 - Models: each module is its own GLB, attached to named mount points on the hero. Plan the mount empties in the hero model:
   `mount_hood`, `mount_flank_L`, `mount_flank_R`, `mount_roof`, `mount_rear`, `mount_skirt_FL`, `mount_skirt_FR`, `mount_skirt_RL`,
   `mount_skirt_RR`.
+- Module files (Jack, 2026-10-05, in `assets/models/`, kept out of the build until Sprint F): `wpn_missile.glb` (flanks, mirrored
+  pair), `wpn_laser.glb` (roof, lens along -X), `wpn_booster.glb` (rear, mirrored pair; four small copies as the jump jets). All are
+  very dark: plan an emissive boost on their cyan trim (it can also carry the Open beat's cyan seam glow).
 - The car stays a car: modules bolt on, nothing unfolds or stands up. Nothing from any transforming-robot franchise, in either the
   sound or the motion.
 

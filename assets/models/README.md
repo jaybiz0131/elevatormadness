@@ -19,3 +19,10 @@ in code by region. Each enemy type draws as one instanced call. Log every new fi
 Files in `spare/` are not embedded in the build. Nose and up axis per file: `ENEMY_NOSE` and `ENEMY_UP` in `enemyModels.js` (all four enemies point -x; the Gunner is pinned up = y).
 
 `source/` holds the original high-detail versions of files that were simplified for the triangle budget (`node spycar/shunt/tools/simplifyglb.mjs <in> <out> <triangles>`); `boss.glb` is kept here but left out of the build until Sprint D (`NOT_YET` in `vite.config.js`).
+
+Weapon modules (Jack, 2026-10-05, Meshy, textured, each about 4,000 triangles, 1 unit long in the file): `wpn_gatling.glb` (Sprint D,
+hood mount, barrels along -X, scale to the hood), `wpn_missile.glb` (flanks, mirrored pair), `wpn_laser.glb` (roof, lens along -X),
+`wpn_booster.glb` (rear mirrored pair, plus four small ones as jump jets); the last three are for Sprint F, The Refit. All four are in
+`NOT_YET` (`spycar/shunt/vite.config.js`) until their sprint, like `boss.glb`. All four are very dark: plan an emissive boost on their
+cyan trim (the per-texel cyan mask from `carModel.js`, glowing rather than tinted) so they read on the night road. The asset zip also
+carries the original cones, newsstand and rooftop_ac and bulwark_alt at its root; here those stay in `source/` and `spare/`.
