@@ -5,13 +5,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const DIR = fileURLToPath(new URL('../../assets/models/', import.meta.url));
+// files kept in assets/models but not built in yet (no page weight until they are used)
+const NOT_YET = new Set(['boss']);   // boss.glb: the Sprint D villain car (see design/roadmap.md, Level 1 climax)
 function models() {
   return {
     name: 'models',
     resolveId(id) { return id === 'virtual:models' ? '\0virtual:models' : null; },
     load(id) {
       if (id !== '\0virtual:models') return null;
-      const out = {}; if (fs.existsSync(DIR)) for (const f of fs.readdirSync(DIR)) { const m = /^(.*)\.(glb|jpg)$/.exec(f); if (!m) continue; const p = path.join(DIR, f); this.addWatchFile(p); out[m[1]] = 'data:' + (m[2] === 'glb' ? 'model/gltf-binary' : 'image/jpeg') + ';base64,' + fs.readFileSync(p).toString('base64'); }   // .glb models and .jpg backdrops (skyline.jpg)
+      const out = {}; if (fs.existsSync(DIR)) for (const f of fs.readdirSync(DIR)) { const m = /^(.*)\.(glb|jpg)$/.exec(f); if (!m || NOT_YET.has(m[1])) continue; const p = path.join(DIR, f); this.addWatchFile(p); out[m[1]] = 'data:' + (m[2] === 'glb' ? 'model/gltf-binary' : 'image/jpeg') + ';base64,' + fs.readFileSync(p).toString('base64'); }   // .glb models and .jpg backdrops (skyline.jpg)
       return `export default ${JSON.stringify(out)};`;
     },
   };

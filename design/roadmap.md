@@ -21,7 +21,7 @@ first run.
 | Act 1: country highway at dusk | D | Open road, learn the controls, the city skyline glowing on the horizon (skyline.jpg backdrop). Lower, more 3D chase camera. |
 | Act 2: the drop | D | Downhill high-speed run into the city, big air, tricks. Camera pulls back and low to show the car airborne. |
 | Act 3: the city | E | The road opens into a compact maze of 3 or 4 blocks with 2 or 3 exit routes. The player turns at intersections; enemies flank from side streets and alleys. Camera rises and zooms out as buildings get taller. Green arrows on the road plus an edge-of-screen pointer guide the way out; any route works. |
-| Climax: boss fight | D | A named villain car (magenta and black): entrance cutscene, on-screen health bar with its name, 2 or 3 attack phases. Replaces the Bulwark showdown; the Bulwark stays a regular heavy enemy. |
+| Climax: boss fight | D | A named villain car (magenta and black): entrance cutscene, on-screen health bar with its name, 2 or 3 attack phases. Replaces the Bulwark showdown; the Bulwark stays a regular heavy enemy. Model: `assets/models/boss.glb` (Jack, 2026-10-05, Meshy, 8,011 triangles), kept out of the build until then (`NOT_YET` in `spycar/shunt/vite.config.js`). When built: strong emissive magenta edge lines, magenta underglow and a rim light, because a black car disappears on the night road. |
 | Payoff | D | Results, unlocks, showroom orbit, play again. |
 | Supply pit stop | F | The Mule extends mule_arm and docks alongside the hero; both race locked together while gear transfers. Never drive into a trailer. (The arm ships folded on the Mule's right side from Sprint C.) |
 
