@@ -40,7 +40,7 @@ export async function loadEnemyModels(scene, cap = 24) {
       const [w, l] = T.sizes[kind]; const { geo, size, info, tex } = await fitGlb(url, { length: l * M, width: w * M, nose: Q.get('nose-' + name) || ENEMY_NOSE[name], up: ENEMY_UP[name] || null });
       const wheels = findWheels(geo, size); info.paint = paintCar(geo, size, wheels, tex ? texPalette(kind) : paletteFor(kind)); info.wheelRadius = +wheels.r.toFixed(3); info.file = name + '.glb';
       const civ = kind === 'civ' && !!tex; const n = civ ? 40 : cap;
-      const mesh = new InstancedMesh(geo, carMaterial(kind === 'truck' ? MULE_PULSE : NO_BRAKE, 'enemy-' + kind, tex ? { tex, clearcoat: civ ? 0.7 : 0.5, envMapIntensity: 1.2, instTint: civ } : {}), n); mesh.count = 0; mesh.castShadow = true; mesh.frustumCulled = false; mesh.name = 'enemy-' + name;
+      const mesh = new InstancedMesh(geo, carMaterial(kind === 'truck' ? MULE_PULSE : NO_BRAKE, 'enemy-' + kind, tex ? { tex, clearcoat: civ ? 0.4 : 0.5, envMapIntensity: civ ? 0.8 : 1.2, instTint: civ } : {}), n); mesh.count = 0; mesh.castShadow = true; mesh.frustumCulled = false; mesh.name = 'enemy-' + name;
       if (civ) { const a = new InstancedBufferAttribute(new Float32Array(n * 4).fill(1), 4); geo.setAttribute('aTint', a); mesh.userData.aTint = a; }   // traffic: body colour and darkness per car
       else mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(n * 3).fill(1), 3);   // per instance tint: white, or dark for a wreck
       scene.add(mesh); out[kind] = { mesh, info };

@@ -123,7 +123,8 @@ export function carMaterial(brake, key, opts = {}) {
  diffuseColor.rgb = mix(tc, uTint * (0.55 + 0.45 * tl), panelW * uTintOn);` + (opts.instTint ? `
  // per-instance body colour (traffic): the light panels take vTint.rgb; cyan texels (rims, trim) go neutral grey, cyan is the hero's;
  // vTint.w darkens the whole car (a wreck)
- diffuseColor.rgb = mix(diffuseColor.rgb, vTint.rgb * (0.5 + 0.5 * tl), panelW);
+ // the traffic texture's panels are a pale lavender grey, so its own mask is looser than the hero's (light, only faintly coloured)
+ float bodyW = smoothstep(0.25, 0.45, tl) * (1.0 - smoothstep(0.2, 0.35, ts)); diffuseColor.rgb = mix(diffuseColor.rgb, vTint.rgb * (0.75 + 0.25 * tl), bodyW);
  float cyanW = clamp((min(tc.g, tc.b) - tc.r) * 4.0, 0.0, 1.0) * step(0.15, ts); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.55 + 0.3 * tl), cyanW);
  diffuseColor.rgb *= vTint.w;` : ''));
       if (opts.instTint) { sh.vertexShader = 'attribute vec4 aTint; varying vec4 vTint;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTint = aTint;'); sh.fragmentShader = 'varying vec4 vTint;\n' + sh.fragmentShader; }
