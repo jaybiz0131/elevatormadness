@@ -1,4 +1,4 @@
-// Enemy model shots: places the four enemy types (and the Mule placeholder) around the hero on the beauty route, freezes the frame,
+// Enemy model shots: places the four enemy types and the Mule (supply truck) around the hero on the beauty route, freezes the frame,
 // and takes a gameplay shot (normal camera, several enemies ahead) and a top-down lineup next to the hero; prints draw calls.
 //   node tools/enemyshots.mjs <outDir>
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
@@ -17,9 +17,10 @@ const ONLY = process.argv[3]; for (const [name, q, layout] of [['enemies-gamepla
     const sh = window.__shunt, G = sh.G, T = sh.T, d = G.dist, road = G.road; G.cars.length = 0;
     const mk = (kind, x, y) => G.cars.push({ kind, x, y, px: x, py: y, w: T.sizes[kind][0], l: T.sizes[kind][1], mass: 1, vx: 0, speed: G.speed, factor: 1, hp: 3, alive: true, wrecked: false, debrisT: 0, spin: 0, flip: 0, state: 'approach', t: 0, lane: 0, blink: 0, blinkDir: 0, laneTimer: 9, hitCd: 0, id: 0.5, tint: '#fff1c9', side: 1, sight: 0, cd: 0, honk: 0, sq: 1, hitFlash: 0, lean: 0 });
     const lane = (i, s) => road.laneX(s, i);
-    if (layout === 'ahead') { mk('weak', lane(0, d + 160), d + 160); mk('bruiser', lane(2, d + 230), d + 230); mk('gunner', lane(1, d + 330), d + 330); mk('weak', lane(3, d + 400), d + 400); mk('armored', lane(1, d + 620), d + 620); mk('truck', lane(3, d + 520), d + 520); }
-    else { mk('weak', G.x - 70, d); mk('bruiser', G.x + 75, d); mk('gunner', G.x - 70, d - 150); mk('armored', G.x + 40, d + 190); }
+    if (layout === 'ahead') { mk('weak', lane(0, d + 160), d + 160); mk('bruiser', lane(2, d + 230), d + 230); mk('gunner', lane(1, d + 330), d + 330); mk('weak', lane(2, d + 420), d + 420); mk('armored', lane(1, d + 620), d + 620); mk('truck', lane(3, d + 330), d + 330); }
+    else { mk('weak', G.x - 70, d); mk('bruiser', G.x + 75, d); mk('gunner', G.x - 70, d - 150); mk('armored', G.x + 40, d + 190); mk('truck', G.x + 75, d - 190); }
     G.hitStop = 30;   // hold the frame
+    if (layout === 'lineup') document.getElementById('ui').style.visibility = 'hidden';   // a presentation shot: no HUD over the cars
   }, layout);
   await page.waitForTimeout(2500);
   const r = await page.evaluate(() => new Promise((res) => { const R = window.__shunt.renderer(); const gl = R.renderer; const orig = gl.renderBufferDirect.bind(gl); const tally = {};

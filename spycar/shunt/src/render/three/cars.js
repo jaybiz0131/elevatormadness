@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { T, REF, lerp } from '../../sim/constants.js';
 import { M, toWorld } from './scale.js';
 import { buildHero } from './hero.js';
+import { tickEnemyLights } from './enemyModels.js';
 const KIND_COL = { player: '#37e6ff', civ: '#cfe6ff', weak: '#3a3d46', bruiser: '#1a1b1f', gunner: '#1a1b1f', armored: '#20242b', truck: '#2fd36a', wreck: '#3a2a2a' };
 const CIV_TINTS = ['#cfe6ff', '#fff1c9', '#cdebdc', '#e9d9ff'];
 const RED = new Color('#ff3b3b'), WHITE = new Color('#ffffff'), DARK = new Color('#14161a'), GLASS = new Color('#1c2634'), GREY = new Color('#6a6f7a'), CYAN = new Color('#37e6ff');
@@ -51,7 +52,7 @@ export class CarSystem {
   // cars that exist this frame get a mesh; the rest go back to the pool. c.mesh is render-side only (the hash never reads it).
   update(G, alpha, fx, elapsed) {
     const stamp = ++this.stamp;   // no per-frame allocation: meshes seen this frame carry the stamp
-    for (const k in this.inst) this.inst[k].count = 0;
+    for (const k in this.inst) this.inst[k].count = 0; tickEnemyLights(elapsed);
     for (const c of G.cars) {
       // a type with an imported model is placed through a proxy and written into its InstancedMesh; the rest use pooled meshes
       if (!c.alive) continue; const inst = this.inst[c.kind]; let m; if (inst) m = this.proxy; else { m = this.meshOf.get(c); if (!m) { m = this.acquire(c.kind); m.userData.kind = c.kind; this.meshOf.set(c, m); } }
@@ -61,7 +62,7 @@ export class CarSystem {
       this.place(m, G, cx, cy, (c.lean || 0) * Math.PI / 180 + (c.spin || 0), 0); fx.shadow(m.position, w, l); if (inst) this.emit(inst, m, 1);
       const p = m.position;
       const fx_ = Math.sin(-m.rotation.y), fz_ = -Math.cos(-m.rotation.y); const rx = Math.cos(-m.rotation.y), rz = Math.sin(-m.rotation.y);
-      if (c.kind === 'truck') { if (!c.loaded) fx.glow(p.x - fx_ * l * 0.5, p.y + 2.6, p.z - fz_ * l * 0.5, 1.2, 1, 0.82, 0.25, 0.4 + 0.4 * Math.sin(elapsed * 6)); continue; }
+      if (c.kind === 'truck') { if (!c.loaded) fx.glow(p.x - fx_ * l * 0.5, p.y + 2.6, p.z - fz_ * l * 0.5, 1.2, 0.24, 1, 0.48, 0.4 + 0.4 * Math.sin(elapsed * 6)); continue; }   // friendly green
       if (c.kind === 'civ') { if (c.blink > 0 && Math.floor(c.blink * 8) % 2 === 0) { const sx = c.blinkDir < 0 ? -1 : 1; fx.glow(p.x + rx * sx * w / 2, p.y + 0.9, p.z + rz * sx * w / 2, 0.6, 1, 0.7, 0.28, 0.9); } continue; }
       // enemies: red headlights, brake lights flashing in the tell, a white flash when hit
       for (const sx of [-1, 1]) { const hx = p.x + fx_ * l * 0.5 + rx * sx * w * 0.35, hz = p.z + fz_ * l * 0.5 + rz * sx * w * 0.35; fx.glow(hx, p.y + 0.7, hz, c.kind === 'armored' ? 1.1 : 0.9, 1, 0.23, 0.23, 0.9); fx.streak(hx + fx_ * 1.6, p.y, hz + fz_ * 1.6, 1, 0.25, 0.25, 0.5, -m.rotation.y); }

@@ -81,6 +81,8 @@ export function paintCar(geo, size, wheels, pal) {
     else if (h > 0.6 && u > 0.2 && u < 0.88 && ny < 0.86 && ny > -0.2 && (Math.abs(nz) > 0.25 || Math.abs(nx) > 0.55)) kind = 'glass';
     else if (h > 0.55 && s < 0.8 && ((u > 0.26 && u < 0.46 && nz < -0.18) || (u > 0.62 && u < 0.86 && nz > 0.18)) && ny < 0.97) kind = 'glass';   // raked windshield and rear window
     else if (h < 0.17 || (u < 0.05 && h < 0.34) || (u > 0.95 && h < 0.34) || ny < -0.6) kind = 'trim';
+    else if (pal.beaconAt && u < pal.beaconAt[0] && h > pal.beaconAt[1] && ny > 0.5) kind = 'beacon';   // a roof beacon (per model: u up to, h from)
+    else if (pal.stripsAt && s > 0.8 && h > pal.stripsAt[0] && h < pal.stripsAt[1]) kind = 'strip';   // light strips along the sides (h band)
     else if (pal.accent && s < 0.14 && ny > 0.75 && u > 0.04 && u < 0.6) kind = 'accent';   // a centre stripe along the bonnet and roof
     counts[kind] = (counts[kind] || 0) + 1; const S = pal[kind];
     // the arch lip: body facets near a wheel blend to the dark arch colour per corner, by each corner's own distance from the wheel
@@ -112,8 +114,8 @@ export function carMaterial(brake, key, opts = {}) {
  diffuseColor.rgb = mix(tc, uTint * (0.55 + 0.45 * tl), panelW * uTintOn);`);
     }
     sh.vertexShader = 'attribute vec4 surf; varying vec4 vSurf;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vSurf = surf;');
-    sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = ' + (T ? 'mix(0.55, 0.2, panelW)' : 'vSurf.x') + ';').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = ' + (T ? 'mix(0.15, 0.45, panelW)' : 'vSurf.y') + ';').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5)' + (T ? ' * (vSurf.w > 0.5 ? max(redW * 1.6, 0.12) : 1.0) + uTint * panelW * 0.07 * uTintOn' : '') + ';'); };
-  m.customProgramCacheKey = () => 'car-' + key + (T ? '-tex' : ''); return m;
+    sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = ' + (T ? 'mix(0.55, 0.2, panelW)' : 'vSurf.x') + ';').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = ' + (T ? 'mix(0.15, 0.45, panelW)' : 'vSurf.y') + ';').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5)' + (T ? (opts.redGate ? ' * (vSurf.w > 0.5 ? max(redW * 1.6, 0.12) : 1.0)' : '') + ' + uTint * panelW * 0.07 * uTintOn' : '') + ';'); };
+  m.customProgramCacheKey = () => 'car-' + key + (T ? '-tex' : '') + (opts.redGate ? '-rg' : ''); return m;
 }
 // tag a code-built part (the hero's spinning wheels) with a palette entry so it draws with carMaterial
 export function tagPart(g, S) { g = g.index ? g.toNonIndexed() : g; const n = g.attributes.position.count; const c = new Float32Array(n * 3), su = new Float32Array(n * 4); for (let i = 0; i < n; i++) { c[i * 3] = S[0].r; c[i * 3 + 1] = S[0].g; c[i * 3 + 2] = S[0].b; su[i * 4] = S[1]; su[i * 4 + 1] = S[2]; su[i * 4 + 2] = S[3]; su[i * 4 + 3] = S[4]; } g.setAttribute('color', new Float32BufferAttribute(c, 3)); g.setAttribute('surf', new Float32BufferAttribute(su, 4)); for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color', 'surf'].includes(k)) g.deleteAttribute(k); return g; }
