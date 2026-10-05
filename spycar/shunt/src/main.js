@@ -1,5 +1,6 @@
 // Shunt: the main loop and the phase machine. The sim (src/sim) is headless and stepped at 120 Hz; the renderer, HUD, audio
 // and input hang off it from here. window.__shunt exposes the hooks the bots and the replay tools use.
+import { fontsReady } from './ui/fonts.js';
 import { T, H, clamp, fnv1a, localDate } from './sim/constants.js';
 import { S, saveSettings } from './settings.js';
 import { G, newRun, beginRun } from './sim/state.js';
@@ -14,6 +15,7 @@ import { createThreeRenderer } from './render/three/index.js';
 import { createHud } from './ui/hud.js';
 import { createPerf } from './ui/perf.js';
 import { createStudio } from './render/three/studio.js';
+import { createTune } from './render/three/tune.js';
 
 let syncRun = false, phase = 'title', now = 0, lastT = 0, elapsed = 0, countdown = 0, pausedFrom = 'playing';
 const Q = new URLSearchParams(location.search);
@@ -27,8 +29,11 @@ const useCanvas = Q.get('r') === 'canvas';
 const renderer = useCanvas ? createCanvasRenderer(cv) : createThreeRenderer(cv, { look: Q.get('look') || 'night' });
 const hud = useCanvas ? null : createHud($('ui'), renderer);
 const perf = createPerf(Q, renderer, hud);
-if (!useCanvas && Q.get('tune') === '1') import('./render/three/tune.js').then(m => m.createTune(renderer, null));
-if (hud) hud.lookToggle([{ key: 'night', label: 'NIGHT' }, { key: 'dusk', label: 'DUSK' }, { key: 'bluehour', label: 'BLUE HOUR' }], renderer.look, (k) => renderer.setLook(k));
+// the tune panel: ?tune=1 opens it at load, Settings > Developer > Tune panel at any time
+// (a static import: the single-file build has no separate chunks, so the old lazy import never loaded on the published link)
+let tune = null; const openTune = () => Promise.resolve(tune ? tune.toggle() : (tune = createTune(renderer), true));
+if (!useCanvas && Q.get('tune') === '1') openTune();
+if (hud) hud.lookToggle([{ key: 'night', label: 'NIGHT' }, { key: 'dusk', label: 'DUSK' }, { key: 'bluehour', label: 'BLUE HOUR' }], renderer.look, (k) => { renderer.setLook(k); if (tune) tune.refresh(); });
 
 // ---------------- runs and phases ----------------
 function freshRun(reseed) {
@@ -85,6 +90,7 @@ for (const [id, key] of [['sSound', 'sound'], ['sMusic', 'music'], ['sHaptics', 
 $('sSens').addEventListener('input', e => { S.sens = parseFloat(e.target.value); saveSettings(); refreshSettings(); });
 $('sBench').addEventListener('click', () => { ui.card.hidden = true; perf.startBench('1', loadReplay); });
 $('sCam').addEventListener('click', () => { S.cam = S.cam === 'B' ? 'A' : 'B'; saveSettings(); if (renderer.setCamera) renderer.setCamera(S.cam); refreshSettings(); });
+$('sTune').addEventListener('click', () => { if (useCanvas) return; openTune().then(on => $('sTune').classList.toggle('on', !!on)); });
 $('sPerf').addEventListener('click', () => { $('sPerf').classList.toggle('on', perf.togglePerf()); });
 ui.primary.addEventListener('click', () => { audio.init(); audio.resume(); if (screen() === 'title') { freshRun(false); startPlaying(); } else if (screen() === 'pause') resume(); else if (screen() === 'over') restartAndPlay(false); else if (screen() === 'settings') { if (settingsFrom() === 'pause') showCard('pause', app); else if (settingsFrom() === 'over') showCard('over', app); else enterTitle(); } });
 ui.a.addEventListener('click', () => { audio.init(); if (screen() === 'title') { dailyMode = !dailyMode; freshRun(true); showCard('title', app); } else if (screen() === 'pause') { freshRun(false); startPlaying(); phase = 'playing'; } else if (screen() === 'over') restartAndPlay(true); });
@@ -110,10 +116,13 @@ function fit() {
   view.SW = Math.round(clamp(H * vw / vh, 390, 600)); const s = Math.min(vw / view.SW, vh / H);
   stage.style.width = view.SW + 'px'; stage.style.transform = `scale(${s})`;
   renderer.resize();
-  try { const pad = parseFloat(getComputedStyle(document.documentElement).paddingTop) || 0; window.safeTop = Math.max(0, pad) / s; view.safeTop = window.safeTop; document.documentElement.style.setProperty('--safe-top', window.safeTop + 'px'); } catch (e) { window.safeTop = 0; }
+  // the iPhone safe areas (the html padding carries env(safe-area-inset-*)), in stage pixels: the stage is centred and scaled, so an
+  // inset counts only where it reaches past the letterbox; ?safe=59,34 fakes a notch and a home bar for headless shots
+  try { const cs = getComputedStyle(document.documentElement); const fake = (Q.get('safe') || '').split(',').map(Number); const top = fake[0] || parseFloat(cs.paddingTop) || 0, bot = fake[1] || parseFloat(cs.paddingBottom) || 0; const gap = (vh - H * s) / 2;
+    window.safeTop = Math.max(0, top - gap) / s; view.safeTop = window.safeTop; view.safeBottom = Math.max(0, bot - gap) / s; document.documentElement.style.setProperty('--safe-top', window.safeTop + 'px'); document.documentElement.style.setProperty('--safe-bottom', view.safeBottom + 'px'); } catch (e) { window.safeTop = 0; }
 }
 window.addEventListener('resize', fit);
-async function start() { fit(); refreshSettings(); freshRun(false); enterTitle(); try { localStorage.setItem('shunt-runs', String(Number(localStorage.getItem('shunt-runs') || 0) + 1)); } catch (e) {} if (renderer.prewarm) await renderer.prewarm(); requestAnimationFrame(frame); perf.start(loadReplay); }
+async function start() { await Promise.race([fontsReady, new Promise(r => setTimeout(r, 1500))]); fit(); refreshSettings(); freshRun(false); enterTitle(); try { localStorage.setItem('shunt-runs', String(Number(localStorage.getItem('shunt-runs') || 0) + 1)); } catch (e) {} if (renderer.prewarm) await renderer.prewarm(); requestAnimationFrame(frame); perf.start(loadReplay); }
 
 // ---------------- hooks for bots and replays ----------------
 function loadReplay(r) { seed = r.seed >>> 0; dailyMode = false; S.sens = r.cfg.sens; S.autoDrift = r.cfg.autoDrift; newRun(seed, { sens: r.cfg.sens, autoDrift: r.cfg.autoDrift, hairpinWall: !!r.cfg.hairpinWall }); if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.pad.hidden = true; updateSpecial(G); attachReplay(r); startPlaying(); return G; }

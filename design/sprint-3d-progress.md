@@ -63,3 +63,20 @@ hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mo
   `assets/models/README.md`); types without a file keep the placeholder boxes. Outline follows the imported body. Smoke starts at
   1.1 m; missile exhaust grows 1 to 2.6 m. `tools/heroshots.mjs <out> [query] [views]` takes gameplay, rear three-quarter, top-down.
   Next: Jack's Dart GLB (set its nose in ENEMY_NOSE after a side-view check), then the other four; Stop 3.
+- Stop 2 done (v17): camera A/B toggle, landmark night lights, simplified cones/rooftop_ac/newsstand, traffic_car.glb with per-car
+  body colour (one draw).
+- Stop 3 UI and performance (v18, waiting on Jack's go-ahead):
+  - Showroom title (`src/render/three/showroom.js`): the hero on a slow turntable under a studio environment map (softboxes), key plus
+    magenta and violet rims, a dark lacquer floor with a mirrored reflection (the floor is 94 to 100% opaque: the car is HDR under it),
+    magenta/violet neon tubes and haze, drawn through the game's post chain while the title card is up (28 calls, 23k triangles).
+    `?showroom=0` keeps the old title over the road. Shots: `tools/titleshot.mjs <out.png> [query]`.
+  - Front close-ups: the hero's headlight sprites, wet-road streaks, headlight pool and readability glow fade within 40 m, most when the
+    camera faces the nose; the model's own headlight glow dims with them (`HEAD_K` in heroModel.js). Bullets are slim HDR tracers.
+    `tools/heroshots.mjs <out> [query] front,front-34 [sim seconds]`.
+  - HUD: score plate with a cyan edge (42 px), ARMOR bar, speed; missile count badge on the special button; the steer hint sits over
+    the free thumb area (bottom left, mirrored for left hand), clear of the buttons. Safe areas: html padding carries
+    env(safe-area-inset-*), `fit()` turns it into `--safe-top` and `--safe-bottom`; `?safe=59,34` fakes a notch for headless shots.
+  - Fonts: Rajdhani 600/700 embedded (`src/ui/fonts.js`, OFL, 31 KB); no Google Fonts request.
+  - Tune panel: static import (the lazy chunk never loaded in the single-file build), Settings > Developer > Tune panel, per-look
+    working copies, 13 px touch rows, Copy look JSON, Reset this look.
+  - Traffic: plain non-metallic paint and a 60% hue hold after lighting so the four colours read at dusk and blue hour; rims grey.

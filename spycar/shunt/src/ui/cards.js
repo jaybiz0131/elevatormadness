@@ -8,7 +8,7 @@ export function settingsFrom() { return settingsFromNow; }
 export function setScreen(k) { screenNow = k; }
 export function setSettingsFrom(k) { settingsFromNow = k; }
 export function showCard(kind, app) {
-  const { G, dailyMode, best, bestDaily, cash } = app; screenNow = kind; ui.card.hidden = false; ui.card.classList.toggle('over', kind === 'over'); ui.card.classList.toggle('showroom', kind === 'title'); ui.logo.hidden = kind !== 'title'; ui.newBest.hidden = true; ui.bar.hidden = true; ui.settings.hidden = kind !== 'settings';
+  const { G, dailyMode, best, bestDaily, cash } = app; screenNow = kind; ui.card.hidden = false; ui.card.classList.toggle('over', kind === 'over'); ui.card.classList.toggle('showroom', kind === 'title'); ui.card.classList.toggle('settings', kind === 'settings'); ui.logo.hidden = kind !== 'title'; ui.newBest.hidden = true; ui.bar.hidden = true; ui.settings.hidden = kind !== 'settings';
   ui.score.hidden = kind === 'settings'; ui.pause.hidden = kind === 'title' || kind === 'settings';
   if (kind === 'title') { ui.title.textContent = dailyMode ? 'Daily run · ' + localDate() : 'Spy car brawler'; ui.score.textContent = 'BEST ' + fmt(dailyMode ? bestDaily : best); ui.lines.innerHTML = ''; ui.primary.textContent = 'PLAY'; ui.a.textContent = dailyMode ? 'RANDOM ROAD' : 'DAILY RUN'; ui.b.textContent = 'SETTINGS'; ui.c.hidden = true; }
   if (kind === 'pause') { ui.title.textContent = 'Paused'; ui.score.textContent = fmt(G.score); ui.lines.textContent = ''; ui.primary.textContent = 'RESUME'; ui.a.textContent = 'RESTART'; ui.b.textContent = 'SETTINGS'; ui.c.hidden = false; ui.c.textContent = 'QUIT TO TITLE'; }

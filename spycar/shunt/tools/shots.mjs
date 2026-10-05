@@ -1,5 +1,5 @@
 // Postcard shots: plays the beauty route (?shots=1 loads the recorded skilled run) and screenshots fixed sim-time moments from the
-// gameplay camera, for one look.  node tools/shots.mjs <outDir> [look] [--page=dist/shunt.html] [--quick] [--only=cruise,boost]
+// gameplay camera, for one look.  node tools/shots.mjs <outDir> [look] [--page=dist/shunt.html] [--quick] [--only=cruise,boost] [--q=extra=query]
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -16,7 +16,7 @@ fs.mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true });
 const errors = []; page.on('pageerror', e => { errors.push(e.message); console.log('PAGE ERROR', e.message.slice(0, 300)); }); page.on('console', m => { if (m.type() === 'error' && !/ERR_CERT/.test(m.text())) { errors.push('console: ' + m.text()); console.log('CONSOLE', m.text().slice(0, 300)); } });
-await page.goto('file://' + pageFile + '?shots=1&look=' + look);
+await page.goto('file://' + pageFile + '?shots=1&look=' + look + (opt.q ? '&' + opt.q : ''));   // --q=safe=59,34 adds to the query
 await page.waitForFunction(() => window.__shunt && window.__shunt.G && window.__shunt.G.rep, null, { timeout: 20000 });
 const t0 = Date.now();
 for (const [name, t, cue] of MOMENTS) {

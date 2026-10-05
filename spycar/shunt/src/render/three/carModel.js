@@ -121,16 +121,22 @@ export function carMaterial(brake, key, opts = {}) {
  vec3 tc = diffuseColor.rgb; float tl = dot(tc, vec3(0.299, 0.587, 0.114)); float ts = max(tc.r, max(tc.g, tc.b)) - min(tc.r, min(tc.g, tc.b));
  float panelW = smoothstep(0.35, 0.6, tl) * (1.0 - smoothstep(0.12, 0.3, ts)); float redW = clamp((tc.r - max(tc.g, tc.b)) * 2.5, 0.0, 1.0);
  diffuseColor.rgb = mix(tc, uTint * (0.55 + 0.45 * tl), panelW * uTintOn);` + (opts.instTint ? `
- // per-instance body colour (traffic): the light panels take vTint.rgb; cyan texels (rims, trim) go neutral grey, cyan is the hero's;
+ // per-instance body colour (traffic), painted as a plain non-metallic finish (roughness and metalness below) so the colour holds under the
+ // dusk sun and the blue-hour sky instead of mirroring them; the light panels take vTint.rgb; cyan texels (rims, trim) go neutral grey, cyan is the hero's;
  // vTint.w darkens the whole car (a wreck)
  // the traffic texture's panels are a pale lavender grey, so its own mask is looser than the hero's (light, only faintly coloured)
  float bodyW = smoothstep(0.25, 0.45, tl) * (1.0 - smoothstep(0.2, 0.35, ts)); diffuseColor.rgb = mix(diffuseColor.rgb, vTint.rgb * (0.75 + 0.25 * tl), bodyW);
  float cyanW = clamp((min(tc.g, tc.b) - tc.r) * 4.0, 0.0, 1.0) * step(0.15, ts); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.55 + 0.3 * tl), cyanW);
  diffuseColor.rgb *= vTint.w;` : ''));
+      // traffic: after lighting, the body is pulled 60% toward its own paint hue at the same brightness, so silver, dark red, white and
+      // navy still read as themselves under the orange dusk sun and the blue-hour sky (bodyW is set in the map block above)
+      if (opts.instTint) sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `{ float Lo = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722)); vec3 hue = vTint.rgb / max(dot(vTint.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.04);
+        outgoingLight = mix(outgoingLight, Lo * min(hue, vec3(2.5)), bodyW * 0.6); }
+      #include <opaque_fragment>`);
       if (opts.instTint) { sh.vertexShader = 'attribute vec4 aTint; varying vec4 vTint;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTint = aTint;'); sh.fragmentShader = 'varying vec4 vTint;\n' + sh.fragmentShader; }
     }
     sh.vertexShader = 'attribute vec4 surf; varying vec4 vSurf;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vSurf = surf;');
-    sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake; uniform float uHeadK;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = ' + (T ? 'mix(0.55, 0.2, panelW)' : 'vSurf.x') + ';').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = ' + (T ? 'mix(0.15, 0.45, panelW)' : 'vSurf.y') + ';').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5) * (vSurf.w > 0.5 ? 1.0 : uHeadK)' + (T ? (opts.redGate ? ' * (vSurf.w > 0.5 ? max(redW * 1.6, 0.12) : 1.0)' : '') + ' + uTint * panelW * 0.07 * uTintOn' : '') + ';'); };
+    sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake; uniform float uHeadK;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = ' + (T ? (opts.instTint ? 'mix(0.55, 0.32, bodyW)' : 'mix(0.55, 0.2, panelW)') : 'vSurf.x') + ';').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = ' + (T ? (opts.instTint ? 'mix(0.15, 0.05, bodyW)' : 'mix(0.15, 0.45, panelW)') : 'vSurf.y') + ';').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5) * (vSurf.w > 0.5 ? 1.0 : uHeadK)' + (T ? (opts.redGate ? ' * (vSurf.w > 0.5 ? max(redW * 1.6, 0.12) : 1.0)' : '') + ' + uTint * panelW * 0.07 * uTintOn' : '') + ';'); };
   m.customProgramCacheKey = () => 'car-' + key + (T ? '-tex' : '') + (opts.redGate ? '-rg' : '') + (opts.instTint ? '-it' : ''); return m;
 }
 // tag a code-built part (the hero's spinning wheels) with a palette entry so it draws with carMaterial

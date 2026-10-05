@@ -75,7 +75,9 @@ export class FX {
     this.sparks = new Points(sg, new PointsMaterial({ size: 0.28, vertexColors: true, sizeAttenuation: true, transparent: true, depthWrite: false, blending: AdditiveBlending, map: soft })); this.sparks.frustumCulled = false; this.sparks.renderOrder = 11; scene.add(this.sparks); this.sparkN = 0;
     // debris, bullets and missiles: instanced boxes
     this.debris = new InstancedMesh(new BoxGeometry(0.5, 0.3, 0.5), new MeshBasicMaterial({ color: 0xffffff }), 256); this.debris.instanceColor = new InstancedBufferAttribute(new Float32Array(256 * 3), 3); this.debris.count = 0; this.debris.frustumCulled = false; scene.add(this.debris);
-    this.bullets = new InstancedMesh(new BoxGeometry(0.18, 0.18, 1.3), new MeshBasicMaterial({ color: new Color('#fff2a8') }), 128); this.bullets.count = 0; this.bullets.frustumCulled = false; scene.add(this.bullets);
+    // bullets are glowing tracers: slim, and over 1 in colour so the bloom carries them from the high road camera; flat pale boxes read as
+    // slabs in a close-up
+    this.bullets = new InstancedMesh(new BoxGeometry(0.06, 0.06, 1.5), new MeshBasicMaterial({ color: new Color('#fff2a8').multiplyScalar(3.6) }), 128); this.bullets.count = 0; this.bullets.frustumCulled = false; scene.add(this.bullets);
     this.missiles = new InstancedMesh(new BoxGeometry(0.45, 0.45, 1.6), new MeshBasicMaterial({ color: new Color('#ffd23f') }), 32); this.missiles.count = 0; this.missiles.frustumCulled = false; scene.add(this.missiles);
     // skid marks: a ring buffer of quads with birth times; the shader fades them over 15 s
     const g = new BufferGeometry(); this.skidPos = new BufferAttribute(new Float32Array(SKID_N * 4 * 3), 3); this.skidCol = new BufferAttribute(new Float32Array(SKID_N * 4 * 4), 4); this.skidPos.setUsage(DynamicDrawUsage); this.skidCol.setUsage(DynamicDrawUsage); g.setAttribute('position', this.skidPos); g.setAttribute('aColor', this.skidCol);
