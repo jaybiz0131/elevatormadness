@@ -113,7 +113,7 @@ export function carMaterial(brake, key, opts = {}) {
     : new MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 1, envMapIntensity: 1.7 });
   if (T && T.normalScale) m.normalScale.copy(T.normalScale);
   const tint = new Color(opts.tint || '#ffffff'); const tintOn = opts.tint ? 1 : 0;   // without a tint the texture's colours stay as they are
-  m.onBeforeCompile = (sh) => { sh.uniforms.uBrake = brake; sh.uniforms.uTint = { value: tint }; sh.uniforms.uTintOn = { value: tintOn };
+  m.onBeforeCompile = (sh) => { sh.uniforms.uBrake = brake; sh.uniforms.uTint = { value: tint }; sh.uniforms.uTintOn = { value: tintOn }; sh.uniforms.uHeadK = opts.headK || { value: 1 };
     // textured: a faint cyan self-light (0.07 on white panels) keeps the hue at night, when a metal finish mostly shows the navy sky
     if (T) {   // textured: per texel, white panels (bright, colourless) take the tint as glossy metal paint; dark and coloured texels keep
       // the texture's colour with a rougher, less metallic finish; tail lights glow only where the texel is red
@@ -130,7 +130,7 @@ export function carMaterial(brake, key, opts = {}) {
       if (opts.instTint) { sh.vertexShader = 'attribute vec4 aTint; varying vec4 vTint;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTint = aTint;'); sh.fragmentShader = 'varying vec4 vTint;\n' + sh.fragmentShader; }
     }
     sh.vertexShader = 'attribute vec4 surf; varying vec4 vSurf;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vSurf = surf;');
-    sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = ' + (T ? 'mix(0.55, 0.2, panelW)' : 'vSurf.x') + ';').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = ' + (T ? 'mix(0.15, 0.45, panelW)' : 'vSurf.y') + ';').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5)' + (T ? (opts.redGate ? ' * (vSurf.w > 0.5 ? max(redW * 1.6, 0.12) : 1.0)' : '') + ' + uTint * panelW * 0.07 * uTintOn' : '') + ';'); };
+    sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake; uniform float uHeadK;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = ' + (T ? 'mix(0.55, 0.2, panelW)' : 'vSurf.x') + ';').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = ' + (T ? 'mix(0.15, 0.45, panelW)' : 'vSurf.y') + ';').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5) * (vSurf.w > 0.5 ? 1.0 : uHeadK)' + (T ? (opts.redGate ? ' * (vSurf.w > 0.5 ? max(redW * 1.6, 0.12) : 1.0)' : '') + ' + uTint * panelW * 0.07 * uTintOn' : '') + ';'); };
   m.customProgramCacheKey = () => 'car-' + key + (T ? '-tex' : '') + (opts.redGate ? '-rg' : '') + (opts.instTint ? '-it' : ''); return m;
 }
 // tag a code-built part (the hero's spinning wheels) with a palette entry so it draws with carMaterial

@@ -37,7 +37,7 @@ function freshRun(reseed) {
   if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; updateSpecial(G);
 }
 function enterTitle() { phase = 'title'; showCard('title', app); }
-function startPlaying() { phase = 'playing'; hideCallout(); hadRun = true; ui.card.hidden = true; ui.pad.hidden = false; ui.gas.hidden = false; ui.fire.hidden = false; ui.special.hidden = false; updateSpecial(G); ui.special.classList.toggle('armed', !!(G.special && G.special.ammo > 0)); lookBar(false); beginRun(); }
+function startPlaying() { phase = 'playing'; hideCallout(); hadRun = true; ui.card.hidden = true; ui.pause.hidden = false; ui.pad.hidden = false; ui.gas.hidden = false; ui.fire.hidden = false; ui.special.hidden = false; updateSpecial(G); ui.special.classList.toggle('armed', !!(G.special && G.special.ammo > 0)); lookBar(false); beginRun(); }
 // iOS counts touchend and click as gestures for audio, not pointerdown: unlock on those, window-wide, until it sticks
 for (const ev of ['touchend', 'click', 'keydown']) window.addEventListener(ev, () => audio.unlock(), { passive: true });
 function lookBar(show) { const b = document.querySelector('#hud .look'); if (b) { if (show) b.removeAttribute('hidden'); else b.setAttribute('hidden', ''); } }

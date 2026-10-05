@@ -12,6 +12,8 @@ export const NOSE = '-x';   // hero.glb (Meshy, textured, 2026-10-05): splitter 
 // the cabin sits ahead of the middle, so the roof guess would point backwards here; keep this set by hand after a side-view check
 export const HERO_FIT = { length: T.sizes.player[1] * M, width: T.sizes.player[0] * M };
 const BRAKE = { value: 0 };
+// the headlight glow (all non-brake lights), lowered by cars.js when the camera is close and facing the nose
+export const HEAD_K = { value: 1 };
 // untextured models (fallback): painted in code; the earlier mesh's ragged side intake ahead of the rear wheel is painted dark
 const PAL = Object.assign(palette('#37e6ff'), { intake: [0.53, 0.74, 0.1, 0.63] });
 // textured models: the texture carries the colour, so every region is white (roughness, metalness and glow per region still apply);
@@ -26,7 +28,7 @@ export async function loadHeroModel(url = HERO_GLB_URL, nose = new URLSearchPara
   // wheels: measured from the mesh; on a textured model the spinning set is Jack's size and sits flush with the body sides
   const measured = findWheels(geo, size); const wheels = tex ? flush(measured, size, geo) : measured;
   const counts = paintCar(geo, size, measured, tex ? TEX_PAL : PAL);
-  const body = new Mesh(geo, carMaterial(BRAKE, 'hero', tex ? { tex, tint: '#37e6ff', redGate: true } : {})); body.castShadow = true; body.receiveShadow = true; body.frustumCulled = false; body.name = 'heroGlb';
+  const body = new Mesh(geo, carMaterial(BRAKE, 'hero', tex ? { tex, tint: '#37e6ff', redGate: true, headK: HEAD_K } : {})); body.castShadow = true; body.receiveShadow = true; body.frustumCulled = false; body.name = 'heroGlb';
   const spin = wheelSet(wheels, tex ? TEX_WHEEL.width : 0.26, tex ? DARK_RIM : PAL.rim); const car = new Group(); car.name = 'heroGlbCar'; car.add(body, spin.mesh); car.userData.body = body;
   car.userData.info = Object.assign(info, { wheelTriangles: spin.triangles, wheelRadius: +wheels.r.toFixed(3), measuredWheelRadius: +measured.r.toFixed(3), wheelsMeasured: measured.measured, axles: [wheels.list[0].z, wheels.list[2].z].map(v => +v.toFixed(2)), wheelX: [+wheels.list[1].x.toFixed(2), +wheels.list[3].x.toFixed(2)], paint: counts });
   // per frame: wheels turn with the road speed (metres per second over the radius); the tail-light bar brightens under braking

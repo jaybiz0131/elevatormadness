@@ -3,10 +3,11 @@
 // tail lights, blinkers, the Bruiser tell arrow, the Gunner sight line and hit flashes are additive glows and markers batched by fx.
 import { BoxGeometry, Mesh, MeshStandardMaterial, Color, Vector3, Float32BufferAttribute, Group, Object3D, Matrix4 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { T, REF, lerp } from '../../sim/constants.js';
+import { T, REF, lerp, clamp } from '../../sim/constants.js';
 import { M, toWorld } from './scale.js';
 import { buildHero } from './hero.js';
 import { tickEnemyLights } from './enemyModels.js';
+import { HEAD_K } from './heroModel.js';
 const KIND_COL = { player: '#37e6ff', civ: '#cfe6ff', weak: '#3a3d46', bruiser: '#1a1b1f', gunner: '#1a1b1f', armored: '#20242b', truck: '#2fd36a', wreck: '#3a2a2a' };
 const CIV_TINTS = ['#cfe6ff', '#fff1c9', '#cdebdc', '#e9d9ff'];
 // the traffic model's body colours, one per sim tint (silver, dark red, white, navy); never cyan, that is the hero's
@@ -90,12 +91,17 @@ export class CarSystem {
     m.visible = !(st.phase === 'playing' && G.flashT > 0 && Math.floor(elapsed * 16) % 2 === 0);
     const p = m.position; fx.shadow(p, 34 * M * (1 - z * 0.2), 60 * M * (1 - z * 0.2), p.y - lift);
     const fx_ = Math.sin(-m.rotation.y), fz_ = -Math.cos(-m.rotation.y); const rx_ = Math.cos(-m.rotation.y), rz_ = Math.sin(-m.rotation.y); const w = 34 * M, l = 60 * M;
+    // close-ups (the title, a front view): the road camera is 60+ m away, so the headlight sprites, the wet-road streaks and the readability
+    // glow were sized for that; within 40 m they fade, most of all when the camera faces the nose (they washed the front of the car out)
+    let near = 0, face = 0; const cp = this.camPos; if (cp) { const dx = cp.x - p.x, dy = cp.y - p.y, dz = cp.z - p.z, d = Math.hypot(dx, dy, dz) || 1; near = clamp((40 - d) / 20, 0, 1); face = near * clamp((fx_ * dx + fz_ * dz) / d * 1.5, 0, 1); }
+    const hk = 1 - 0.8 * face;
+    HEAD_K.value = 1 - 0.6 * face;
     // headlights (pale yellow #fff3c4), brighter when the gun fires; tail lights, bright under braking; the cyan body glow that keeps the player readable
-    for (const sx of [-1, 1]) { if (G.flashT2 > 0) fx.glow(p.x + fx_ * l * 0.42 + rx_ * sx * w * 0.5, p.y + 0.6, p.z + fz_ * l * 0.42 + rz_ * sx * w * 0.5, 2.4, 1, 0.85, 0.5, 1); fx.glow(p.x + fx_ * l * 0.5 + rx_ * sx * w * 0.35, p.y + 0.7, p.z + fz_ * l * 0.5 + rz_ * sx * w * 0.35, 1.0, 1, 0.95, 0.77, 0.7); fx.glow(p.x - fx_ * l * 0.5 + rx_ * sx * w * 0.35, p.y + 0.8, p.z - fz_ * l * 0.5 + rz_ * sx * w * 0.35, G.braking ? 1.2 : 0.6, 1, 0.3, 0.3, G.braking ? 1 : 0.6); }
+    for (const sx of [-1, 1]) { if (G.flashT2 > 0) fx.glow(p.x + fx_ * l * 0.42 + rx_ * sx * w * 0.5, p.y + 0.6, p.z + fz_ * l * 0.42 + rz_ * sx * w * 0.5, 2.4 * (1 - 0.5 * near), 1, 0.85, 0.5, hk); fx.glow(p.x + fx_ * l * 0.5 + rx_ * sx * w * 0.35, p.y + 0.7, p.z + fz_ * l * 0.5 + rz_ * sx * w * 0.35, 1.0 - 0.5 * near, 1, 0.95, 0.77, 0.7 * hk); fx.glow(p.x - fx_ * l * 0.5 + rx_ * sx * w * 0.35, p.y + 0.8, p.z - fz_ * l * 0.5 + rz_ * sx * w * 0.35, G.braking ? 1.2 : 0.6, 1, 0.3, 0.3, G.braking ? 1 : 0.6); }
     // the cyan readability glow: half strength on the imported hero, whose body is cyan itself (from above it washed the paint out)
-    fx.glow(p.x, p.y + 0.8, p.z, 4.0, G.nitro > 0 ? 1 : 0.22, G.nitro > 0 ? 0.82 : 0.9, G.nitro > 0 ? 0.25 : 1, G.nitro > 0 ? 0.5 : (this.heroGlb && this.heroGlb.visible ? 0.15 : 0.3));
-    fx.poolAt(p.x + fx_ * 9, p.y - lift, p.z + fz_ * 9, 1, 0.95, 0.75, 0.22, 6, -m.rotation.y, 2.4);   // headlight pool on the road ahead
-    for (const sx of [-1, 1]) { fx.streak(p.x - fx_ * (l * 0.5 + 1.6) + rx_ * sx * w * 0.35, p.y - lift, p.z - fz_ * (l * 0.5 + 1.6) + rz_ * sx * w * 0.35, 1, 0.12, 0.1, G.in && G.in.brake ? 0.7 : 0.35, -m.rotation.y); fx.streak(p.x + fx_ * (l * 0.5 + 2.5) + rx_ * sx * w * 0.35, p.y - lift, p.z + fz_ * (l * 0.5 + 2.5) + rz_ * sx * w * 0.35, 0.9, 0.95, 1, 0.3, -m.rotation.y, 4.5); }   // tail and head lights on the wet road
+    fx.glow(p.x, p.y + 0.8, p.z, 4.0, G.nitro > 0 ? 1 : 0.22, G.nitro > 0 ? 0.82 : 0.9, G.nitro > 0 ? 0.25 : 1, (G.nitro > 0 ? 0.5 : (this.heroGlb && this.heroGlb.visible ? 0.15 : 0.3)) * (1 - 0.85 * near));
+    fx.poolAt(p.x + fx_ * 9, p.y - lift, p.z + fz_ * 9, 1, 0.95, 0.75, 0.22 * (1 - 0.7 * face), 6, -m.rotation.y, 2.4);   // headlight pool on the road ahead
+    for (const sx of [-1, 1]) { fx.streak(p.x - fx_ * (l * 0.5 + 1.6) + rx_ * sx * w * 0.35, p.y - lift, p.z - fz_ * (l * 0.5 + 1.6) + rz_ * sx * w * 0.35, 1, 0.12, 0.1, G.in && G.in.brake ? 0.7 : 0.35, -m.rotation.y); fx.streak(p.x + fx_ * (l * 0.5 + 2.5) + rx_ * sx * w * 0.35, p.y - lift, p.z + fz_ * (l * 0.5 + 2.5) + rz_ * sx * w * 0.35, 0.9, 0.95, 1, 0.3 * (1 - face), -m.rotation.y, 4.5); }   // tail and head lights on the wet road
     if (G.drifting && st.phase === 'playing') fx.ring(p.x, p.y - lift + 0.03, p.z, 36 * M, G.driftTier >= 3 ? 0xff7a2a : G.driftTier === 2 ? 0xffd23f : 0xffffff, 0.8, Math.min(1, G.driftCharge / T.drift.tiers[2]));
     if (G.slamCd > 0) fx.ring(p.x, p.y - lift + 0.03, p.z, 30 * M, 0xffffff, 0.5, 1 - G.slamCd / T.slam.cooldown);
     if (G.air > 0 && G.air < 0.4) fx.ring(p.x, p.y - lift + 0.03, p.z, 26 * M, 0xffffff, 0.8, 1);

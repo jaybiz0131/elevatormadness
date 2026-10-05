@@ -83,8 +83,19 @@
   .sw.seg { width: auto; padding: 0 14px; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.1em; color: var(--fg); background: rgba(255,255,255,0.14); } .sw.seg::after { display: none; }
   /* the death card sits low so the replay plays in the top half behind it */
   #card.over { justify-content: flex-end; padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.2) 38%, rgba(0,0,0,0.82) 52%); }
+  /* the showroom title (Stop 3): the 3D showroom shows through; the logo sits at the top, PLAY and the small buttons at the bottom */
+  #card.showroom { justify-content: flex-end; background: linear-gradient(to bottom, rgba(3,4,10,0.55) 0%, rgba(3,4,10,0) 24%, rgba(3,4,10,0) 58%, rgba(3,4,10,0.7) 82%); padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)); gap: 12px; }
+  #card.showroom .logo { position: absolute; left: 0; right: 0; top: calc(58px + var(--safe-top, 0px)); text-align: center; font-size: 76px; line-height: 1; letter-spacing: 0.24em; padding-left: 0.24em; color: #eafcff; text-shadow: 0 0 6px rgba(55,230,255,0.9), 0 0 26px rgba(55,230,255,0.6), 0 0 60px rgba(55,230,255,0.35); font-style: italic; }
+  #card.showroom .title { position: absolute; left: 0; right: 0; top: calc(144px + var(--safe-top, 0px)); font-size: 14px; letter-spacing: 0.42em; padding-left: 0.42em; color: rgba(255,255,255,0.72); font-weight: 700; }
+  #card.showroom .score { font-size: 17px; letter-spacing: 0.18em; color: rgba(255,255,255,0.8); font-weight: 700; }
+  #card.showroom .lines { font-size: 13px; color: rgba(255,255,255,0.55); }
+  #card.showroom .lines .diag { display: block; font-size: 11px; opacity: 0.6; margin-top: 4px; letter-spacing: 0; }
+  #card.showroom #btnPrimary { height: 72px; max-width: 300px; border-radius: 36px; font-size: 32px; letter-spacing: 0.32em; padding-left: 0.32em; background: linear-gradient(180deg, #8ff4ff 0%, #37e6ff 55%, #1cb8d8 100%); color: #021219; box-shadow: 0 0 0 2px rgba(255,255,255,0.35) inset, 0 6px 30px rgba(55,230,255,0.55); animation: playGlow 2.4s ease-in-out infinite; }
+  @keyframes playGlow { 0%, 100% { box-shadow: 0 0 0 2px rgba(255,255,255,0.35) inset, 0 6px 26px rgba(55,230,255,0.45); } 50% { box-shadow: 0 0 0 2px rgba(255,255,255,0.5) inset, 0 6px 40px rgba(55,230,255,0.8); } }
+  #card.showroom .row { max-width: 300px; }
+  #card.showroom .row .btn { background: rgba(10,14,24,0.6); border: 1px solid rgba(255,255,255,0.22); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
   .btn:focus-visible { outline: 2px solid var(--player); outline-offset: 2px; }
-  @media (prefers-reduced-motion: reduce) { .callout { transition: none; } #special.pulse { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .callout { transition: none; } #special.pulse, #card.showroom #btnPrimary { animation: none; } }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&display=swap">
 </head>

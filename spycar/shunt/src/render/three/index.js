@@ -20,6 +20,7 @@ import { loadHeroModel, HERO_GLB_URL } from './heroModel.js';
 import { loadEnemyModels } from './enemyModels.js';
 import { loadPropModels } from './propModels.js';
 import { MODELS } from './carModel.js';
+import { createShowroom } from './showroom.js';
 const V = new Vector3(), V2 = new Vector3(), SUN = new Vector3();
 function rainTexture() { const c = document.createElement('canvas'); c.width = 256; c.height = 256; const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 256, 256); let a = 7; const rng = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 1; for (let i = 0; i < 90; i++) { const px = rng() * 256, py = rng() * 256, l = 14 + rng() * 26; x.globalAlpha = 0.3 + rng() * 0.6; x.beginPath(); x.moveTo(px, py); x.lineTo(px + 2, py + l); x.stroke(); } const t = new CanvasTexture(c); t.wrapS = t.wrapT = RepeatWrapping; t.colorSpace = SRGBColorSpace; return t; }
 const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -40,7 +41,7 @@ export function createThreeRenderer(canvas, opts = {}) {
   const SB = 80; key.shadow.camera.left = -SB; key.shadow.camera.right = SB; key.shadow.camera.top = SB; key.shadow.camera.bottom = -SB; scene.add(key); scene.add(key.target);
   const hemi = new HemisphereLight(0x8899ff, 0x202020, 0.6); scene.add(hemi);
   const sky = new Sky(scene, renderer); if (MODELS.skyline) sky.addSkyline(MODELS.skyline);
-  const road = new RoadMesh(scene), cars = new CarSystem(scene), props = new Props(scene), fx = new FX(scene), city = new City(scene, fx); roadCam.setOccluders(city.group);
+  const road = new RoadMesh(scene), cars = new CarSystem(scene), props = new Props(scene), fx = new FX(scene), city = new City(scene, fx); roadCam.setOccluders(city.group); cars.camPos = camera.position;
   // rain streaks (a ?tune=1 option): a scrolling streak quad in front of the camera
   const rain = new Mesh(new PlaneGeometry(2, 2), new MeshBasicMaterial({ map: rainTexture(), transparent: true, opacity: 0, blending: AdditiveBlending, depthTest: false, depthWrite: false })); rain.renderOrder = 20; rain.frustumCulled = false; camera.add(rain); rain.position.set(0, 0, -1.2); scene.add(camera);
   let look = lookFor(opts.look || 'night'), P = Object.assign({}, LOOKS[look]); if (IS_IOS) P.msaa = 2;
@@ -58,7 +59,7 @@ export function createThreeRenderer(canvas, opts = {}) {
   function setScale(k) { state.scale = k; renderer.setPixelRatio(k); renderer.setSize(view.SW, H, false); post.composer.setSize(view.SW, H); }
   function resize() {
     const cssScale = Math.min(window.innerWidth / view.SW, window.innerHeight / H); state.cap = LITE ? 0.5 : Math.min(2, (window.devicePixelRatio || 1) * cssScale); setScale(Math.min(state.cap, Math.max(state.scale, Math.min(1.25, state.cap))));
-    camera.aspect = view.SW / H; camera.updateProjectionMatrix(); const a = Math.tan(camera.fov / 2 * Math.PI / 180) * 1.2 * 2; rain.scale.set(a * camera.aspect, a, 1);
+    camera.aspect = view.SW / H; camera.updateProjectionMatrix(); if (showroom) showroom.resize(view.SW / H); const a = Math.tan(camera.fov / 2 * Math.PI / 180) * 1.2 * 2; rain.scale.set(a * camera.aspect, a, 1);
   }
   function adapt(dt) {
     // frames over 15 ms for a while lower the scale, frames under 10 ms raise it, within [1.25, cap]; headless and desktop DPR 1 sit at their cap
@@ -67,12 +68,22 @@ export function createThreeRenderer(canvas, opts = {}) {
     else if (state.frameMs < 10 && state.scale < state.cap) { setScale(Math.min(state.cap, state.scale + 0.125)); state.frameMs = 12; }
   }
   canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); state.lost = true; }, false);
-  canvas.addEventListener('webglcontextrestored', () => { post.dispose(); post = createPost(renderer, scene, camera, P); applyLook(); road.reset(); city.reset(); state.lost = false; prewarm(); }, false);
+  canvas.addEventListener('webglcontextrestored', () => { post.dispose(); post = createPost(renderer, scene, camera, P); showroomOn = false; applyLook(); road.reset(); city.reset(); state.lost = false; prewarm(); }, false);
   // the shadow box rides with the player and snaps to shadow-map texels so edges do not swim
   function placeKey(target) { const texel = (2 * SB) / key.shadow.mapSize.x; key.target.position.set(Math.round(target.x / texel) * texel, 0, Math.round(target.z / texel) * texel); key.position.copy(key.target.position).addScaledVector(SUN, 220); key.target.updateMatrixWorld(); }
   let roadRef = null;
+  // the showroom title (showroom.js): drawn through the same post chain instead of the city while the title card is up
+  let showroom = null, showroomOn = false;
+  function useScene(on) { if (on === showroomOn) return; showroomOn = on; post.composer.setMainScene(on ? showroom.scene : scene); post.composer.setMainCamera(on ? showroom.camera : camera); }
+  function renderShowroom(dt, st) {
+    showroom.update(dt, st.elapsed); renderer.info.reset();
+    if (LITE || state.postError) renderer.render(showroom.scene, showroom.camera); else { useScene(true); try { post.composer.render(dt); } catch (e) { state.postError = String(e && e.message || e).slice(0, 120); renderer.render(showroom.scene, showroom.camera); } }
+    adapt(dt);
+  }
   function render(dt, st) {
-    if (state.lost) return; state.elapsed = st.elapsed; const G = st.G; roadRef = G.road;
+    if (state.lost) return;
+    if (st.phase === 'title' && showroom && !NO_SHOWROOM) { renderShowroom(dt, st); return; }
+    if (showroomOn) useScene(false); state.elapsed = st.elapsed; const G = st.G; roadRef = G.road;
     const alpha = clamp(G.acc * 120, 0, 1); let rx, rdist, frame = null;
     if (st.phase === 'over' && G.replay.count) { const R = G.replay; const span = R.count / 30 / 0.6 + 0.5; const t = G.replayT % span; const idx = Math.min(R.count - 1, Math.floor(t * 0.6 * 30)); frame = R.frames[(R.head - R.count + idx + 45 * 2) % 45]; rx = frame.x; rdist = frame.y; }
     else { rx = lerp(G.px, G.x, alpha); rdist = lerp(G.pdist, G.dist, alpha); }   // rx is road-space x (centre 195)
@@ -98,8 +109,9 @@ export function createThreeRenderer(canvas, opts = {}) {
   // how far ahead (in road pt) the top centre of the screen reaches on the ground: the warning-time measure
   function visibleAhead(G) { V.set(0, 1, 0.5).unproject(camera); V2.copy(V).sub(camera.position).normalize(); if (V2.y >= 0) return 3000; const t = -camera.position.y / V2.y; V.copy(camera.position).addScaledVector(V2, t); let best = 0, bd = 1e18; for (let s = G.dist; s < G.dist + 3000; s += 20) { toWorld(G.road, REF, s, V2); const d = (V2.x - V.x) ** 2 + (V2.z - V.z) ** 2; if (d < bd) { bd = d; best = s; } } return best - G.dist; }
   // the imported hero: loaded before the shader prewarm so its material compiles with the rest; ?hero=code keeps the code hero
+  const NO_SHOWROOM = new URLSearchParams(location.search).get('showroom') === '0';   // ?showroom=0: the old title over the road
   const HERO_MODE = new URLSearchParams(location.search).get('hero') === 'code' ? 'code' : 'glb';
-  async function loadHero() { if (!HERO_GLB_URL || state.heroInfo) return; try { const m = await loadHeroModel(); if (m) { cars.setHeroModel(m, HERO_MODE === 'code'); state.heroInfo = m.userData.info; } } catch (e) { state.heroError = String(e && e.message || e).slice(0, 120); } }
+  async function loadHero() { if (!HERO_GLB_URL || state.heroInfo) return; try { const m = await loadHeroModel(); if (m) { cars.setHeroModel(m, HERO_MODE === 'code'); state.heroInfo = m.userData.info; showroom = createShowroom(renderer, m, view.SW / H); } } catch (e) { state.heroError = String(e && e.message || e).slice(0, 120); } }
   async function loadEnemies() { if (state.enemyInfo) return; const map = await loadEnemyModels(scene); cars.setEnemyModels(map); state.enemyInfo = Object.fromEntries(Object.entries(map).map(([k, v]) => [k, v.info || v])); }
   async function loadProps() { if (state.propInfo) return; const r = await loadPropModels(scene); city.setPropModels(r.meshes); props.setPropModels(r.meshes); state.propInfo = r.info; }
   async function prewarm() {
@@ -107,7 +119,7 @@ export function createThreeRenderer(canvas, opts = {}) {
     // every material compiled before play: one of each car kind in the scene, every batch with one instance, then one composer frame
     const temp = []; for (const k of Object.keys(cars.geo)) { const m = cars.acquire(k); m.userData.kind = k; temp.push(m); }
     fx.begin(); fx.glow(0, 0, 0, 1, 1, 1, 1, 0); fx.puff(0, 0, 0, 1, 0); fx.shadow(V.set(0, 0, 0), 1, 1); fx.ring(0, 0, 0, 1, 0xffffff, 0, 1); fx.spark(0, 0, 0, 0, 0, 0); fx.poolAt(0, 0, 0, 1, 1, 1, 0, 1); fx.cone(0, 0, 0, 1, 1, 1, 1, 0); fx.end();
-    try { await renderer.compileAsync(scene, camera); } catch (e) { renderer.compile(scene, camera); }
+    try { await renderer.compileAsync(scene, camera); if (showroom) await renderer.compileAsync(showroom.scene, showroom.camera); } catch (e) { renderer.compile(scene, camera); }
     for (const m of temp) cars.release(m); fx.begin(); fx.end();
   }
   // one line for the title card and the frame counter: what the device is running
@@ -117,5 +129,5 @@ export function createThreeRenderer(canvas, opts = {}) {
   function reset() { roadCam.reset(); road.reset(); city.reset(); cars.reset(); fx.reset(); }
   resize();
   function setCamera(name) { const n = setCamPreset(name); resize(); return n; }
-  return { kind: 'three', render, setCamera, reset, resize, stats, diag, project, visibleAhead, prewarm, setLook, get look() { return look; }, get P() { return P; }, applyLook, camera: roadCam, renderer, scene, setRoad(r) { roadRef = r; }, fx, props, cars, city, state, CAM, get post() { return post; }, simulateContextLoss() { const ext = renderer.getContext().getExtension('WEBGL_lose_context'); if (ext) { ext.loseContext(); setTimeout(() => ext.restoreContext(), 800); return true; } return false; } };
+  return { kind: 'three', render, setCamera, reset, resize, stats, diag, project, visibleAhead, prewarm, setLook, get look() { return look; }, get P() { return P; }, applyLook, camera: roadCam, renderer, scene, setRoad(r) { roadRef = r; }, fx, props, cars, city, state, CAM, get post() { return post; }, get showroom() { return showroom; }, simulateContextLoss() { const ext = renderer.getContext().getExtension('WEBGL_lose_context'); if (ext) { ext.loseContext(); setTimeout(() => ext.restoreContext(), 800); return true; } return false; } };
 }

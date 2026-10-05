@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 const here = path.dirname(fileURLToPath(import.meta.url)); const pageFile = path.join(here, '..', 'dist', 'shunt.html');
 const out = process.argv[2] || 'shots'; const extra = process.argv[3] ? '&' + process.argv[3] : ''; fs.mkdirSync(out, { recursive: true });
-const VIEWS = (process.argv[4] ? process.argv[4].split(',') : ['gameplay', 'closeup-34', 'topdown']).map(n => [n, { gameplay: '', 'closeup-34': '&cam=20,13,36,-38,0.5', topdown: '&cam=89,16,36,0.01,0.5' }[n]]);   // argv[4]: a subset
+const VIEWS = (process.argv[4] ? process.argv[4].split(',') : ['gameplay', 'closeup-34', 'topdown']).map(n => [n, { gameplay: '', 'closeup-34': '&cam=20,13,36,-38,0.5', topdown: '&cam=89,16,36,0.01,0.5', front: '&cam=10,10,36,180,0.5', 'front-34': '&cam=14,11,36,150,0.5' }[n]]);   // argv[4]: a subset
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 for (const [name, q] of VIEWS) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true }); const errors = []; page.on('pageerror', e => errors.push(e.message));
