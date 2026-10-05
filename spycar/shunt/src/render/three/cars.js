@@ -9,6 +9,8 @@ import { buildHero } from './hero.js';
 import { tickEnemyLights } from './enemyModels.js';
 const KIND_COL = { player: '#37e6ff', civ: '#cfe6ff', weak: '#3a3d46', bruiser: '#1a1b1f', gunner: '#1a1b1f', armored: '#20242b', truck: '#2fd36a', wreck: '#3a2a2a' };
 const CIV_TINTS = ['#cfe6ff', '#fff1c9', '#cdebdc', '#e9d9ff'];
+// the traffic model's body colours, one per sim tint (silver, dark red, white, navy); never cyan, that is the hero's
+const CIV_BODY = ['#b8bec8', '#7a1a22', '#f2f2f2', '#1f2d55'].map(h => new Color(h));
 const RED = new Color('#ff3b3b'), WHITE = new Color('#ffffff'), DARK = new Color('#14161a'), GLASS = new Color('#1c2634'), GREY = new Color('#6a6f7a'), CYAN = new Color('#37e6ff');
 function box(w, h, l, x, y, z, c) { const g = new BoxGeometry(w, h, l); g.translate(x, y, z); const n = g.attributes.position.count; const col = new Float32Array(n * 3); for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; } g.setAttribute('color', new Float32BufferAttribute(col, 3)); return g; }
 // geometry in metres, body colour white (the material tints it), trim in fixed colours; forward is -z
@@ -45,7 +47,8 @@ export class CarSystem {
     const glb = mesh && !useCode; this.outline.geometry = glb ? mesh.userData.body.geometry : this.geo.player; this.outline.position.y = glb ? 0 : -0.35; this.outline.scale.setScalar(glb ? 1.015 : 1); }
   // the imported enemy types (enemyModels.js): one InstancedMesh per type
   setEnemyModels(map) { for (const [k, v] of Object.entries(map)) if (v.mesh) this.inst[k] = v.mesh; }
-  emit(im, o, tint) { if (im.count >= im.instanceMatrix.count) return; o.updateMatrix(); im.setMatrixAt(im.count, o.matrix); im.instanceColor.setXYZ(im.count, tint, tint, tint); im.count++;
+  emit(im, o, tint, body) { if (im.count >= im.instanceMatrix.count) return; o.updateMatrix(); im.setMatrixAt(im.count, o.matrix);
+    if (im.userData.aTint) { const c = body || CIV_BODY[0]; im.userData.aTint.setXYZW(im.count, c.r, c.g, c.b, tint); } else im.instanceColor.setXYZ(im.count, tint, tint, tint); im.count++;
     const at = im.userData.attach; if (at && at.mesh.count < at.mesh.instanceMatrix.count) { this.attachM.multiplyMatrices(o.matrix, at.local); at.mesh.setMatrixAt(at.mesh.count, this.attachM); at.mesh.instanceColor.setXYZ(at.mesh.count, tint, tint, tint); at.mesh.count++; } }   // an attached part (the Mule's arm)
   acquire(kind) { let m = this.free[kind].pop(); if (!m) { m = new Mesh(this.geo[kind], this.mat[kind]); m.castShadow = true; m.frustumCulled = false; } this.scene.add(m); return m; }
   release(m) { this.scene.remove(m); this.free[m.userData.kind].push(m); }
@@ -60,7 +63,7 @@ export class CarSystem {
       m.userData.stamp = stamp; const cx = lerp(c.px, c.x, alpha), cy = lerp(c.py, c.y, alpha); const w = c.w * M, l = c.l * M;
       if (c.wrecked) { m.material = this.mat.wreck; this.place(m, G, cx, cy, c.spin, 0); m.rotation.z = Math.sin(c.flip * Math.PI * 2) * 0.5; m.rotation.x = Math.sin(c.flip * Math.PI) * 0.2; if (inst) this.emit(inst, m, 0.28); if (c.debrisT > 0.5) fx.glow(m.position.x, m.position.y + 1, m.position.z, 2.5, 1, 0.5, 0.15, (c.debrisT - 0.5)); fx.shadow(m.position, w, l); continue; }
       m.material = c.kind === 'civ' ? this.mat['civ' + Math.max(0, CIV_TINTS.indexOf(c.tint))] : this.mat[c.kind]; m.rotation.z = 0; m.rotation.x = 0;
-      this.place(m, G, cx, cy, (c.lean || 0) * Math.PI / 180 + (c.spin || 0), 0); fx.shadow(m.position, w, l); if (inst) this.emit(inst, m, 1);
+      this.place(m, G, cx, cy, (c.lean || 0) * Math.PI / 180 + (c.spin || 0), 0); fx.shadow(m.position, w, l); if (inst) this.emit(inst, m, 1, c.kind === 'civ' ? CIV_BODY[Math.max(0, CIV_TINTS.indexOf(c.tint))] : null);
       const p = m.position;
       const fx_ = Math.sin(-m.rotation.y), fz_ = -Math.cos(-m.rotation.y); const rx = Math.cos(-m.rotation.y), rz = Math.sin(-m.rotation.y);
       if (c.kind === 'truck') { if (!c.loaded) fx.glow(p.x - fx_ * l * 0.5, p.y + 2.6, p.z - fz_ * l * 0.5, 1.2, 0.24, 1, 0.48, 0.4 + 0.4 * Math.sin(elapsed * 6)); continue; }   // friendly green
@@ -74,7 +77,7 @@ export class CarSystem {
       if (c.kind === 'gunner' && c.state === 'sight') fx.sightLine(G, c.sightX, c.y, c.sightX, c.y + 700, 0.5 + 0.5 * Math.sin(elapsed * 30));
     }
     for (const [c, m] of this.meshOf) if (m.userData.stamp !== stamp) { this.release(m); this.meshOf.delete(c); }
-    for (const k in this.inst) { const im = this.inst[k]; for (const m of im.userData.attach ? [im, im.userData.attach.mesh] : [im]) if (m.count) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; } }
+    for (const k in this.inst) { const im = this.inst[k]; for (const m of im.userData.attach ? [im, im.userData.attach.mesh] : [im]) if (m.count) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; if (m.userData.aTint) m.userData.aTint.needsUpdate = true; } }
   }
   updatePlayer(G, rx, rdist, fx, st, elapsed) {
     // the imported hero turns its wheels with the road speed and lights its tail bar under braking

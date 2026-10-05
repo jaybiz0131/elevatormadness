@@ -120,11 +120,17 @@ export function carMaterial(brake, key, opts = {}) {
       sh.fragmentShader = 'uniform vec3 uTint; uniform float uTintOn;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
  vec3 tc = diffuseColor.rgb; float tl = dot(tc, vec3(0.299, 0.587, 0.114)); float ts = max(tc.r, max(tc.g, tc.b)) - min(tc.r, min(tc.g, tc.b));
  float panelW = smoothstep(0.35, 0.6, tl) * (1.0 - smoothstep(0.12, 0.3, ts)); float redW = clamp((tc.r - max(tc.g, tc.b)) * 2.5, 0.0, 1.0);
- diffuseColor.rgb = mix(tc, uTint * (0.55 + 0.45 * tl), panelW * uTintOn);`);
+ diffuseColor.rgb = mix(tc, uTint * (0.55 + 0.45 * tl), panelW * uTintOn);` + (opts.instTint ? `
+ // per-instance body colour (traffic): the light panels take vTint.rgb; cyan texels (rims, trim) go neutral grey, cyan is the hero's;
+ // vTint.w darkens the whole car (a wreck)
+ diffuseColor.rgb = mix(diffuseColor.rgb, vTint.rgb * (0.5 + 0.5 * tl), panelW);
+ float cyanW = clamp((min(tc.g, tc.b) - tc.r) * 4.0, 0.0, 1.0) * step(0.15, ts); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.55 + 0.3 * tl), cyanW);
+ diffuseColor.rgb *= vTint.w;` : ''));
+      if (opts.instTint) { sh.vertexShader = 'attribute vec4 aTint; varying vec4 vTint;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTint = aTint;'); sh.fragmentShader = 'varying vec4 vTint;\n' + sh.fragmentShader; }
     }
     sh.vertexShader = 'attribute vec4 surf; varying vec4 vSurf;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vSurf = surf;');
     sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = ' + (T ? 'mix(0.55, 0.2, panelW)' : 'vSurf.x') + ';').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = ' + (T ? 'mix(0.15, 0.45, panelW)' : 'vSurf.y') + ';').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5)' + (T ? (opts.redGate ? ' * (vSurf.w > 0.5 ? max(redW * 1.6, 0.12) : 1.0)' : '') + ' + uTint * panelW * 0.07 * uTintOn' : '') + ';'); };
-  m.customProgramCacheKey = () => 'car-' + key + (T ? '-tex' : '') + (opts.redGate ? '-rg' : ''); return m;
+  m.customProgramCacheKey = () => 'car-' + key + (T ? '-tex' : '') + (opts.redGate ? '-rg' : '') + (opts.instTint ? '-it' : ''); return m;
 }
 // tag a code-built part (the hero's spinning wheels) with a palette entry so it draws with carMaterial
 export function tagPart(g, S) { g = g.index ? g.toNonIndexed() : g; const n = g.attributes.position.count; const c = new Float32Array(n * 3), su = new Float32Array(n * 4); for (let i = 0; i < n; i++) { c[i * 3] = S[0].r; c[i * 3 + 1] = S[0].g; c[i * 3 + 2] = S[0].b; su[i * 4] = S[1]; su[i * 4 + 1] = S[2]; su[i * 4 + 2] = S[3]; su[i * 4 + 3] = S[4]; } g.setAttribute('color', new Float32BufferAttribute(c, 3)); g.setAttribute('surf', new Float32BufferAttribute(su, 4)); for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color', 'surf'].includes(k)) g.deleteAttribute(k); return g; }
