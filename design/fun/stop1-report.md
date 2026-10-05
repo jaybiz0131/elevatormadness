@@ -1,6 +1,6 @@
 # Sprint D, Stop 1: fun first (report)
 
-Build: https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn (version 20). Branch `shunt-3d`. Settings > Developer now holds Camera A/B and Show FPS.
+Build: https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn (version 20). Branch `shunt-3d`. Settings > Developer holds Camera A/B and Show FPS (both were already on the branch from the Sprint C session, so I did not add a second copy).
 Kill sequence: `design/fun/kill-sequence.mp4` (10 s, 24 fps) and `design/fun/kill-1.png` to `kill-4.png`. End screen: `design/fun/win/`.
 
 **The sim changed in this stop** (replay rev `D1`). The six Sprint 4 baselines (`wall-s*.json`) are retired and replaced by six new ones
@@ -29,7 +29,7 @@ The dead-time rows are the real change.
 - **Pacing director.** A wave every 8 to 15 s, escalating with progress: Darts, then Rams, then Gunners, a Bulwark from halfway. A filler enemy
   appears within 0.3 s when the road has no attacker, so a gap cannot reach 5 s. Weave lines of slow traffic (three rows, one wandering gap),
   near-miss bonus (gap of 16 pt or less, 50 to 100 points, extends the combo), armor and missile crates when low.
-- **Gatling.** `wpn_gatling.glb` did not exist, so `tools/make-gatling.mjs` builds it (3 meshes, 900 triangles, 67 KB) and it is inlined in the build.
+- **Gatling.** Your `assets/models/wpn_gatling.glb`, now built in (it was in `NOT_YET`). It is a single mesh, so the barrels cannot turn; a ring of six glints at the muzzle turns with the spin instead, and its cyan texels glow up with the spin and with every round. Mount point and size: `GUN` in `src/render/three/gatling.js`.
   On the hood, 1 s spin-up whine, 20 rounds a second, a spray of plus or minus 3 degrees along the heading, no aim help. Brass casings, tracers every
   third round, muzzle flash, and the cyan trim glows up with every round. Every hit: sparks, a flash, a tick, a tiny kick. Every kill: 60 ms hit stop,
   a bigger shake, a screen flash, a bigger explosion with 20 debris pieces and a shock ring, a punchy sample, a popup with the multiplier. Ram hits (a Ram
@@ -42,9 +42,9 @@ The dead-time rows are the real change.
 
 ## Checks
 
-- Budgets: draw calls at most 144 in the worst frame of a bot kill sequence (full quality, shadows and post on), 135 in a clean fight. The same
-  frames were 187 to 197 before this stop: the hero car was about 90 separate meshes and is now 10. Headroom to 150 is small. Triangles at most 25.5k (budget 400k).
-  The single-file build is 1.02 MB (budget 15 MB). These are SwiftShader counts, not iPhone frame rates.
+- Budgets, measured after merging the Sprint C models: draw calls at most 103, triangles at most 367k (budget 400k, so little headroom: the city and the
+  models are most of it; the gatling is about 4k), single-file build 11.1 MB (budget 15 MB). Before the merge, on my own branch, the code hero was merged by material
+  (about 90 meshes to 10) and the worst frame was 144 calls. These are SwiftShader counts, not iPhone frame rates.
 - Determinism: 7 of 7 replays match twice (sync), one live. The check found a real bug: `nearLane` could return `undefined` when the player was off the lane range,
   which spawned a NaN car and a NaN bot input, and the recording then differed from its replay. Fixed at the source, and the input snapshot refuses NaN.
 - Bots on the final baselines: skilled bot reaches the city in 2 of 3 (died to a Gunner at 133 s in the other); across eight seeds on an earlier tuning it was 8 of 8.

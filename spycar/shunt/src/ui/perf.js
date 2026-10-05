@@ -2,22 +2,19 @@
 // the beauty route, then shows average fps, 1% low, worst frame and the resolution scale it settled on. ?bench=soak: ten minutes,
 // first minute against last. ?shots=1 plays the same run for the postcard tool. Headless numbers are not iPhone numbers.
 import bench from '../../replays/beauty.json';
-// Show FPS (Settings > Developer, remembered): the current rate (last half second) and the lowest rate seen in the last 10 s, from raw
-// frame times, so a hitch shows. Separate from the ?perf=1 overlay, which is the detailed one.
-export function createFpsBadge(el) {
-  const ring = new Float32Array(1200); let n = 0, head = 0, acc = 0, frames = 0, shown = 0, on = false;   // up to 120 fps x 10 s of per-frame times
-  const t = new Float32Array(1200);
-  return {
-    set(v) { on = !!v; el.hidden = !on; if (on) { n = 0; head = 0; acc = 0; frames = 0; shown = 0; } },
-    reset() { n = 0; head = 0; acc = 0; frames = 0; },
-    frame(raw, now) {
-      if (!on || raw <= 0 || raw > 0.5) return;
-      ring[head] = raw; t[head] = now; head = (head + 1) % ring.length; n = Math.min(n + 1, ring.length); acc += raw; frames++;
-      if (now - shown < 0.25) return; shown = now;
-      const cur = frames / acc; acc = 0; frames = 0; let worst = 0;
-      for (let i = 0; i < n; i++) { const k = (head - 1 - i + ring.length) % ring.length; if (now - t[k] > 10) break; if (ring[k] > worst) worst = ring[k]; }
-      el.textContent = Math.round(cur) + ' FPS\nLOW ' + Math.round(1 / Math.max(worst, 1e-3)) + ' (10 s)';
-    },
+import { S } from '../settings.js';
+// Show FPS (Settings > Developer > Show FPS, remembered; or ?debug=1): a small readout in the top right corner with the current frames
+// per second and the lowest over the last 10 seconds. FPS is measured over half-second windows; the low is the worst of the last 20
+// windows. Amber under 55. Draw calls and triangles are in the Frame counter (?perf=1).
+function createDebug(Q, renderer) {
+  const force = Q.get('debug') === '1'; let el = null, t = 0, n = 0, acc = 0; const win = new Float32Array(20); let wn = 0, wi = 0;
+  return function (dt) {
+    const on = force || S.debug; if (!on) { if (el) el.hidden = true; wn = 0; return; }
+    if (!el) { el = document.createElement('div'); el.id = 'dbg'; document.getElementById('ui').appendChild(el); } el.hidden = false;
+    n++; acc += dt; if (performance.now() - t < 500) return; t = performance.now();
+    const fps = n / Math.max(1e-3, acc); n = 0; acc = 0; win[wi] = fps; wi = (wi + 1) % win.length; wn = Math.min(win.length, wn + 1);
+    let low = fps; for (let k = 0; k < wn; k++) low = Math.min(low, win[k]);
+    el.textContent = `${fps.toFixed(0)} FPS\nLOW ${low.toFixed(0)} (10 s)`; el.classList.toggle('over', low < 55);
   };
 }
 export function createPerf(Q, renderer, hud) {
@@ -25,7 +22,9 @@ export function createPerf(Q, renderer, hud) {
   let el = null; function overlay() { if (el) return; el = document.createElement('div'); el.style.cssText = 'position:absolute;left:12px;top:calc(110px + var(--safe-top,0px));font:600 13px/1.4 monospace;color:#9fe;background:rgba(0,0,0,0.55);padding:6px 8px;border-radius:6px;pointer-events:none;white-space:pre;z-index:5'; document.getElementById('ui').appendChild(el); }
   if (show) overlay();
   const frames = []; let t = 0, acc = 0, n = 0, worst = 0, running = false, results = null, soakStart = 0, loops = 0, lastPerf = 0, minutesDone = false; const minutes = [];
+  const debug = createDebug(Q, renderer);
   function frame(dt, st) {
+    debug(dt);
     if (!show && !shots) return; const ms = dt * 1000; acc += ms; n++; worst = Math.max(worst, ms); if (running) frames.push(ms);
     const wall = performance.now() / 1000;   // the soak runs on wall time, not the frame-capped elapsed clock
     if (mode === 'soak' && running) { const m = Math.floor((wall - soakStart) / 60); if (!minutes[m]) minutes[m] = { ms: [], mem: [] }; minutes[m].ms.push(ms); if (performance.memory && n % 60 === 0) minutes[m].mem.push(performance.memory.usedJSHeapSize); }

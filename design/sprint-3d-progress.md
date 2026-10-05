@@ -32,7 +32,7 @@ Stop Point 1: waiting on Jack's answers (look choice, iPhone ?bench=1 screenshot
 - Replays: `graybox/replays/base-*.json` (flag off, Sprint C baselines) and `shunt/replays/wall-*.json` (flag on, step 6 baselines)
   must both match on every build; `replays/beauty.json` is the bench and postcard run (seed 3, flag off, 90 s).
 
-## Sprint 4 (driving v2 + weapons on buttons), in progress
+## Sprint C work: driving v2 and weapons on buttons (commits titled "Sprint 4 ..." used an old numbering; see design/roadmap.md, sprints are A to G)
 Jack's calls after Stop Point 1: the sim is open again. Done in step A (commit "Sprint 4 step A"):
 - GAS (hold) to 1,300 pt/s, coast back to cruise, BRAKE to 260 then stop and reverse to -220 while held (`T.drive`).
 - The 360: pad held + thumb dragged a lane past the road edge for 0.4 s at speed > 480 → spin at 420°/s, pays 300 + tier-3 turbo (`T.spin`).
@@ -46,12 +46,54 @@ Jack's calls after Stop Point 1: the sim is open again. Done in step A (commit "
 
 ## Sprint D, Stop 1: FUN FIRST (branch `shunt-3d`)
 Jack's v18 verdict: not fun yet (nothing happening, no goal, hits feel weak). Done in this stop, sim changed (replay rev `D1`):
-- Settings > Developer: Camera A (high, Sprint 3D) / B (low and close, Sprint 4) and Show FPS (now + lowest in 10 s), both remembered (`localStorage` key `shunt-settings`: `camera`, `showFps`).
+- Settings > Developer Camera A/B and Show FPS: already on the branch from the Sprint C session (`S.cam`, `S.debug`); my duplicate was dropped in the merge.
 - Pacing director (`src/sim/director.js`, replaces the scripted first minute and the 40 s / 10 s wave cycle): waves every 8 to 15 s by progress (Darts, Rams, Gunners, a Bulwark), a floor so the road is never quiet (spawns at once if no attacker in the window), weave lines of slow traffic, pickups (armor, missiles) when low, near-miss bonus. Names: Dart = kind `weak`, Ram = `bruiser`, Gunner = `gunner`, Bulwark = `armored`. Dart is now a real attacker (short tell, 0.5 armor clip).
-- Gatling (`wpn_gatling.glb`, built by `tools/make-gatling.mjs`, inlined with Vite `?inline`): `T.gatling`, no aim help, 1 s spin-up, 20 rounds/s, spray of +-3 degrees. Hit: sparks + flash + tick + tiny kick. Kill: 60 ms hit stop, shake, flash, bigger explosion, score popup. Ram hits: crunch sample, sparks, shove (`slideVx`), kick.
+- Gatling (Jack's `assets/models/wpn_gatling.glb`, removed from `NOT_YET`, loaded by `render/three/gatling.js`; one mesh, so a ring of glints shows the spin): `T.gatling`, no aim help, 1 s spin-up, 20 rounds/s, spray of +-3 degrees. Hit: sparks + flash + tick + tiny kick. Kill: 60 ms hit stop, shake, flash, bigger explosion, score popup. Ram hits: crunch sample, sparks, shove (`slideVx`), kick.
 - Goal: `T.goal.city` = 120,000 pt (about 3 minutes), progress bar at the top, combo x2..x5 (3 s chain, 4 s hold, crash resets), finale at 90% (soft heavy wave + Bulwark), `win()` at the city, end card with stars (`T.goal.stars`).
 - Mercy rules (for weak drivers): half damage for 60 s, `T.mercy` pause after a hit (double on one pip), heavy enemies become Darts on one pip, armor crate within 1.5 s when on one pip, finale enemies are soft.
-- Hero car: static meshes merged by material (about 90 meshes to 10): the frame was 187 to 197 draw calls before this stop, 114 after (full quality).
+- Code hero (`hero.js`, the fallback) merged by material (about 90 meshes to 10). After merging the Sprint C models: at most 103 draw calls, 367k triangles, 11.1 MB.
 - Bug found by determinism check: `nearLane` could return `undefined` (player off the lane range) which spawned a NaN car and a NaN bot input; fixed, and `input.snapshot` refuses NaN.
 - Baselines: `replays/fun-s{1,2,3}-{active,idle}.json` and `replays/beauty.json` (rev D1). The six `wall-*.json` Sprint 4 baselines are retired (they cannot match this sim).
-- Tools: `tools/pacing.mjs` (dead-time report from replays, `--weakAttacks` after D1), `tools/killcam.mjs` (frame-by-frame capture of a kill sequence), `tools/wincard.mjs` (finale and end card shots), `tools/make-gatling.mjs`, playtest `novice` mode and `?fine=1` per-6-step hashes for debugging a replay divergence.
+- Tools: `tools/pacing.mjs` (dead-time report from replays, `--weakAttacks` after D1), `tools/killcam.mjs` and `tools/showcase.mjs` (frame-by-frame capture), `tools/wincard.mjs` (finale and end card shots), playtest `novice` mode and `?fine=1` per-6-step hashes for debugging a replay divergence.
+
+## Sprint C, Look to 8 stop points (session of 2026-10-04)
+Stop 1 Environment, Stop 2 Cars, Stop 3 UI and performance; report and wait for Jack's go-ahead at each. Rules: enemy shapes are
+original, from role descriptions only (no real makes, no spy-franchise cues), top-view sheet of all five shown before building;
+hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mood board. Approved for Stop 3: showroom title screen
+(hero car slowly turning, lit to show the paint) inside the 150 draw-call budget.
+- Stop 1 Environment (done, waiting on Jack's go-ahead): dark wet road (shader grain, damp sheen, puddles, light streaks for neon,
+  lamps and car lights), real smoke (billow atlas, rotation, self-shadow, ground fade), prop kit `render/three/kit.js` replacing the
+  box props (one merged draw per prop type), buildings turned to run along the street with shopfronts, awnings and roof units, street
+  lamps at every light pool, debug readout (Settings > Debug readout or `?debug=1`: FPS, draw calls, triangles).
+  Postcard moments re-picked for the current driving (`tools/shots.mjs`; `--only=a,b` for a subset; the wreck shot waits for a visible
+  explosion). `tools/calls.mjs [t] [look]` prints one frame's draw calls by pass and object type (cars are the biggest cost: ~70).
+- Next: Stop 2 Cars (top-view sheet of five original enemy designs for Jack's approval before building), then Stop 3 (UI, showroom
+  title, tune panel, fonts, draw calls under 150).
+- Stop 2 (hero import approved; enemies will be Jack's Meshy GLBs, not code): `carModel.js` fits, measures and paints any car GLB
+  (one draw per body); `heroModel.js` adds the spinning wheel set at the measured radius (0.302 m) and the side-intake paint;
+  `enemyModels.js` loads `assets/models/<dart|ram|turret-van|bulwark|mule>.glb` into one InstancedMesh per type (see
+  `assets/models/README.md`); types without a file keep the placeholder boxes. Outline follows the imported body. Smoke starts at
+  1.1 m; missile exhaust grows 1 to 2.6 m. `tools/heroshots.mjs <out> [query] [views]` takes gameplay, rear three-quarter, top-down.
+  Next: Jack's Dart GLB (set its nose in ENEMY_NOSE after a side-view check), then the other four; Stop 3.
+- Stop 2 done (v17): camera A/B toggle, landmark night lights, simplified cones/rooftop_ac/newsstand, traffic_car.glb with per-car
+  body colour (one draw).
+- Stop 3 UI and performance (v18, accepted by Jack 2026-10-05):
+  - Showroom title (`src/render/three/showroom.js`): the hero on a slow turntable under a studio environment map (softboxes), key plus
+    magenta and violet rims, a dark lacquer floor with a mirrored reflection (the floor is 94 to 100% opaque: the car is HDR under it),
+    magenta/violet neon tubes and haze, drawn through the game's post chain while the title card is up (28 calls, 23k triangles).
+    `?showroom=0` keeps the old title over the road. Shots: `tools/titleshot.mjs <out.png> [query]`.
+  - Front close-ups: the hero's headlight sprites, wet-road streaks, headlight pool and readability glow fade within 40 m, most when the
+    camera faces the nose; the model's own headlight glow dims with them (`HEAD_K` in heroModel.js). Bullets are slim HDR tracers.
+    `tools/heroshots.mjs <out> [query] front,front-34 [sim seconds]`.
+  - HUD: score plate with a cyan edge (42 px), ARMOR bar, speed; missile count badge on the special button; the steer hint sits over
+    the free thumb area (bottom left, mirrored for left hand), clear of the buttons. Safe areas: html padding carries
+    env(safe-area-inset-*), `fit()` turns it into `--safe-top` and `--safe-bottom`; `?safe=59,34` fakes a notch for headless shots.
+  - Fonts: Rajdhani 600/700 embedded (`src/ui/fonts.js`, OFL, 31 KB); no Google Fonts request.
+  - Tune panel: static import (the lazy chunk never loaded in the single-file build), Settings > Developer > Tune panel, per-look
+    working copies, 13 px touch rows, Copy look JSON, Reset this look.
+  - Traffic: plain non-metallic paint and a 60% hue hold after lighting so the four colours read at dusk and blue hour; rims grey.
+- Sprint C status: code done (v18, https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn). The sprint closes on Jack's iPhone playtest of
+  v18. Do not start Sprint D until then.
+- Recorded in design/roadmap.md: Sprint F segment 5 "The Refit" (the Mule dock cinematic, mount points on the hero); carried into
+  Sprint D: swap silver traffic for a mid gunmetal grey (silver and white both read as cream at dusk).
+- Next: Jack's playtest notes on v18, then Sprint D (first item: the hood gatling and the handbrake 180).

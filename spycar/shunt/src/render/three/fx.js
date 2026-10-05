@@ -8,13 +8,25 @@ import { PUFF_LIFE } from '../../sim/physics.js';
 import { M, toWorld } from './scale.js';
 const V = new Vector3(), V2 = new Vector3(), D = new Object3D(), COL = new Color();
 function softTexture(size, falloff) { const d = new Uint8Array(size * size * 4); for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) { const dx = (x + 0.5) / size - 0.5, dy = (y + 0.5) / size - 0.5; const r = Math.min(1, Math.hypot(dx, dy) * 2); const a = Math.pow(1 - r, falloff); const i = (y * size + x) * 4; d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = Math.round(255 * a); } const t = new DataTexture(d, size, size, RGBAFormat); t.needsUpdate = true; t.minFilter = LinearFilter; t.magFilter = LinearFilter; t.colorSpace = NoColorSpace; return t; }
+// tyre smoke: a 2x2 atlas of billowy puffs (overlapping soft lobes under a round falloff), alpha only; seeded so it never changes
+function smokeTexture() { const S = 256, H = 128, d = new Uint8Array(S * S * 4); let a = 99; const rng = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
+  for (let cell = 0; cell < 4; cell++) { const ox = (cell % 2) * H, oy = Math.floor(cell / 2) * H; const lobes = []; for (let i = 0; i < 13; i++) { const ang = rng() * 6.283, r = rng() * 0.24; lobes.push([0.5 + Math.cos(ang) * r, 0.5 + Math.sin(ang) * r, 0.16 + rng() * 0.17, 0.55 + rng() * 0.45]); }
+    for (let y = 0; y < H; y++) for (let x = 0; x < H; x++) { const u = (x + 0.5) / H, v = (y + 0.5) / H; let acc = 0; for (const [cx, cy, cr, w] of lobes) { const q = Math.hypot(u - cx, v - cy) / cr; if (q < 1) acc += w * (1 - q * q) * (1 - q * q); }
+      const edge = Math.max(0, 1 - Math.hypot(u - 0.5, v - 0.5) * 2); const al = Math.min(1, acc * 1.35) * Math.min(1, edge * 2.6); const i = ((oy + y) * S + ox + x) * 4; d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = Math.round(255 * al); } }
+  const t = new DataTexture(d, S, S, RGBAFormat); t.needsUpdate = true; t.minFilter = LinearFilter; t.magFilter = LinearFilter; t.colorSpace = NoColorSpace; return t; }
 export function arrowTexture(size) { const d = new Uint8Array(size * size * 4); for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) { const u = x / size, v = y / size; const head = u > 0.55 && Math.abs(v - 0.5) < (1 - u) * 1.1; const shaft = u > 0.1 && u <= 0.55 && Math.abs(v - 0.5) < 0.16; const i = (y * size + x) * 4; d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = (head || shaft) ? 255 : 0; } const t = new DataTexture(d, size, size, RGBAFormat); t.needsUpdate = true; t.colorSpace = NoColorSpace; return t; }
-const VERT_BILLBOARD = `attribute float instanceAlpha; attribute float instanceParam; varying vec2 vUv; varying vec3 vColor; varying float vAlpha; varying float vParam;
+const VERT_BILLBOARD = `attribute float instanceAlpha; attribute float instanceParam; attribute float instanceGround; uniform vec3 sunDir; varying vec2 vUv; varying vec3 vColor; varying float vAlpha; varying float vParam; varying float vH; varying vec2 vSun;
 void main() { vUv = uv; vColor = instanceColor; vAlpha = instanceAlpha; vParam = instanceParam; vec3 c = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; float sx = length(instanceMatrix[0].xyz), sy = length(instanceMatrix[1].xyz);
-  vec3 r = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]); vec3 u = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]); vec3 p = c + r * position.x * sx + u * position.y * sy; gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0); }`;
-const VERT_FLAT = `attribute float instanceAlpha; attribute float instanceParam; varying vec2 vUv; varying vec3 vColor; varying float vAlpha; varying float vParam;
-void main() { vUv = uv; vColor = instanceColor; vAlpha = instanceAlpha; vParam = instanceParam; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`;
-const FRAG = `uniform sampler2D map; uniform vec3 sunDir; uniform float lit; varying vec2 vUv; varying vec3 vColor; varying float vAlpha; varying float vParam;
+  vec3 r = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]); vec3 u = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]); vec2 q = position.xy; vSun = vec2(0.0);
+  #ifdef SMOKE
+  // param = rotation + 10 x atlas cell; the sun is carried into the puff's own 2D frame for the self-shadow lookup
+  float cellI = floor(instanceParam / 10.0); float rot = instanceParam - cellI * 10.0; float cs = cos(rot), sn = sin(rot); q = vec2(cs * q.x - sn * q.y, sn * q.x + cs * q.y);
+  vUv = (uv + vec2(mod(cellI, 2.0), floor(cellI / 2.0))) * 0.5; vec2 s2 = vec2(dot(sunDir, r), dot(sunDir, u)); vSun = vec2(cs * s2.x + sn * s2.y, -sn * s2.x + cs * s2.y);
+  #endif
+  vec3 p = c + r * q.x * sx + u * q.y * sy; vH = p.y - instanceGround; gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0); }`;
+const VERT_FLAT = `attribute float instanceAlpha; attribute float instanceParam; varying vec2 vUv; varying vec3 vColor; varying float vAlpha; varying float vParam; varying float vH; varying vec2 vSun;
+void main() { vH = 1.0; vSun = vec2(0.0); vUv = uv; vColor = instanceColor; vAlpha = instanceAlpha; vParam = instanceParam; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`;
+const FRAG = `uniform sampler2D map; uniform vec3 sunDir; uniform float lit; uniform vec3 sunCol; uniform vec3 ambCol; varying vec2 vUv; varying vec3 vColor; varying float vAlpha; varying float vParam; varying float vH; varying vec2 vSun;
 void main() { float a = texture2D(map, vUv).a;
   #ifdef RING
   vec2 d = vUv - 0.5; float r = length(d) * 2.0; float ang = atan(d.x, d.y); float frac = mod(ang / 6.2831853 + 1.0, 1.0); a = smoothstep(0.76, 0.84, r) * (1.0 - smoothstep(0.95, 1.0, r)) * step(frac, vParam);
@@ -23,34 +35,40 @@ void main() { float a = texture2D(map, vUv).a;
   #ifdef LIT
   vec2 n2 = (vUv - 0.5) * 2.0; float h = sqrt(max(0.0, 1.0 - dot(n2, n2))); vec3 n = normalize(vec3(n2.x, n2.y, h)); float l = 0.55 + 0.45 * max(0.0, dot(n, normalize(sunDir))); col *= mix(1.0, l, lit);
   #endif
+  #ifdef SMOKE
+  // lit like a volume: ambient from the look's sky, plus the sun where the puff is thinner toward the light (a two-tap self-shadow);
+  // the bottom fades out over 0.5 m above the road so a puff never shows a hard line where it meets the asphalt
+  float a2 = texture2D(map, vUv + normalize(vSun + 1e-4) * 0.045).a; float sh = clamp(0.55 + (a - a2) * 2.5 + 0.25 * length(vSun), 0.2, 1.3);
+  col = vColor * (ambCol + sunCol * sh); a *= smoothstep(0.0, 0.5, vH);
+  #endif
   gl_FragColor = vec4(col, a * vAlpha); }`;
 class Batch {
-  constructor(scene, cap, { flat = false, additive = true, ring = false, lit = false, map, depthTest = true, renderOrder = 0 } = {}) {
+  constructor(scene, cap, { flat = false, additive = true, ring = false, lit = false, smoke = false, map, depthTest = true, renderOrder = 0 } = {}) {
     const geo = new PlaneGeometry(1, 1); if (flat) geo.rotateX(-Math.PI / 2);
-    this.alpha = new InstancedBufferAttribute(new Float32Array(cap), 1); this.param = new InstancedBufferAttribute(new Float32Array(cap), 1); geo.setAttribute('instanceAlpha', this.alpha); geo.setAttribute('instanceParam', this.param);
+    this.alpha = new InstancedBufferAttribute(new Float32Array(cap), 1); this.param = new InstancedBufferAttribute(new Float32Array(cap), 1); this.ground = new InstancedBufferAttribute(new Float32Array(cap).fill(-1e4), 1); geo.setAttribute('instanceAlpha', this.alpha); geo.setAttribute('instanceParam', this.param); geo.setAttribute('instanceGround', this.ground); this.ground.setUsage(DynamicDrawUsage);
     this.alpha.setUsage(DynamicDrawUsage); this.param.setUsage(DynamicDrawUsage);
-    const defines = {}; if (ring) defines.RING = ''; if (lit) defines.LIT = '';
-    const mat = new ShaderMaterial({ vertexShader: flat ? VERT_FLAT : VERT_BILLBOARD, fragmentShader: FRAG, uniforms: { map: { value: map }, sunDir: { value: new Vector3(0.3, 1, 0.2) }, lit: { value: lit ? 1 : 0 } }, defines, transparent: true, depthWrite: false, depthTest, blending: additive ? AdditiveBlending : NormalBlending, side: DoubleSide });
+    const defines = {}; if (ring) defines.RING = ''; if (lit) defines.LIT = ''; if (smoke) defines.SMOKE = '';
+    const mat = new ShaderMaterial({ vertexShader: flat ? VERT_FLAT : VERT_BILLBOARD, fragmentShader: FRAG, uniforms: { map: { value: map }, sunDir: { value: new Vector3(0.3, 1, 0.2) }, lit: { value: lit ? 1 : 0 }, sunCol: { value: new Color(0.5, 0.5, 0.55) }, ambCol: { value: new Color(0.45, 0.45, 0.55) } }, defines, transparent: true, depthWrite: false, depthTest, blending: additive ? AdditiveBlending : NormalBlending, side: DoubleSide });
     this.mesh = new InstancedMesh(geo, mat, cap); this.mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(cap * 3), 3); this.mesh.instanceColor.setUsage(DynamicDrawUsage); this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.renderOrder = renderOrder; this.cap = cap; scene.add(this.mesh);
     this.mat = mat;
   }
   begin() { this.mesh.count = 0; }
   // billboard: position and size in metres; flat: position, size across, size along, yaw
-  add(x, y, z, sx, sy, r, g, b, a, param = 1, yaw = 0, sz = 1) { const m = this.mesh; const i = m.count; if (i >= this.cap) return -1; D.position.set(x, y, z); D.rotation.set(0, yaw, 0); D.scale.set(sx, sy, sz); D.updateMatrix(); m.setMatrixAt(i, D.matrix); m.instanceColor.setXYZ(i, r, g, b); this.alpha.setX(i, a); this.param.setX(i, param); m.count = i + 1; return i; }
-  end() { const m = this.mesh; if (m.count) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; this.alpha.needsUpdate = true; this.param.needsUpdate = true; } }
+  add(x, y, z, sx, sy, r, g, b, a, param = 1, yaw = 0, sz = 1, ground = -1e4) { const m = this.mesh; const i = m.count; if (i >= this.cap) return -1; this.ground.array[i] = ground; D.position.set(x, y, z); D.rotation.set(0, yaw, 0); D.scale.set(sx, sy, sz); D.updateMatrix(); m.setMatrixAt(i, D.matrix); m.instanceColor.setXYZ(i, r, g, b); this.alpha.setX(i, a); this.param.setX(i, param); m.count = i + 1; return i; }
+  end() { const m = this.mesh; if (m.count) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; this.alpha.needsUpdate = true; this.param.needsUpdate = true; this.ground.needsUpdate = true; } }
 }
 const SKID_N = 2000, SKID_LIFE = 15, SKID_W = 6 * M / 2;
 export class FX {
   constructor(scene) {
-    this.scene = scene; const soft = softTexture(64, 2.2), softHard = softTexture(64, 0.8), blob = softTexture(32, 1.2), arrow = arrowTexture(64);
+    this.scene = scene; this.wet = 1; const soft = softTexture(64, 2.2), softHard = softTexture(64, 0.8), blob = softTexture(32, 1.2), arrow = arrowTexture(64);
     this.glows = new Batch(scene, 512, { map: soft, additive: true, depthTest: true, renderOrder: 10 });
-    this.puffs = new Batch(scene, 800, { map: softHard, additive: false, lit: true, renderOrder: 8 });
+    this.puffs = new Batch(scene, 800, { map: smokeTexture(), additive: false, smoke: true, renderOrder: 8 });
     this.shadows = new Batch(scene, 128, { map: blob, flat: true, additive: false, renderOrder: 1 });
     this.markers = new Batch(scene, 64, { map: arrow, flat: true, additive: true, renderOrder: 2 });
     this.rings = new Batch(scene, 64, { map: soft, flat: true, additive: true, ring: true, renderOrder: 3 });
     this.stamps = new Batch(scene, 256, { map: blob, flat: true, additive: false, renderOrder: 1 });
     // fake lights on the road: round pools under lamps and headlights, and stretched reflection streaks under signs and neon
-    this.pools = new Batch(scene, 256, { map: soft, flat: true, additive: true, renderOrder: 2 });
+    this.pools = new Batch(scene, 384, { map: soft, flat: true, additive: true, renderOrder: 2 });
     this.cones = new Batch(scene, 64, { map: softHard, additive: true, renderOrder: 9 });
     // sparks: points
     const sg = new BufferGeometry(); this.sparkPos = new BufferAttribute(new Float32Array(1024 * 3), 3); this.sparkCol = new BufferAttribute(new Float32Array(1024 * 3), 3); this.sparkPos.setUsage(DynamicDrawUsage); this.sparkCol.setUsage(DynamicDrawUsage); sg.setAttribute('position', this.sparkPos); sg.setAttribute('color', this.sparkCol); sg.setDrawRange(0, 0);
@@ -77,7 +95,7 @@ export class FX {
   // n casings from the port at (x, y, z): thrown to the right and up, carrying the car's forward speed (in m/s) so they fly along with it
   brass(x, y, z, yaw, n, speedM) { const a = this.brassA; const fx_ = Math.sin(-yaw), fz_ = -Math.cos(-yaw), rx = Math.cos(-yaw), rz = Math.sin(-yaw); for (let k = 0; k < Math.min(n, 4); k++) { const i = (this.brassHead++ % this.brassN) * 8; const side = 2.2 + Math.random() * 2.2, up = 2.4 + Math.random() * 2.2, back = (Math.random() - 0.3) * 1.5; a[i] = x; a[i + 1] = y; a[i + 2] = z; a[i + 3] = rx * side + fx_ * (speedM + back); a[i + 4] = up; a[i + 5] = rz * side + fz_ * (speedM + back); a[i + 6] = 0; a[i + 7] = Math.random() * 6; } }
   glow(x, y, z, r, cr, cg, cb, a) { this.glows.add(x, y, z, r * 2, r * 2, cr, cg, cb, a); }
-  puff(x, y, z, r, a, cr = 0.78, cg = 0.8, cb = 0.82) { this.puffs.add(x, y, z, r * 2, r * 2, cr, cg, cb, a); }
+  puff(x, y, z, r, a, cr = 0.78, cg = 0.8, cb = 0.82, rot = 0) { return this.puffs.add(x, y, z, r * 2, r * 2, cr, cg, cb, a, (rot % 6.2) + 10 * (Math.floor(rot * 1.7) & 3)); }
   shadow(p, w, l, y) { this.shadows.add(p.x, (y !== undefined ? y : p.y) + 0.02, p.z, w * 1.8, 1, 0, 0, 0, 0.55, 1, 0, l * 1.5); }
   marker(G, x, s, kind, dir, a) { toWorld(G.road, x, s, V); const yaw = -(G.road.frame(s).psi) + (dir > 0 ? 0 : Math.PI); this.markers.add(V.x, V.y + 0.04, V.z, 2.4, 1, 1, 0.23, 0.23, a, 1, yaw, 1.6); }
   ring(x, y, z, r, hex, a, fill) { COL.setHex(hex); this.rings.add(x, y, z, r * 2, 1, COL.r, COL.g, COL.b, a, fill, 0, r * 2); }
@@ -85,6 +103,8 @@ export class FX {
   pool(G, x, s, r, g, b, a, radius) { toWorld(G.road, x, s, V); this.pools.add(V.x, V.y + 0.03, V.z, radius * 2, 1, r, g, b, a, 1, 0, radius * 2); }
   poolAt(x, y, z, r, g, b, a, radius, yaw = 0, len = 1) { this.pools.add(x, y + 0.03, z, radius * 2, 1, r, g, b, a, 1, yaw, radius * 2 * len); }
   reflect(G, x, s, col, a, len) { if (a <= 0.01) return; toWorld(G.road, x, s, V); this.pools.add(V.x, V.y + 0.03, V.z, 2.2, 1, col.r, col.g, col.b, a, 1, -(G.road.frame(s).psi), Math.max(3, len)); }
+  // a car light on the wet road: a narrow streak stretched along the car's heading, under the light, scaled by the look's wetness
+  streak(x, y, z, r, g, b, a, yaw, len = 3.5) { if (this.wet <= 0.01) return; this.pools.add(x, y + 0.035, z, 0.9, 1, r, g, b, a * this.wet, 1, yaw, len); }
   cone(x, y, z, r, cr, cg, cb, a) { this.cones.add(x, y, z, r * 2, r * 2, cr, cg, cb, a); }
   spark(x, y, z, r, g, b) { const i = this.sparkN; if (i >= 1024) return; this.sparkPos.setXYZ(i, x, y, z); this.sparkCol.setXYZ(i, r, g, b); this.sparkN = i + 1; }
   // skid ribbons: the sim keeps a polyline per rear wheel; each new point becomes one quad in the ring buffer, stamped with its birth time
@@ -101,9 +121,12 @@ export class FX {
       for (let i = Math.max(st.n, 3); i + 2 < pts.length; i += 3) this.skidSegment(G, pts[i - 3], pts[i - 2], pts[i], pts[i + 1], pts[i + 2], elapsed);
       st.n = pts.length; if (pts.length >= 360) st.n -= 3; }   // the sim drops the oldest point once a ribbon holds 120, so the newest stays at the same index
     for (const m of G.marks) { toWorld(G.road, m.x, m.y, V); const a = Math.min(1, m.t / (m.scorch ? 3 : 2.5)) * 0.6; const yaw = -(G.road.frame(m.y).psi); if (m.scorch) { this.stamps.add(V.x, V.y + 0.025, V.z, 44 * M, 1, 0.02, 0.02, 0.02, a, 1, yaw, 60 * M); if (m.t > 2) this.glows.add(V.x, V.y + 0.3, V.z, 2, 2, 1, 0.47, 0.12, (m.t - 2) * 0.6); } else { for (const sx of [-1, 1]) this.stamps.add(V.x + Math.cos(yaw) * sx * 10 * M, V.y + 0.025, V.z - Math.sin(yaw) * sx * 10 * M, 5 * M, 1, 0.02, 0.02, 0.03, a, 1, yaw, 12 * M); } }
-    // tyre smoke: 0.5 m to 3 m over the puff's life, fading from 55%; sorted back to front
-    let n = 0; for (const p of G.puffs) { if (n >= 700) break; toWorld(G.road, p.x, p.y, V); const k = p.t / PUFF_LIFE; const r = 0.5 + 2.5 * k; const i = this.puffs.add(V.x, V.y + 0.4 + k * 1.2, V.z, r * 2, r * 2, 0.78, 0.8, 0.84, 0.55 * (1 - k) * (1 - k * 0.3)); if (i >= 0) { this.puffOrder[n] = i; this.puffKey[n] = -((V.x - cam.x) ** 2 + (V.y - cam.y) ** 2 + (V.z - cam.z) ** 2); n++; } }
-    for (const d of G.debris) { toWorld(G.road, d.x, d.y, V); if (d.smoke) { const i = this.puffs.add(V.x, V.y + 0.3, V.z, d.s * M * 2, d.s * M * 2, 0.7, 0.7, 0.7, clamp(d.t, 0, 1) * 0.5); if (i >= 0 && n < 800) { this.puffOrder[n] = i; this.puffKey[n] = -((V.x - cam.x) ** 2 + (V.y - cam.y) ** 2 + (V.z - cam.z) ** 2); n++; } } else { const j = this.debris.count; if (j < 256) { D.position.set(V.x, V.y + 0.3 + Math.abs(Math.sin(d.t * 7)) * 0.8, V.z); D.rotation.set(d.t * 5, d.t * 3, 0); D.scale.set(d.s / 8, d.s / 8, d.s / 8); D.updateMatrix(); this.debris.setMatrixAt(j, D.matrix); COL.set(d.col.startsWith('#') ? d.col : '#777777'); this.debris.instanceColor.setXYZ(j, COL.r, COL.g, COL.b); this.debris.count = j + 1; } } }
+    // tyre smoke: 1.1 m to 3 m over the puff's life (Stop 2: starting at 0.5 m, the newest puffs read as a string of beads behind the car) (an ease-out, so it billows fast then hangs), dense at birth and thinning out;
+    // each puff turns slowly from its seed and picks one of four atlas shapes; ground-faded; sorted back to front
+    let n = 0; for (const p of G.puffs) { if (n >= 600) break; toWorld(G.road, p.x, p.y, V); const k = p.t / PUFF_LIFE; const e = 1 - (1 - k) * (1 - k); const r = 1.1 + 1.9 * e; const sd = p.seed || 0; const rot = (sd + k * (sd > 3.14 ? 0.9 : -0.9) + 6.2832) % 6.2832;
+      const i = this.puffs.add(V.x, V.y + r * 0.45 + k * 0.6, V.z, r * 2, r * 2, 0.92, 0.92, 0.95, 0.9 * (1 - k) * (1 - k * 0.3) * Math.min(1, p.t * 12), Math.min(6.2, rot) + 10 * (Math.floor(sd * 0.64) & 3), 0, 1, V.y); if (i >= 0) { this.puffOrder[n] = i; this.puffKey[n] = -((V.x - cam.x) ** 2 + (V.y - cam.y) ** 2 + (V.z - cam.z) ** 2); n++; } }
+    for (const d of G.debris) { toWorld(G.road, d.x, d.y, V); if (d.smoke) {   // missile exhaust: grows 1 m to 2.6 m as it fades (its life is 0.5 s), each puff its own shape and turn, ground-faded
+        const k = clamp(1 - d.t / 0.5, 0, 1), sz = 1 + 1.6 * k, hh = (d.x * 12.9898 + d.y * 78.233) % 6.2832; const i = this.puffs.add(V.x, V.y + sz * 0.4, V.z, sz, sz, 0.8, 0.8, 0.82, clamp(d.t, 0, 1) * 0.9, Math.abs(hh) % 6.2 + 10 * (Math.floor(Math.abs(hh) * 3) & 3), 0, 1, V.y); if (i >= 0 && n < 800) { this.puffOrder[n] = i; this.puffKey[n] = -((V.x - cam.x) ** 2 + (V.y - cam.y) ** 2 + (V.z - cam.z) ** 2); n++; } } else { const j = this.debris.count; if (j < 256) { D.position.set(V.x, V.y + 0.3 + Math.abs(Math.sin(d.t * 7)) * 0.8, V.z); D.rotation.set(d.t * 5, d.t * 3, 0); D.scale.set(d.s / 8, d.s / 8, d.s / 8); D.updateMatrix(); this.debris.setMatrixAt(j, D.matrix); COL.set(d.col.startsWith('#') ? d.col : '#777777'); this.debris.instanceColor.setXYZ(j, COL.r, COL.g, COL.b); this.debris.count = j + 1; } } }
     // rounds: every third is a tracer, a long hot streak along its own direction; the rest are short dim slugs
     for (const b of G.bullets) { const by = lerp(b.py === undefined ? b.y : b.py, b.y, alpha); toWorld(G.road, b.x, by, V); const j = this.bullets.count; if (j < 160) { const tr = !!b.tr, ang = Math.atan2(b.vx || 0, b.vy === undefined ? 1 : b.vy); D.position.set(V.x, V.y + 0.8, V.z); D.rotation.set(0, -(G.road.frame(by).psi + ang), 0); D.scale.set(tr ? 1.3 : 1, tr ? 1.3 : 1, tr ? 6 : 1.2); D.updateMatrix(); this.bullets.setMatrixAt(j, D.matrix); if (tr) this.bullets.instanceColor.setXYZ(j, 4.0, 2.6, 0.9); else this.bullets.instanceColor.setXYZ(j, 1.4, 1.1, 0.5); this.bullets.count = j + 1; if (tr) this.glow(V.x, V.y + 0.8, V.z, 0.5, 1, 0.65, 0.2, 0.5); } }
     { const dt = this.brassT < 0 ? 0 : Math.min(0.05, elapsed - this.brassT); this.brassT = elapsed; const a = this.brassA;
@@ -127,12 +150,14 @@ export class FX {
   sortPuffs(n) {
     if (n < 2) return; const ord = this.puffOrder, key = this.puffKey, seq = this.puffSeq; for (let i = 0; i < n; i++) seq[i] = i;
     const sub = seq.subarray(0, n); sub.sort((a, b) => key[a] - key[b]);   // farthest first (keys are negative squared distances)
-    const m = this.puffs.mesh; const am = m.instanceMatrix.array, ac = m.instanceColor.array, aa = this.puffs.alpha.array, ap = this.puffs.param.array;
-    if (!this.puffScratch) this.puffScratch = { m: new Float32Array(am.length), c: new Float32Array(ac.length), a: new Float32Array(aa.length), p: new Float32Array(ap.length) };
-    const S = this.puffScratch; S.m.set(am); S.c.set(ac); S.a.set(aa); S.p.set(ap); const base = m.count - n;
-    for (let i = 0; i < n; i++) { const src = ord[sub[i]], dst = base + i; for (let k = 0; k < 16; k++) am[dst * 16 + k] = S.m[src * 16 + k]; for (let k = 0; k < 3; k++) ac[dst * 3 + k] = S.c[src * 3 + k]; aa[dst] = S.a[src]; ap[dst] = S.p[src]; }
+    const m = this.puffs.mesh; const am = m.instanceMatrix.array, ac = m.instanceColor.array, aa = this.puffs.alpha.array, ap = this.puffs.param.array, ag = this.puffs.ground.array;
+    if (!this.puffScratch) this.puffScratch = { m: new Float32Array(am.length), c: new Float32Array(ac.length), a: new Float32Array(aa.length), p: new Float32Array(ap.length), g: new Float32Array(ag.length) };
+    const S = this.puffScratch; S.m.set(am); S.c.set(ac); S.a.set(aa); S.p.set(ap); S.g.set(ag); const base = m.count - n;
+    for (let i = 0; i < n; i++) { const src = ord[sub[i]], dst = base + i; for (let k = 0; k < 16; k++) am[dst * 16 + k] = S.m[src * 16 + k]; for (let k = 0; k < 3; k++) ac[dst * 3 + k] = S.c[src * 3 + k]; aa[dst] = S.a[src]; ap[dst] = S.p[src]; ag[dst] = S.g[src]; }
   }
   end() { for (const b of this.batches) b.end(); if (this.debris.count) { this.debris.instanceMatrix.needsUpdate = true; this.debris.instanceColor.needsUpdate = true; } if (this.bullets.count) { this.bullets.instanceMatrix.needsUpdate = true; this.bullets.instanceColor.needsUpdate = true; } if (this.missiles.count) this.missiles.instanceMatrix.needsUpdate = true; this.sparks.geometry.setDrawRange(0, this.sparkN); if (this.sparkN) { this.sparkPos.needsUpdate = true; this.sparkCol.needsUpdate = true; } this.lines.geometry.setDrawRange(0, this.lineN * 2); if (this.lineN) this.linePos.needsUpdate = true; }
   setSun(dir) { this.puffs.mat.uniforms.sunDir.value.copy(dir); }
+  // the smoke's light: the key light's colour (damped) and an ambient from the look's sky and fog, so it sits in each look
+  setLook(P) { this.wet = P.wet; const u = this.puffs.mat.uniforms; u.sunCol.value.set(P.sunColor).multiplyScalar(Math.min(1, P.sunIntensity * 0.3) * (P.sunElevation > 0 ? 1 : 0.5)); u.ambCol.value.set(P.hemiSky).multiplyScalar(0.35 * P.hemiIntensity).add(COL.set(P.fog).multiplyScalar(0.4)).addScalar(0.26); }
   reset() { this.ribbonState = new WeakMap(); this.skidCol.array.fill(-1e9); this.skidCol.needsUpdate = true; this.skidHead = 0; }
 }

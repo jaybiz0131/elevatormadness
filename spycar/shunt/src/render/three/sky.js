@@ -1,7 +1,7 @@
 // Sky, fog, environment and colour grade. A gradient dome (zenith to horizon) follows the camera; height fog tinted to the horizon
 // colour is patched into every standard material through the fog shader chunks; a small pre-filtered environment map, built from
 // the same gradient, gives the cars and the wet road their reflections; a 16^3 LUT per look does the grade.
-import { Mesh, SphereGeometry, ShaderMaterial, BackSide, Color, Vector3, ShaderChunk, PMREMGenerator, Scene, FogExp2 } from 'three';
+import { Mesh, SphereGeometry, ShaderMaterial, BackSide, Color, Vector3, ShaderChunk, PMREMGenerator, Scene, FogExp2, CylinderGeometry, TextureLoader, SRGBColorSpace, MirroredRepeatWrapping } from 'three';
 import { LookupTexture } from 'postprocessing';
 // --- height fog: distance fog that thins with height above the road, so the horizon and the far street soak in it while towers rise out
 ShaderChunk.fog_pars_vertex = `#ifdef USE_FOG\n varying float vFogDepth; varying float vFogY;\n#endif`;
@@ -22,11 +22,22 @@ export class Sky {
   apply(P, sunDir) {
     const u = this.mat.uniforms; u.zenith.value.set(P.sky); u.horizon.value.set(P.horizon); u.sunDir.value.copy(sunDir); u.sunCol.value.set(P.sunColor).multiplyScalar(P.sunElevation > 0 ? 1 : 0.35); u.sunSize.value = P.sunElevation > 0 ? 3 : 0;
     this.scene.background = null; this.scene.fog.color.set(P.fog); this.scene.fog.density = P.fogDensity;
+    if (this.skyMat) { this.skyMat.uniforms.tint.value.set(P.horizon).lerp(new Color(1, 1, 1), 0.75).multiplyScalar(P.name === 'Night' ? 1 : 0.85); this.skyMat.uniforms.fogCol.value.set(P.fog); }   // the painting is a night scene: dusk and blue hour tint it toward their horizon
     // the environment map: the same gradient, a little brighter, pre-filtered once per look
     const e = this.envDome.material.uniforms; e.zenith.value.copy(u.zenith.value).multiplyScalar(1.4); e.horizon.value.copy(u.horizon.value).multiplyScalar(1.6); e.sunDir.value.copy(sunDir); e.sunCol.value.copy(u.sunCol.value); e.sunSize.value = u.sunSize.value;
     if (this.envTarget) this.envTarget.dispose(); this.envTarget = this.pmrem.fromScene(this.envScene, 0.04); this.scene.environment = this.envTarget.texture; this.scene.environmentIntensity = P.envIntensity || 0.6;
   }
-  update(camPos) { this.dome.position.copy(camPos); }
+  update(camPos) { this.dome.position.copy(camPos); if (this.skyline) this.skyline.position.set(camPos.x, 0, camPos.z); }
+  // the skyline backdrop (Jack's skyline.jpg): a band round the horizon behind everything, the painting mirrored eight times so it joins
+  // without a seam; tinted toward each look's horizon colour; its foot (the lower 40%, where it meets the fogged far ground) dissolves into the fog colour and its top fades into the sky dome
+  addSkyline(url) {
+    const tex = new TextureLoader().load(url); tex.colorSpace = SRGBColorSpace; tex.wrapS = MirroredRepeatWrapping; tex.repeat.set(8, 1);
+    const R = 1150, H = 560; const g = new CylinderGeometry(R, R, H, 64, 1, true).translate(0, H / 2 - 110, 0);
+    this.skyMat = new ShaderMaterial({ uniforms: { map: { value: tex }, tint: { value: new Color(1, 1, 1) }, fogCol: { value: new Color() } }, side: BackSide, transparent: true, depthWrite: false, fog: false,
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv * vec2(8.0, 1.0); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform sampler2D map; uniform vec3 tint; uniform vec3 fogCol; varying vec2 vUv; void main() { vec2 u = vec2(abs(mod(vUv.x, 2.0) - 1.0), vUv.y); vec3 c = texture2D(map, u).rgb * tint; c = mix(fogCol, c, smoothstep(0.2, 0.42, vUv.y)); gl_FragColor = vec4(c, 1.0 - smoothstep(0.72, 0.98, vUv.y)); }' });
+    this.skyline = new Mesh(g, this.skyMat); this.skyline.frustumCulled = false; this.skyline.renderOrder = -9; this.scene.add(this.skyline);
+  }
 }
 // --- colour grade: a small 3D LUT per look, built in place from a few knobs (lift, gamma, gain per channel, saturation)
 export function buildLut(grade) {
