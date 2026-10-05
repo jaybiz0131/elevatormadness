@@ -5,10 +5,18 @@
 |--------|-------|
 | A, B | Done before the 3D port (gray-box driving; Sprint B driving constants). |
 | **C (current)** | 3D engine and corners, run as the "Look to 8" stop points. This session: Stop 1 Environment (dark wet road, real smoke, prop kit), Stop 2 Cars (five enemy looks, hero polish, hero top-view design), Stop 3 UI and performance (HUD and title polish, showroom title screen with the hero car turning, tune panel, fonts, under 150 draw calls). |
-| D | Downhill drop plus the first 5-stage mission: drop camera, intro orbit camera, slow-motion kill shot. Level 1 intro, Acts 1 and 2, the boss climax and the payoff (see Level 1 below). |
+| D | First: the hood gatling and the handbrake 180 (below). Then the downhill drop plus the first 5-stage mission: drop camera, intro orbit camera, slow-motion kill shot. Level 1 intro, Acts 1 and 2, the boss climax and the payoff (see Level 1 below). |
 | E | Act 3, the city maze (see Level 1 below). Rest of scope to be confirmed with Jack. |
 | F | Supply pit stop with the Mule's arm (see Level 1 below). Rest of scope to be confirmed with Jack. |
 | G | Scope to be confirmed with Jack. |
+
+## Sprint D, first item: the hood gatling and the handbrake 180 (Jack, 2026-10-05; record only)
+- The plain machine guns become one hood-mounted gatling gun: fixed forward, firing along the car's heading in a tight spray cone (about
+  8 degrees); the player aims by steering.
+- Heavy feel: spin-up whine, deep roar, shell casings, a glowing barrel, camera shake, and a muzzle flash that lights the road.
+- Barrel heat instead of ammo: hold it too long and it overheats briefly.
+- Handbrake 180: brake plus a hard steer whips the car round to a stop facing backward, so the player can fire behind.
+- This is a sim change (weapons and handling): new baseline replays in the same commit, as for every sim change.
 
 ## Level 1 plan (Jack, 2026-10-05; record only, build in the sprints named)
 Goal: arcade feel on mobile. Quick to start, big moments, readable at a glance, a score to beat. Driving skill raises the score, but a

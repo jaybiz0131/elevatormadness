@@ -7,7 +7,7 @@ import { REF, H, T, clamp, lerp } from '../../sim/constants.js';
 import { S } from '../../settings.js';
 import { view } from '../../ui/dom.js';
 import { M, toWorld } from './scale.js';
-import { RoadCamera, CAM } from './camera.js';
+import { RoadCamera, CAM, setCamPreset } from './camera.js';
 import { RoadMesh } from './road.js';
 import { CarSystem } from './cars.js';
 import { Props } from './props.js';
@@ -28,6 +28,8 @@ export function createThreeRenderer(canvas, opts = {}) {
   const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, alpha: false });
   // ?lite=1: half resolution, no shadows, no post: for headless bots on software GL, where the sim must run at pace
   const LITE = new URLSearchParams(location.search).get('lite') === '1';
+  // the chase-cam preset (A or B): ?camera=B, or Settings > Camera (S.cam); ?cam below still overrides for shots
+  setCamPreset(new URLSearchParams(location.search).get('camera') || S.cam || 'A');
   // ?cam=pitch,dist,fov[,yaw,screenY] overrides the road camera for comparison and close-up shots (e.g. ?cam=47,76,42; a three-quarter
   // close-up ?cam=18,11,40,35,0.5): yaw orbits the camera round the car in degrees; screenY is where the car sits (1/3 = lower third)
   { const c = new URLSearchParams(location.search).get('cam'); if (c) { const [p, d, f, y, t] = c.split(',').map(Number); if (p) CAM.pitch = p; if (d) CAM.dist = d; if (f) CAM.fov = f; if (y) CAM.yaw = y; if (t) CAM.lowerThird = t; if (y || t) CAM.fixed = true; } }
@@ -114,5 +116,6 @@ export function createThreeRenderer(canvas, opts = {}) {
   function setLook(name) { look = lookFor(name); P = Object.assign({}, LOOKS[look]); if (IS_IOS) P.msaa = 2; applyLook(); }
   function reset() { roadCam.reset(); road.reset(); city.reset(); cars.reset(); fx.reset(); }
   resize();
-  return { kind: 'three', render, reset, resize, stats, diag, project, visibleAhead, prewarm, setLook, get look() { return look; }, get P() { return P; }, applyLook, camera: roadCam, renderer, scene, setRoad(r) { roadRef = r; }, fx, props, cars, city, state, CAM, get post() { return post; }, simulateContextLoss() { const ext = renderer.getContext().getExtension('WEBGL_lose_context'); if (ext) { ext.loseContext(); setTimeout(() => ext.restoreContext(), 800); return true; } return false; } };
+  function setCamera(name) { const n = setCamPreset(name); resize(); return n; }
+  return { kind: 'three', render, setCamera, reset, resize, stats, diag, project, visibleAhead, prewarm, setLook, get look() { return look; }, get P() { return P; }, applyLook, camera: roadCam, renderer, scene, setRoad(r) { roadRef = r; }, fx, props, cars, city, state, CAM, get post() { return post; }, simulateContextLoss() { const ext = renderer.getContext().getExtension('WEBGL_lose_context'); if (ext) { ext.loseContext(); setTimeout(() => ext.restoreContext(), 800); return true; } return false; } };
 }

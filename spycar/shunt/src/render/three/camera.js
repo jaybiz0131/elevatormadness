@@ -5,6 +5,11 @@ import { PerspectiveCamera, Vector3, Quaternion, Euler, Raycaster } from 'three'
 import { clamp } from '../../sim/constants.js';
 import { M } from './scale.js';
 export const CAM = { fov: 42, pitch: 47, dist: 76, pitchHi: 56, distHi: 92, fovSpeed: 12, distSpeed: 26, lowerThird: 1 / 3, yaw: 0, fixed: false, leadS: 0.4, leadCap: 0.44, spring: 14, roll: 5, shakeM: 1.2, shakeDeg: 2, look: 1.5 };
+// chase-cam presets for Jack's phone comparison (Settings > Camera, or ?camera=B): A is the current high camera; B is lower and a
+// little further back, so the horizon and the skyline band come into the top of the frame (a 42 degree lens tilted more than about
+// 25 degrees down cannot see the horizon at all, so B sits at 22 degrees with a slightly wider lens)
+export const CAM_PRESETS = { A: { pitch: 47, dist: 76, fov: 42, pitchHi: 56, distHi: 92 }, B: { pitch: 22, dist: 86, fov: 48, pitchHi: 30, distHi: 98 } };
+export function setCamPreset(name) { const p = CAM_PRESETS[name] || CAM_PRESETS.A; Object.assign(CAM, p); return CAM_PRESETS[name] ? name : 'A'; }
 const noise1 = (t) => Math.sin(t) * 0.6 + Math.sin(t * 2.3 + 1.3) * 0.4;
 export class RoadCamera {
   constructor(aspect) {

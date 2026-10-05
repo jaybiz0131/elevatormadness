@@ -29,13 +29,13 @@ export class Sky {
   }
   update(camPos) { this.dome.position.copy(camPos); if (this.skyline) this.skyline.position.set(camPos.x, 0, camPos.z); }
   // the skyline backdrop (Jack's skyline.jpg): a band round the horizon behind everything, the painting mirrored eight times so it joins
-  // without a seam; tinted toward each look's horizon colour; its foot sinks into the fog colour and its top fades into the sky dome
+  // without a seam; tinted toward each look's horizon colour; its foot (the lower 40%, where it meets the fogged far ground) dissolves into the fog colour and its top fades into the sky dome
   addSkyline(url) {
     const tex = new TextureLoader().load(url); tex.colorSpace = SRGBColorSpace; tex.wrapS = MirroredRepeatWrapping; tex.repeat.set(8, 1);
     const R = 1150, H = 560; const g = new CylinderGeometry(R, R, H, 64, 1, true).translate(0, H / 2 - 110, 0);
     this.skyMat = new ShaderMaterial({ uniforms: { map: { value: tex }, tint: { value: new Color(1, 1, 1) }, fogCol: { value: new Color() } }, side: BackSide, transparent: true, depthWrite: false, fog: false,
       vertexShader: 'varying vec2 vUv; void main() { vUv = uv * vec2(8.0, 1.0); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'uniform sampler2D map; uniform vec3 tint; uniform vec3 fogCol; varying vec2 vUv; void main() { vec2 u = vec2(abs(mod(vUv.x, 2.0) - 1.0), vUv.y); vec3 c = texture2D(map, u).rgb * tint; c = mix(fogCol, c, smoothstep(0.02, 0.2, vUv.y)); gl_FragColor = vec4(c, 1.0 - smoothstep(0.72, 0.98, vUv.y)); }' });
+      fragmentShader: 'uniform sampler2D map; uniform vec3 tint; uniform vec3 fogCol; varying vec2 vUv; void main() { vec2 u = vec2(abs(mod(vUv.x, 2.0) - 1.0), vUv.y); vec3 c = texture2D(map, u).rgb * tint; c = mix(fogCol, c, smoothstep(0.2, 0.42, vUv.y)); gl_FragColor = vec4(c, 1.0 - smoothstep(0.72, 0.98, vUv.y)); }' });
     this.skyline = new Mesh(g, this.skyMat); this.skyline.frustumCulled = false; this.skyline.renderOrder = -9; this.scene.add(this.skyline);
   }
 }

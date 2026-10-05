@@ -17,3 +17,5 @@ longest axis is taken as the length and the nose is found from the roof; once a 
 in code by region. Each enemy type draws as one instanced call. Log every new file in `CREDITS.md`.
 
 Files in `spare/` are not embedded in the build. Nose and up axis per file: `ENEMY_NOSE` and `ENEMY_UP` in `enemyModels.js` (all four enemies point -x; the Gunner is pinned up = y).
+
+`source/` holds the original high-detail versions of files that were simplified for the triangle budget (`node spycar/shunt/tools/simplifyglb.mjs <in> <out> <triangles>`); `boss.glb` is kept here but left out of the build until Sprint D (`NOT_YET` in `vite.config.js`).

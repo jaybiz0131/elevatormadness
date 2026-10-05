@@ -8,6 +8,7 @@ import { REF, hashI } from '../../sim/constants.js';
 import { M, toWorld } from './scale.js';
 import { CHUNK } from './road.js';
 import { KIT, kitMaterial, kitGlow } from './kit.js';
+import { PROP_BLINK } from './propModels.js';
 const D = new Object3D(), V = new Vector3();
 const BRANDS = ['KIRA', 'DRIFT DINER', 'OKAMI TYRES', 'NEON 9', 'ZEN-DO', 'PULSE', 'KUMO HOTEL', 'HOTARU', 'RAMEN 24', 'VOLT', 'SAKURA FM', 'MIDNIGHT GARAGE', 'TORII', 'ASTRA', 'HANABI', 'GHOST NOODLE', 'LUNA BAR', 'NOVA', 'KITSUNE', 'TAXI 7'];
 const NEON = ['#ff2fd0', '#22e6ff', '#ffb02a', '#ff5a5a', '#8cff5a'];
@@ -126,7 +127,9 @@ export class City {
       if (s % 3200 === 1600 && !(a.corner)) { for (const side of [-1, 1]) this.put(this.pillar, road, REF + side * (w / 2 + 26), s, 0); this.put(this.beam, road, REF, s, 0, (w + 90) * M, 1, 1, 7); }   // overpass
       if (s % 1200 === 600) { const side = h < 0.5 ? -1 : 1; const x = REF + side * (w / 2 + 24); this.put(this.vent, road, x, s, 0); const n = 6; for (let j = 0; j < n; j++) { const ph = ((elapsed * 0.35 + j / n + h) % 1); toWorld(road, x + (ph * 10 - 2) * side, s + 10, V); this.fx.puff(V.x, V.y + 0.3 + ph * 4.5, V.z, 0.5 + ph * 1.6, (1 - ph) * 0.35 * this.steam, 0.75, 0.78, 0.84); } }
     }
-    for (const lm of LANDMARKS) { const im = this.glb[lm.name]; if (!im || lm.s < rdist - 600 || lm.s > rdist + 2600) continue; const w = road.at(lm.s).width; this.put(im, road, REF + lm.side * (w / 2 + lm.off), lm.s, lm.yaw); }   // set pieces
+    for (const lm of LANDMARKS) { const im = this.glb[lm.name]; if (!im || lm.s < rdist - 600 || lm.s > rdist + 2600) continue; const w = road.at(lm.s).width; this.put(im, road, REF + lm.side * (w / 2 + lm.off), lm.s, lm.yaw);
+      if (lm.name === 'radio_tower') { toWorld(road, REF + lm.side * (w / 2 + lm.off), lm.s, V); for (const k of [1, 0.72, 0.48, 0.24]) this.fx.glow(V.x, V.y + 80 * k, V.z, 3.2, 1, 0.1, 0.06, 0.9 * PROP_BLINK.value); } }   // set pieces; the radio tower's red warning lights bloom
+    PROP_BLINK.value = Math.sin(elapsed * 3.2) > -0.2 ? 1 : 0.15;   // aircraft-warning blink
     for (const p of this.props) if (p.count) p.instanceMatrix.needsUpdate = true;
   }
   setTubeColor(i, col, k) { if (!this.tubes.instanceColor) { this.tubes.instanceColor = new (Object.getPrototypeOf(this.tubes.instanceMatrix).constructor)(new Float32Array(512 * 3), 3); } const b = 0.4 + 2.6 * k; this.tubes.instanceColor.setXYZ(i, col.r * b, col.g * b, col.b * b); }
