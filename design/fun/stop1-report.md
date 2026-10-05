@@ -1,6 +1,6 @@
 # Sprint D, Stop 1: fun first (report)
 
-Build: https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn (version 20). Branch `shunt-3d`. Settings > Developer holds Camera A/B and Show FPS (both were already on the branch from the Sprint C session, so I did not add a second copy).
+Build: https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn (version 21). Branch `shunt-3d`. Settings > Developer holds Camera A/B and Show FPS (both were already on the branch from the Sprint C session, so I did not add a second copy).
 Kill sequence: `design/fun/kill-sequence.mp4` (10 s, 24 fps) and `design/fun/kill-1.png` to `kill-4.png`. End screen: `design/fun/win/`.
 
 **The sim changed in this stop** (replay rev `D1`). The six Sprint 4 baselines (`wall-s*.json`) are retired and replaced by six new ones
