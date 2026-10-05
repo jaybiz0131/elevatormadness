@@ -1,0 +1,352 @@
+{
+ "tag": "rep-s2-active",
+ "style": "replay",
+ "seed": 7,
+ "camera": "B",
+ "look": "night",
+ "runLength": 116.49166666666666,
+ "cause": "",
+ "score": 70574,
+ "kills": 46,
+ "carKills": 19,
+ "gunKills": 27,
+ "passiveWrecks": 3,
+ "slams": 12,
+ "drifts": 35,
+ "turbos": 34,
+ "civHits": 16,
+ "wallHits": 0,
+ "comboPeak": 8,
+ "rounds": 286,
+ "hairpins": 7,
+ "topSpeed": 1361,
+ "avgSpeed": 899,
+ "gasPct": "40%",
+ "firePct": "50%",
+ "noEnemyVisiblePct": "2%",
+ "noThreatPct": "2%",
+ "noEnemyNear150Pct": "73%",
+ "oneEnemyOrLessVisiblePct": "42%",
+ "twoPlusCarsVisiblePct": "98%",
+ "attackPct": "6%",
+ "longestNoThreatGap": 1.2,
+ "longestNoThreatGapAt": 11.3,
+ "longestNoEventGap": 0,
+ "firstEnemyVisible": 0.058333333333333334,
+ "firstEnemyNear150": 2.4916666666666667,
+ "firstAttackTell": 95.56666666666666,
+ "firstKill": 2.5166666666666666,
+ "firstDamage": 100.025,
+ "killTimes": [
+  2.5,
+  4.3,
+  9.4,
+  9.7,
+  10.5,
+  11,
+  11.4,
+  11.8,
+  14.2,
+  16.1,
+  18.2,
+  21.4,
+  25.6,
+  29.6,
+  30.5,
+  32.1,
+  33.3,
+  34.1,
+  35.6,
+  40.3,
+  45.3,
+  45.6,
+  50.5,
+  54,
+  54.5,
+  60.4,
+  60.7,
+  63,
+  66,
+  69.3,
+  70,
+  70.2,
+  73.3,
+  77.7,
+  81.6,
+  83.2,
+  89.3,
+  90.8,
+  93.3,
+  94.5,
+  94.6,
+  95.8,
+  96.7,
+  99,
+  115.8
+ ],
+ "killsPerMin": 23.7,
+ "meanSecondsBetweenKills": 2.6,
+ "medianKillGap": 1.9,
+ "longestKillGap": 16.7,
+ "damageEvents": 3,
+ "damageTimes": [
+  100,
+  108.5,
+  114.5
+ ],
+ "armorLost": 3,
+ "damagePerMin": 1.55,
+ "visibleAheadPt": {
+  "min": 300,
+  "max": 3000
+ },
+ "busiest": {
+  "file": "rep-s2-active-021-90.0s-t.png",
+  "calls": 132,
+  "tris": 318146
+ },
+ "mostTris": {
+  "file": "rep-s2-active-013-50.0s-t.png",
+  "calls": 104,
+  "tris": 358990
+ },
+ "maxCalls": 132,
+ "maxTris": 358990,
+ "simMsPerStep": null,
+ "headlessRenderMs": {
+  "median": 4,
+  "max": 3559
+ },
+ "replayMatch": true,
+ "wreckLog": [
+  "2.5 weak ram approach",
+  "2.5 weak chain approach",
+  "4.3 bruiser missile approach",
+  "9.4 weak missile approach",
+  "9.7 bruiser slam hold",
+  "10.5 bruiser missile approach",
+  "11.0 weak missile approach",
+  "11.4 weak missile approach",
+  "11.8 weak missile approach",
+  "14.1 weak gun approach",
+  "16.0 weak gun approach",
+  "18.2 weak gun approach",
+  "21.4 weak gun approach",
+  "25.6 bruiser gun hold",
+  "29.6 weak chain approach",
+  "30.5 bruiser slam approach",
+  "32.1 bruiser gun approach",
+  "33.3 weak gun approach",
+  "34.0 weak gun approach",
+  "35.6 bruiser gun approach",
+  "40.2 weak slam approach",
+  "45.2 armored chain approach",
+  "45.6 bruiser gun approach",
+  "50.5 bruiser slam hold",
+  "53.9 weak gun approach",
+  "54.5 weak gun approach",
+  "60.3 bruiser gun approach",
+  "60.7 weak gun approach",
+  "63.0 bruiser shunt approach",
+  "65.9 weak gun approach",
+  "69.3 bruiser shunt approach",
+  "70.0 bruiser slam approach",
+  "70.1 weak chain approach",
+  "73.3 weak gun approach",
+  "77.6 gunner gun approach",
+  "81.6 bruiser shunt approach",
+  "83.2 gunner ram approach",
+  "89.3 bruiser slam approach",
+  "90.8 weak slam approach",
+  "93.3 weak gun approach",
+  "94.5 gunner shunt approach",
+  "94.6 gunner chain approach",
+  "95.7 weak gun approach",
+  "96.7 weak gun approach",
+  "99.0 weak gun approach",
+  "115.8 bruiser stomp hold"
+ ],
+ "errors": [],
+ "shots": [
+  {
+   "file": "rep-s2-active-000-0.0s-title.png",
+   "t": 0,
+   "calls": 28,
+   "tris": 22745
+  },
+  {
+   "file": "rep-s2-active-001-0.6s-burnout.png",
+   "t": 0.6,
+   "calls": 90,
+   "tris": 222657
+  },
+  {
+   "file": "rep-s2-active-002-1.6s-go.png",
+   "t": 1.6,
+   "calls": 92,
+   "tris": 279205
+  },
+  {
+   "file": "rep-s2-active-003-3.0s-t.png",
+   "t": 3,
+   "calls": 111,
+   "tris": 278665
+  },
+  {
+   "file": "rep-s2-active-004-5.0s-t.png",
+   "t": 5,
+   "calls": 113,
+   "tris": 268666
+  },
+  {
+   "file": "rep-s2-active-005-10.1s-t.png",
+   "t": 10.1,
+   "calls": 110,
+   "tris": 197103
+  },
+  {
+   "file": "rep-s2-active-006-15.1s-t.png",
+   "t": 15.1,
+   "calls": 100,
+   "tris": 165654
+  },
+  {
+   "file": "rep-s2-active-007-20.1s-t.png",
+   "t": 20.1,
+   "calls": 92,
+   "tris": 249323
+  },
+  {
+   "file": "rep-s2-active-008-25.0s-t.png",
+   "t": 25,
+   "calls": 87,
+   "tris": 287223
+  },
+  {
+   "file": "rep-s2-active-009-30.0s-t.png",
+   "t": 30,
+   "calls": 98,
+   "tris": 238734
+  },
+  {
+   "file": "rep-s2-active-010-35.0s-t.png",
+   "t": 35,
+   "calls": 118,
+   "tris": 315408
+  },
+  {
+   "file": "rep-s2-active-011-40.0s-t.png",
+   "t": 40,
+   "calls": 98,
+   "tris": 245240
+  },
+  {
+   "file": "rep-s2-active-012-45.0s-t.png",
+   "t": 45,
+   "calls": 104,
+   "tris": 200871
+  },
+  {
+   "file": "rep-s2-active-013-50.0s-t.png",
+   "t": 50,
+   "calls": 104,
+   "tris": 358990
+  },
+  {
+   "file": "rep-s2-active-014-55.1s-t.png",
+   "t": 55.1,
+   "calls": 107,
+   "tris": 280455
+  },
+  {
+   "file": "rep-s2-active-015-60.0s-t.png",
+   "t": 60,
+   "calls": 99,
+   "tris": 277194
+  },
+  {
+   "file": "rep-s2-active-016-65.0s-t.png",
+   "t": 65,
+   "calls": 103,
+   "tris": 237836
+  },
+  {
+   "file": "rep-s2-active-017-70.0s-t.png",
+   "t": 70,
+   "calls": 117,
+   "tris": 305616
+  },
+  {
+   "file": "rep-s2-active-018-75.0s-t.png",
+   "t": 75,
+   "calls": 102,
+   "tris": 255200
+  },
+  {
+   "file": "rep-s2-active-019-80.1s-t.png",
+   "t": 80.1,
+   "calls": 91,
+   "tris": 172710
+  },
+  {
+   "file": "rep-s2-active-020-85.0s-t.png",
+   "t": 85,
+   "calls": 99,
+   "tris": 192125
+  },
+  {
+   "file": "rep-s2-active-021-90.0s-t.png",
+   "t": 90,
+   "calls": 132,
+   "tris": 318146
+  },
+  {
+   "file": "rep-s2-active-022-95.0s-t.png",
+   "t": 95,
+   "calls": 99,
+   "tris": 284612
+  },
+  {
+   "file": "rep-s2-active-023-100.0s-hit-armor2.png",
+   "t": 100,
+   "calls": 110,
+   "tris": 258966
+  },
+  {
+   "file": "rep-s2-active-024-100.0s-t.png",
+   "t": 100,
+   "calls": 117,
+   "tris": 267461
+  },
+  {
+   "file": "rep-s2-active-025-105.0s-t.png",
+   "t": 105,
+   "calls": 94,
+   "tris": 198916
+  },
+  {
+   "file": "rep-s2-active-026-108.5s-hit-armor2.png",
+   "t": 108.5,
+   "calls": 102,
+   "tris": 244505
+  },
+  {
+   "file": "rep-s2-active-027-110.1s-t.png",
+   "t": 110.1,
+   "calls": 90,
+   "tris": 230679
+  },
+  {
+   "file": "rep-s2-active-028-114.5s-hit-armor1.png",
+   "t": 114.5,
+   "calls": 115,
+   "tris": 263496
+  },
+  {
+   "file": "rep-s2-active-029-115.0s-t.png",
+   "t": 115,
+   "calls": 113,
+   "tris": 273494
+  }
+ ]
+}

@@ -1,0 +1,179 @@
+{
+ "tag": "rep-s3-idle",
+ "style": "replay",
+ "seed": 7,
+ "camera": "B",
+ "look": "night",
+ "runLength": 22.775,
+ "cause": "Hit the barrier",
+ "score": 73,
+ "kills": 0,
+ "carKills": 0,
+ "gunKills": 0,
+ "passiveWrecks": 0,
+ "slams": 0,
+ "drifts": 0,
+ "turbos": 0,
+ "civHits": 3,
+ "wallHits": 2,
+ "comboPeak": 1,
+ "rounds": 0,
+ "hairpins": 2,
+ "topSpeed": 564,
+ "avgSpeed": 485,
+ "gasPct": "0%",
+ "firePct": "0%",
+ "noEnemyVisiblePct": "0%",
+ "noThreatPct": "0%",
+ "noEnemyNear150Pct": "25%",
+ "oneEnemyOrLessVisiblePct": "9%",
+ "twoPlusCarsVisiblePct": "100%",
+ "attackPct": "12%",
+ "longestNoThreatGap": 0,
+ "longestNoThreatGapAt": 0,
+ "longestNoEventGap": 0,
+ "firstEnemyVisible": 0.05,
+ "firstEnemyNear150": 2.3916666666666666,
+ "firstAttackTell": 4.125,
+ "firstKill": null,
+ "firstDamage": 4.725,
+ "killTimes": [],
+ "killsPerMin": 0,
+ "meanSecondsBetweenKills": null,
+ "medianKillGap": null,
+ "longestKillGap": 22.775,
+ "damageEvents": 7,
+ "damageTimes": [
+  4.7,
+  13.1,
+  17.3,
+  19,
+  20,
+  20.4,
+  22.7
+ ],
+ "armorLost": 3,
+ "damagePerMin": 18.44,
+ "visibleAheadPt": {
+  "min": 300,
+  "max": 3000
+ },
+ "busiest": {
+  "file": "rep-s3-idle-003-3.0s-t.png",
+  "calls": 116,
+  "tris": 303732
+ },
+ "mostTris": {
+  "file": "rep-s3-idle-004-5.0s-t.png",
+  "calls": 113,
+  "tris": 309809
+ },
+ "maxCalls": 116,
+ "maxTris": 309809,
+ "simMsPerStep": null,
+ "headlessRenderMs": {
+  "median": 4,
+  "max": 3955
+ },
+ "replayMatch": true,
+ "wreckLog": [],
+ "errors": [],
+ "shots": [
+  {
+   "file": "rep-s3-idle-000-0.0s-title.png",
+   "t": 0,
+   "calls": 28,
+   "tris": 22745
+  },
+  {
+   "file": "rep-s3-idle-001-0.6s-burnout.png",
+   "t": 0.6,
+   "calls": 99,
+   "tris": 257419
+  },
+  {
+   "file": "rep-s3-idle-002-1.5s-go.png",
+   "t": 1.5,
+   "calls": 107,
+   "tris": 290521
+  },
+  {
+   "file": "rep-s3-idle-003-3.0s-t.png",
+   "t": 3,
+   "calls": 116,
+   "tris": 303732
+  },
+  {
+   "file": "rep-s3-idle-004-5.0s-t.png",
+   "t": 5,
+   "calls": 113,
+   "tris": 309809
+  },
+  {
+   "file": "rep-s3-idle-005-10.0s-t.png",
+   "t": 10,
+   "calls": 109,
+   "tris": 272740
+  },
+  {
+   "file": "rep-s3-idle-006-13.1s-hit-armor2.png",
+   "t": 13.1,
+   "calls": 93,
+   "tris": 250629
+  },
+  {
+   "file": "rep-s3-idle-007-15.0s-t.png",
+   "t": 15,
+   "calls": 107,
+   "tris": 271660
+  },
+  {
+   "file": "rep-s3-idle-008-19.0s-hit-armor1.png",
+   "t": 19,
+   "calls": 103,
+   "tris": 222287
+  },
+  {
+   "file": "rep-s3-idle-009-20.0s-barrier.png",
+   "t": 20,
+   "calls": 86,
+   "tris": 197884
+  },
+  {
+   "file": "rep-s3-idle-010-20.0s-t.png",
+   "t": 20,
+   "calls": 95,
+   "tris": 201287
+  },
+  {
+   "file": "rep-s3-idle-011-22.7s-hit-armor0.png",
+   "t": 22.7,
+   "calls": 94,
+   "tris": 197589
+  },
+  {
+   "file": "rep-s3-idle-012-22.7s-barrier.png",
+   "t": 22.7,
+   "calls": 92,
+   "tris": 197753
+  },
+  {
+   "file": "rep-s3-idle-013-22.7s-death.png",
+   "t": 22.7,
+   "calls": 106,
+   "tris": 187532
+  },
+  {
+   "file": "rep-s3-idle-014-23.3s-death-late.png",
+   "t": 23.3,
+   "calls": 102,
+   "tris": 202594
+  },
+  {
+   "file": "rep-s3-idle-015-24.7s-over-card.png",
+   "t": 24.7,
+   "calls": 94,
+   "tris": 208349
+  }
+ ]
+}

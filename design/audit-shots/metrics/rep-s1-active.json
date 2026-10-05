@@ -1,0 +1,368 @@
+{
+ "tag": "rep-s1-active",
+ "style": "replay",
+ "seed": 7,
+ "camera": "B",
+ "look": "night",
+ "runLength": 104.19166666666666,
+ "cause": "Shot by a Gunner van",
+ "score": 71968,
+ "kills": 54,
+ "carKills": 11,
+ "gunKills": 43,
+ "passiveWrecks": 2,
+ "slams": 8,
+ "drifts": 31,
+ "turbos": 30,
+ "civHits": 21,
+ "wallHits": 0,
+ "comboPeak": 8,
+ "rounds": 398,
+ "hairpins": 5,
+ "topSpeed": 1361,
+ "avgSpeed": 892,
+ "gasPct": "46%",
+ "firePct": "43%",
+ "noEnemyVisiblePct": "5%",
+ "noThreatPct": "5%",
+ "noEnemyNear150Pct": "76%",
+ "oneEnemyOrLessVisiblePct": "55%",
+ "twoPlusCarsVisiblePct": "99%",
+ "attackPct": "7%",
+ "longestNoThreatGap": 1.4,
+ "longestNoThreatGapAt": 67.3,
+ "longestNoEventGap": 0,
+ "firstEnemyVisible": 0.05,
+ "firstEnemyNear150": 3.033333333333333,
+ "firstAttackTell": 32.35,
+ "firstKill": 1.2083333333333333,
+ "firstDamage": 43.31666666666667,
+ "killTimes": [
+  1.2,
+  2,
+  5.4,
+  6,
+  9.4,
+  10.6,
+  11.8,
+  13.7,
+  15.5,
+  18.6,
+  19,
+  20.6,
+  22.6,
+  24.9,
+  25.7,
+  28,
+  29.4,
+  34.5,
+  38.2,
+  41.7,
+  42.4,
+  42.9,
+  48.1,
+  50,
+  50.9,
+  52.8,
+  57.2,
+  59.5,
+  60.6,
+  61.3,
+  62.7,
+  64.1,
+  65.5,
+  66.2,
+  67.3,
+  67.3,
+  67.7,
+  70.5,
+  74.6,
+  74.9,
+  75,
+  75.9,
+  80.4,
+  84.1,
+  85.5,
+  91.1,
+  91.5,
+  93,
+  97.5,
+  98.9,
+  99.7,
+  101.7,
+  103.7
+ ],
+ "killsPerMin": 31.1,
+ "meanSecondsBetweenKills": 2,
+ "medianKillGap": 1.4,
+ "longestKillGap": 5.6,
+ "damageEvents": 3,
+ "damageTimes": [
+  43.3,
+  77.9,
+  104.1
+ ],
+ "armorLost": 3,
+ "damagePerMin": 1.73,
+ "visibleAheadPt": {
+  "min": 280,
+  "max": 3000
+ },
+ "busiest": {
+  "file": "rep-s1-active-023-90.0s-t.png",
+  "calls": 125,
+  "tris": 345996
+ },
+ "mostTris": {
+  "file": "rep-s1-active-023-90.0s-t.png",
+  "calls": 125,
+  "tris": 345996
+ },
+ "maxCalls": 125,
+ "maxTris": 345996,
+ "simMsPerStep": null,
+ "headlessRenderMs": {
+  "median": 4,
+  "max": 1788
+ },
+ "replayMatch": true,
+ "wreckLog": [
+  "0.9 weak missile approach",
+  "1.2 bruiser missile approach",
+  "1.5 bruiser missile approach",
+  "5.3 weak gun approach",
+  "5.9 weak slam approach",
+  "9.4 weak gun approach",
+  "10.6 bruiser slam approach",
+  "11.7 bruiser gun hold",
+  "13.7 bruiser gun approach",
+  "15.2 weak gun approach",
+  "18.6 weak gun approach",
+  "19.0 weak gun approach",
+  "20.6 bruiser ram approach",
+  "22.6 weak gun approach",
+  "24.9 bruiser gun approach",
+  "25.6 weak gun approach",
+  "28.0 bruiser missile approach",
+  "29.4 bruiser missile approach",
+  "34.5 weak ram approach",
+  "38.2 bruiser gun approach",
+  "41.7 weak slam approach",
+  "42.3 weak gun approach",
+  "42.9 weak gun approach",
+  "48.0 bruiser gun approach",
+  "50.0 bruiser gun approach",
+  "50.9 weak gun approach",
+  "52.8 weak gun approach",
+  "57.2 weak gun approach",
+  "59.5 bruiser missile approach",
+  "60.6 weak missile approach",
+  "61.3 weak missile approach",
+  "62.7 weak gun approach",
+  "64.1 bruiser missile approach",
+  "65.3 weak missile approach",
+  "66.1 weak missile approach",
+  "67.3 bruiser missile approach",
+  "67.3 bruiser chain approach",
+  "67.7 weak missile approach",
+  "70.5 bruiser slam hold",
+  "74.5 weak gun approach",
+  "74.9 gunner slam approach",
+  "75.0 bruiser chain approach",
+  "75.9 bruiser chain approach",
+  "80.4 gunner slam approach",
+  "84.1 gunner gun sight",
+  "85.4 bruiser gun approach",
+  "91.1 bruiser gun approach",
+  "91.5 bruiser gun approach",
+  "93.0 weak gun approach",
+  "97.5 gunner gun approach",
+  "98.9 weak missile approach",
+  "99.6 bruiser missile approach",
+  "101.7 bruiser missile approach",
+  "103.7 weak gun approach"
+ ],
+ "errors": [],
+ "shots": [
+  {
+   "file": "rep-s1-active-000-0.0s-title.png",
+   "t": 0,
+   "calls": 28,
+   "tris": 22745
+  },
+  {
+   "file": "rep-s1-active-001-0.6s-burnout.png",
+   "t": 0.6,
+   "calls": 100,
+   "tris": 319015
+  },
+  {
+   "file": "rep-s1-active-002-1.5s-go.png",
+   "t": 1.5,
+   "calls": 110,
+   "tris": 336411
+  },
+  {
+   "file": "rep-s1-active-003-3.0s-t.png",
+   "t": 3,
+   "calls": 116,
+   "tris": 337849
+  },
+  {
+   "file": "rep-s1-active-004-5.0s-t.png",
+   "t": 5,
+   "calls": 109,
+   "tris": 265199
+  },
+  {
+   "file": "rep-s1-active-005-10.1s-t.png",
+   "t": 10.1,
+   "calls": 108,
+   "tris": 197624
+  },
+  {
+   "file": "rep-s1-active-006-15.1s-t.png",
+   "t": 15.1,
+   "calls": 100,
+   "tris": 230376
+  },
+  {
+   "file": "rep-s1-active-007-20.0s-t.png",
+   "t": 20,
+   "calls": 112,
+   "tris": 262699
+  },
+  {
+   "file": "rep-s1-active-008-25.1s-t.png",
+   "t": 25.1,
+   "calls": 109,
+   "tris": 246385
+  },
+  {
+   "file": "rep-s1-active-009-30.1s-t.png",
+   "t": 30.1,
+   "calls": 107,
+   "tris": 281793
+  },
+  {
+   "file": "rep-s1-active-010-35.0s-t.png",
+   "t": 35,
+   "calls": 117,
+   "tris": 290444
+  },
+  {
+   "file": "rep-s1-active-011-40.0s-t.png",
+   "t": 40,
+   "calls": 117,
+   "tris": 219578
+  },
+  {
+   "file": "rep-s1-active-012-43.3s-hit-armor2.png",
+   "t": 43.3,
+   "calls": 105,
+   "tris": 271950
+  },
+  {
+   "file": "rep-s1-active-013-45.0s-t.png",
+   "t": 45,
+   "calls": 101,
+   "tris": 308717
+  },
+  {
+   "file": "rep-s1-active-014-50.0s-t.png",
+   "t": 50,
+   "calls": 106,
+   "tris": 279526
+  },
+  {
+   "file": "rep-s1-active-015-55.0s-t.png",
+   "t": 55,
+   "calls": 94,
+   "tris": 279321
+  },
+  {
+   "file": "rep-s1-active-016-60.0s-t.png",
+   "t": 60,
+   "calls": 101,
+   "tris": 313556
+  },
+  {
+   "file": "rep-s1-active-017-65.0s-t.png",
+   "t": 65,
+   "calls": 103,
+   "tris": 312963
+  },
+  {
+   "file": "rep-s1-active-018-70.1s-t.png",
+   "t": 70.1,
+   "calls": 97,
+   "tris": 270563
+  },
+  {
+   "file": "rep-s1-active-019-75.0s-t.png",
+   "t": 75,
+   "calls": 108,
+   "tris": 258394
+  },
+  {
+   "file": "rep-s1-active-020-77.9s-hit-armor1.png",
+   "t": 77.9,
+   "calls": 108,
+   "tris": 239907
+  },
+  {
+   "file": "rep-s1-active-021-80.0s-t.png",
+   "t": 80,
+   "calls": 113,
+   "tris": 319005
+  },
+  {
+   "file": "rep-s1-active-022-85.1s-t.png",
+   "t": 85.1,
+   "calls": 108,
+   "tris": 307383
+  },
+  {
+   "file": "rep-s1-active-023-90.0s-t.png",
+   "t": 90,
+   "calls": 125,
+   "tris": 345996
+  },
+  {
+   "file": "rep-s1-active-024-95.0s-t.png",
+   "t": 95,
+   "calls": 91,
+   "tris": 273448
+  },
+  {
+   "file": "rep-s1-active-025-100.0s-t.png",
+   "t": 100,
+   "calls": 113,
+   "tris": 228047
+  },
+  {
+   "file": "rep-s1-active-026-104.1s-hit-armor0.png",
+   "t": 104.1,
+   "calls": 98,
+   "tris": 201462
+  },
+  {
+   "file": "rep-s1-active-027-104.1s-death.png",
+   "t": 104.1,
+   "calls": 98,
+   "tris": 201462
+  },
+  {
+   "file": "rep-s1-active-028-104.7s-death-late.png",
+   "t": 104.7,
+   "calls": 105,
+   "tris": 182671
+  },
+  {
+   "file": "rep-s1-active-029-106.1s-over-card.png",
+   "t": 106.1,
+   "calls": 105,
+   "tris": 214700
+  }
+ ]
+}

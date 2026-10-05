@@ -1,0 +1,506 @@
+{
+ "tag": "run2-skilled",
+ "style": "skilled",
+ "seed": 11,
+ "camera": "B",
+ "look": "night",
+ "runLength": 185.44166666666666,
+ "cause": "",
+ "score": 71485,
+ "kills": 65,
+ "carKills": 12,
+ "gunKills": 53,
+ "passiveWrecks": 9,
+ "slams": 6,
+ "drifts": 53,
+ "turbos": 52,
+ "civHits": 32,
+ "wallHits": 0,
+ "comboPeak": 7,
+ "rounds": 428,
+ "hairpins": 13,
+ "topSpeed": 1361,
+ "avgSpeed": 836,
+ "gasPct": "38%",
+ "firePct": "56%",
+ "noEnemyVisiblePct": "7%",
+ "noThreatPct": "7%",
+ "noEnemyNear150Pct": "79%",
+ "oneEnemyOrLessVisiblePct": "50%",
+ "twoPlusCarsVisiblePct": "97%",
+ "attackPct": "3%",
+ "longestNoThreatGap": 3,
+ "longestNoThreatGapAt": 15.5,
+ "longestNoEventGap": 0,
+ "firstEnemyVisible": 0.058333333333333334,
+ "firstEnemyNear150": 2.3583333333333334,
+ "firstAttackTell": 63.333333333333336,
+ "firstKill": 1.3416666666666666,
+ "firstDamage": 96.01666666666667,
+ "killTimes": [
+  1.3,
+  3.4,
+  5.5,
+  8.7,
+  13.8,
+  15.5,
+  23.1,
+  23.4,
+  23.6,
+  26.9,
+  27.8,
+  29.3,
+  29.8,
+  30.7,
+  32.6,
+  32.7,
+  35,
+  41.3,
+  41.8,
+  45.3,
+  52.2,
+  55.9,
+  59.7,
+  60,
+  61.1,
+  64,
+  65.9,
+  66.1,
+  68.1,
+  68.5,
+  72.7,
+  74.4,
+  77.1,
+  80.4,
+  85.3,
+  87.1,
+  88.9,
+  90.8,
+  91.1,
+  96.9,
+  100,
+  102.9,
+  106.5,
+  109.6,
+  114.3,
+  119.7,
+  126,
+  126.2,
+  132.3,
+  137.3,
+  141.7,
+  146.9,
+  150.8,
+  151.3,
+  156.3,
+  157.4,
+  161.9,
+  169.2,
+  174.2,
+  174.9,
+  178.2,
+  178.7
+ ],
+ "killsPerMin": 21,
+ "meanSecondsBetweenKills": 3,
+ "medianKillGap": 2.9,
+ "longestKillGap": 7.6,
+ "damageEvents": 1,
+ "damageTimes": [
+  96
+ ],
+ "armorLost": 1,
+ "damagePerMin": 0.32,
+ "visibleAheadPt": {
+  "min": 260,
+  "max": 3000
+ },
+ "busiest": {
+  "file": "run2-skilled-035-120.0s-t.png",
+  "calls": 127,
+  "tris": 338604
+ },
+ "mostTris": {
+  "file": "run2-skilled-041-150.0s-t.png",
+  "calls": 102,
+  "tris": 371808
+ },
+ "maxCalls": 127,
+ "maxTris": 371808,
+ "simMsPerStep": 0.042,
+ "headlessRenderMs": {
+  "median": 4,
+  "max": 3884
+ },
+ "replayMatch": null,
+ "wreckLog": [
+  "1.0 bruiser missile approach",
+  "1.2 weak missile approach",
+  "3.2 weak missile approach",
+  "3.2 bruiser missile approach",
+  "5.3 weak gun approach",
+  "8.7 bruiser gun hold",
+  "13.8 bruiser gun approach",
+  "15.5 weak gun approach",
+  "23.1 weak gun approach",
+  "23.4 bruiser gun approach",
+  "23.6 weak ram approach",
+  "26.9 bruiser gun approach",
+  "27.7 weak missile approach",
+  "29.3 bruiser missile approach",
+  "29.8 bruiser gun approach",
+  "30.7 weak gun approach",
+  "32.6 weak gun approach",
+  "32.7 bruiser missile approach",
+  "35.0 bruiser gun hold",
+  "41.3 bruiser gun approach",
+  "41.8 bruiser gun approach",
+  "45.3 bruiser slam hold",
+  "52.2 bruiser gun approach",
+  "55.9 weak gun approach",
+  "59.7 weak ram approach",
+  "59.8 weak chain approach",
+  "61.0 weak gun approach",
+  "64.0 bruiser slam swerve",
+  "65.9 weak gun approach",
+  "66.1 weak gun approach",
+  "68.0 bruiser missile approach",
+  "68.5 gunner missile sight",
+  "72.7 gunner gun approach",
+  "74.4 weak gun approach",
+  "77.1 gunner missile approach",
+  "80.2 weak gun approach",
+  "85.2 weak gun approach",
+  "87.0 weak gun approach",
+  "88.9 weak gun approach",
+  "90.8 bruiser shunt hold",
+  "91.1 bruiser slam approach",
+  "96.8 bruiser gun swerve",
+  "100.0 gunner gun approach",
+  "102.9 weak gun approach",
+  "106.5 weak gun approach",
+  "109.5 gunner shunt approach",
+  "114.3 bruiser gun hold",
+  "119.6 gunner gun approach",
+  "126.0 bruiser gun approach",
+  "126.2 bruiser slam hold",
+  "132.3 bruiser gun hold",
+  "137.3 bruiser slam hold",
+  "141.6 weak gun approach",
+  "146.8 weak gun approach",
+  "150.8 gunner gun approach",
+  "151.3 gunner shunt approach",
+  "156.3 weak gun approach",
+  "157.4 gunner gun approach",
+  "161.9 weak gun approach",
+  "169.2 bruiser gun tell",
+  "174.2 weak gun approach",
+  "174.8 weak gun approach",
+  "178.2 bruiser gun approach",
+  "178.7 weak gun approach",
+  "181.3 weak ram approach"
+ ],
+ "errors": [],
+ "shots": [
+  {
+   "file": "run2-skilled-000-0.0s-title.png",
+   "t": 0,
+   "calls": 28,
+   "tris": 22745
+  },
+  {
+   "file": "run2-skilled-001-0.7s-burnout.png",
+   "t": 0.7,
+   "calls": 105,
+   "tris": 295232
+  },
+  {
+   "file": "run2-skilled-002-1.5s-go.png",
+   "t": 1.5,
+   "calls": 125,
+   "tris": 333536
+  },
+  {
+   "file": "run2-skilled-003-3.0s-t.png",
+   "t": 3,
+   "calls": 116,
+   "tris": 351628
+  },
+  {
+   "file": "run2-skilled-004-5.0s-t.png",
+   "t": 5,
+   "calls": 97,
+   "tris": 248507
+  },
+  {
+   "file": "run2-skilled-005-10.1s-t.png",
+   "t": 10.1,
+   "calls": 116,
+   "tris": 231344
+  },
+  {
+   "file": "run2-skilled-006-15.1s-t.png",
+   "t": 15.1,
+   "calls": 102,
+   "tris": 231104
+  },
+  {
+   "file": "run2-skilled-007-20.0s-t.png",
+   "t": 20,
+   "calls": 113,
+   "tris": 314970
+  },
+  {
+   "file": "run2-skilled-008-25.0s-t.png",
+   "t": 25,
+   "calls": 103,
+   "tris": 257331
+  },
+  {
+   "file": "run2-skilled-009-29.3s-kill14.png",
+   "t": 29.3,
+   "calls": 105,
+   "tris": 271305
+  },
+  {
+   "file": "run2-skilled-010-30.0s-t.png",
+   "t": 30,
+   "calls": 110,
+   "tris": 289275
+  },
+  {
+   "file": "run2-skilled-011-35.0s-kill19.png",
+   "t": 35,
+   "calls": 105,
+   "tris": 290956
+  },
+  {
+   "file": "run2-skilled-012-35.0s-t.png",
+   "t": 35,
+   "calls": 113,
+   "tris": 302354
+  },
+  {
+   "file": "run2-skilled-013-40.1s-t.png",
+   "t": 40.1,
+   "calls": 108,
+   "tris": 304203
+  },
+  {
+   "file": "run2-skilled-014-45.1s-t.png",
+   "t": 45.1,
+   "calls": 104,
+   "tris": 216363
+  },
+  {
+   "file": "run2-skilled-015-50.0s-t.png",
+   "t": 50,
+   "calls": 99,
+   "tris": 208706
+  },
+  {
+   "file": "run2-skilled-016-55.0s-t.png",
+   "t": 55,
+   "calls": 98,
+   "tris": 171529
+  },
+  {
+   "file": "run2-skilled-017-59.7s-kill25.png",
+   "t": 59.7,
+   "calls": 95,
+   "tris": 272180
+  },
+  {
+   "file": "run2-skilled-018-60.0s-t.png",
+   "t": 60,
+   "calls": 104,
+   "tris": 343014
+  },
+  {
+   "file": "run2-skilled-019-65.0s-t.png",
+   "t": 65,
+   "calls": 105,
+   "tris": 309290
+  },
+  {
+   "file": "run2-skilled-020-70.1s-t.png",
+   "t": 70.1,
+   "calls": 101,
+   "tris": 270009
+  },
+  {
+   "file": "run2-skilled-021-74.4s-kill34.png",
+   "t": 74.4,
+   "calls": 106,
+   "tris": 256395
+  },
+  {
+   "file": "run2-skilled-022-75.0s-t.png",
+   "t": 75,
+   "calls": 111,
+   "tris": 255648
+  },
+  {
+   "file": "run2-skilled-023-80.0s-t.png",
+   "t": 80,
+   "calls": 99,
+   "tris": 168407
+  },
+  {
+   "file": "run2-skilled-024-85.0s-t.png",
+   "t": 85,
+   "calls": 100,
+   "tris": 269900
+  },
+  {
+   "file": "run2-skilled-025-90.0s-t.png",
+   "t": 90,
+   "calls": 106,
+   "tris": 277594
+  },
+  {
+   "file": "run2-skilled-026-95.0s-t.png",
+   "t": 95,
+   "calls": 89,
+   "tris": 305184
+  },
+  {
+   "file": "run2-skilled-027-96.0s-hit-armor2.png",
+   "t": 96,
+   "calls": 92,
+   "tris": 291608
+  },
+  {
+   "file": "run2-skilled-028-100.0s-t.png",
+   "t": 100,
+   "calls": 102,
+   "tris": 356200
+  },
+  {
+   "file": "run2-skilled-029-105.0s-t.png",
+   "t": 105,
+   "calls": 112,
+   "tris": 224350
+  },
+  {
+   "file": "run2-skilled-030-109.6s-kill46.png",
+   "t": 109.6,
+   "calls": 109,
+   "tris": 180729
+  },
+  {
+   "file": "run2-skilled-031-110.0s-t.png",
+   "t": 110,
+   "calls": 106,
+   "tris": 182213
+  },
+  {
+   "file": "run2-skilled-032-114.3s-kill47.png",
+   "t": 114.3,
+   "calls": 106,
+   "tris": 299158
+  },
+  {
+   "file": "run2-skilled-033-115.0s-t.png",
+   "t": 115,
+   "calls": 110,
+   "tris": 310578
+  },
+  {
+   "file": "run2-skilled-034-119.7s-kill48.png",
+   "t": 119.7,
+   "calls": 124,
+   "tris": 337284
+  },
+  {
+   "file": "run2-skilled-035-120.0s-t.png",
+   "t": 120,
+   "calls": 127,
+   "tris": 338604
+  },
+  {
+   "file": "run2-skilled-036-125.1s-t.png",
+   "t": 125.1,
+   "calls": 109,
+   "tris": 313564
+  },
+  {
+   "file": "run2-skilled-037-130.1s-t.png",
+   "t": 130.1,
+   "calls": 99,
+   "tris": 259711
+  },
+  {
+   "file": "run2-skilled-038-135.0s-t.png",
+   "t": 135,
+   "calls": 101,
+   "tris": 288913
+  },
+  {
+   "file": "run2-skilled-039-140.1s-t.png",
+   "t": 140.1,
+   "calls": 102,
+   "tris": 217998
+  },
+  {
+   "file": "run2-skilled-040-145.0s-t.png",
+   "t": 145,
+   "calls": 96,
+   "tris": 239924
+  },
+  {
+   "file": "run2-skilled-041-150.0s-t.png",
+   "t": 150,
+   "calls": 102,
+   "tris": 371808
+  },
+  {
+   "file": "run2-skilled-042-155.0s-t.png",
+   "t": 155,
+   "calls": 95,
+   "tris": 247088
+  },
+  {
+   "file": "run2-skilled-043-160.1s-t.png",
+   "t": 160.1,
+   "calls": 117,
+   "tris": 238723
+  },
+  {
+   "file": "run2-skilled-044-165.0s-t.png",
+   "t": 165,
+   "calls": 107,
+   "tris": 310706
+  },
+  {
+   "file": "run2-skilled-045-169.2s-kill60.png",
+   "t": 169.2,
+   "calls": 103,
+   "tris": 213912
+  },
+  {
+   "file": "run2-skilled-046-170.0s-t.png",
+   "t": 170,
+   "calls": 115,
+   "tris": 229504
+  },
+  {
+   "file": "run2-skilled-047-174.2s-kill61.png",
+   "t": 174.2,
+   "calls": 105,
+   "tris": 309790
+  },
+  {
+   "file": "run2-skilled-048-175.1s-t.png",
+   "t": 175.1,
+   "calls": 113,
+   "tris": 278391
+  },
+  {
+   "file": "run2-skilled-049-180.0s-t.png",
+   "t": 180,
+   "calls": 111,
+   "tris": 309352
+  }
+ ]
+}

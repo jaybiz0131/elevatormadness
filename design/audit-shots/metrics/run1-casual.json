@@ -1,0 +1,271 @@
+{
+ "tag": "run1-casual",
+ "style": "casual",
+ "seed": 7,
+ "camera": "B",
+ "look": "night",
+ "runLength": 54.291666666666664,
+ "cause": "Hit the barrier",
+ "score": 10942,
+ "kills": 22,
+ "carKills": 5,
+ "gunKills": 17,
+ "passiveWrecks": 0,
+ "slams": 0,
+ "drifts": 9,
+ "turbos": 0,
+ "civHits": 8,
+ "wallHits": 5,
+ "comboPeak": 6,
+ "rounds": 74,
+ "hairpins": 4,
+ "topSpeed": 1347,
+ "avgSpeed": 877,
+ "gasPct": "40%",
+ "firePct": "31%",
+ "noEnemyVisiblePct": "11%",
+ "noThreatPct": "8%",
+ "noEnemyNear150Pct": "79%",
+ "oneEnemyOrLessVisiblePct": "65%",
+ "twoPlusCarsVisiblePct": "96%",
+ "attackPct": "0%",
+ "longestNoThreatGap": 1.5,
+ "longestNoThreatGapAt": 47.8,
+ "longestNoEventGap": 0,
+ "firstEnemyVisible": 0.05,
+ "firstEnemyNear150": 3.475,
+ "firstAttackTell": 18.1,
+ "firstKill": 4.916666666666667,
+ "firstDamage": 10.491666666666667,
+ "killTimes": [
+  4.9,
+  6.4,
+  7.5,
+  11.7,
+  13,
+  14.3,
+  16.8,
+  18.4,
+  23.3,
+  23.8,
+  25.5,
+  27.6,
+  30.6,
+  34.9,
+  37.1,
+  40.9,
+  41.3,
+  43.1,
+  44.6,
+  45,
+  46.9
+ ],
+ "killsPerMin": 24.3,
+ "meanSecondsBetweenKills": 2.6,
+ "medianKillGap": 1.8,
+ "longestKillGap": 7.3,
+ "damageEvents": 6,
+ "damageTimes": [
+  10.5,
+  13.9,
+  34,
+  39.9,
+  43.4,
+  49.2
+ ],
+ "armorLost": 3,
+ "damagePerMin": 6.63,
+ "visibleAheadPt": {
+  "min": 260,
+  "max": 3000
+ },
+ "busiest": {
+  "file": "run1-casual-016-40.9s-t.png",
+  "calls": 126,
+  "tris": 217190
+ },
+ "mostTris": {
+  "file": "run1-casual-004-5.0s-t.png",
+  "calls": 108,
+  "tris": 289511
+ },
+ "maxCalls": 126,
+ "maxTris": 289511,
+ "simMsPerStep": 0.035,
+ "headlessRenderMs": {
+  "median": 4,
+  "max": 1890
+ },
+ "replayMatch": null,
+ "wreckLog": [
+  "4.9 bruiser gun hold",
+  "6.4 bruiser gun approach",
+  "7.5 weak gun approach",
+  "11.7 bruiser gun approach",
+  "13.0 bruiser gun approach",
+  "14.0 weak gun approach",
+  "16.8 weak gun approach",
+  "18.3 bruiser shunt tell",
+  "23.3 bruiser gun approach",
+  "23.8 weak gun approach",
+  "25.0 weak gun approach",
+  "27.6 weak gun approach",
+  "30.6 bruiser shunt approach",
+  "34.9 bruiser ram recover",
+  "37.1 weak gun approach",
+  "40.6 bruiser gun approach",
+  "41.2 weak gun approach",
+  "41.2 weak chain approach",
+  "43.1 armored missile approach",
+  "44.6 bruiser missile approach",
+  "45.0 weak missile approach",
+  "46.9 bruiser shunt hold"
+ ],
+ "errors": [],
+ "shots": [
+  {
+   "file": "run1-casual-000-0.0s-title.png",
+   "t": 0,
+   "calls": 28,
+   "tris": 22745
+  },
+  {
+   "file": "run1-casual-001-0.6s-burnout.png",
+   "t": 0.6,
+   "calls": 97,
+   "tris": 223491
+  },
+  {
+   "file": "run1-casual-002-1.6s-go.png",
+   "t": 1.6,
+   "calls": 105,
+   "tris": 272242
+  },
+  {
+   "file": "run1-casual-003-3.0s-t.png",
+   "t": 3,
+   "calls": 115,
+   "tris": 275768
+  },
+  {
+   "file": "run1-casual-004-5.0s-t.png",
+   "t": 5,
+   "calls": 108,
+   "tris": 289511
+  },
+  {
+   "file": "run1-casual-005-10.1s-t.png",
+   "t": 10.1,
+   "calls": 93,
+   "tris": 220398
+  },
+  {
+   "file": "run1-casual-006-10.5s-barrier.png",
+   "t": 10.5,
+   "calls": 91,
+   "tris": 217166
+  },
+  {
+   "file": "run1-casual-007-13.9s-barrier.png",
+   "t": 13.9,
+   "calls": 97,
+   "tris": 199223
+  },
+  {
+   "file": "run1-casual-008-15.1s-t.png",
+   "t": 15.1,
+   "calls": 97,
+   "tris": 212167
+  },
+  {
+   "file": "run1-casual-009-20.0s-t.png",
+   "t": 20,
+   "calls": 100,
+   "tris": 230194
+  },
+  {
+   "file": "run1-casual-010-25.0s-t.png",
+   "t": 25,
+   "calls": 97,
+   "tris": 271449
+  },
+  {
+   "file": "run1-casual-011-30.0s-t.png",
+   "t": 30,
+   "calls": 103,
+   "tris": 234257
+  },
+  {
+   "file": "run1-casual-012-34.0s-hit-armor2.png",
+   "t": 34,
+   "calls": 110,
+   "tris": 216113
+  },
+  {
+   "file": "run1-casual-013-35.0s-t.png",
+   "t": 35,
+   "calls": 125,
+   "tris": 273891
+  },
+  {
+   "file": "run1-casual-014-39.9s-hit-armor1.png",
+   "t": 39.9,
+   "calls": 93,
+   "tris": 173475
+  },
+  {
+   "file": "run1-casual-015-39.9s-barrier.png",
+   "t": 39.9,
+   "calls": 98,
+   "tris": 187683
+  },
+  {
+   "file": "run1-casual-016-40.9s-t.png",
+   "t": 40.9,
+   "calls": 126,
+   "tris": 217190
+  },
+  {
+   "file": "run1-casual-017-43.4s-barrier.png",
+   "t": 43.4,
+   "calls": 99,
+   "tris": 204349
+  },
+  {
+   "file": "run1-casual-018-45.1s-t.png",
+   "t": 45.1,
+   "calls": 103,
+   "tris": 223403
+  },
+  {
+   "file": "run1-casual-019-49.2s-hit-armor0.png",
+   "t": 49.2,
+   "calls": 93,
+   "tris": 255530
+  },
+  {
+   "file": "run1-casual-020-49.2s-barrier.png",
+   "t": 49.2,
+   "calls": 92,
+   "tris": 254556
+  },
+  {
+   "file": "run1-casual-021-49.2s-death.png",
+   "t": 49.2,
+   "calls": 106,
+   "tris": 196674
+  },
+  {
+   "file": "run1-casual-022-49.8s-death-late.png",
+   "t": 49.8,
+   "calls": 97,
+   "tris": 220284
+  },
+  {
+   "file": "run1-casual-023-51.2s-over-card.png",
+   "t": 51.2,
+   "calls": 94,
+   "tris": 234864
+  }
+ ]
+}

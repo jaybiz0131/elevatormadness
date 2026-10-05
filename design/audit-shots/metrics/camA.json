@@ -1,0 +1,114 @@
+{
+ "tag": "camA",
+ "style": "casual",
+ "seed": 7,
+ "camera": "A",
+ "look": "night",
+ "runLength": 12.941666666666666,
+ "cause": "",
+ "score": 2893,
+ "kills": 5,
+ "carKills": 1,
+ "gunKills": 4,
+ "passiveWrecks": 0,
+ "slams": 0,
+ "drifts": 0,
+ "turbos": 0,
+ "civHits": 1,
+ "wallHits": 1,
+ "comboPeak": 3,
+ "rounds": 72,
+ "hairpins": 1,
+ "topSpeed": 1361,
+ "avgSpeed": 955,
+ "gasPct": "95%",
+ "firePct": "33%",
+ "noEnemyVisiblePct": "0%",
+ "noThreatPct": "0%",
+ "noEnemyNear150Pct": "79%",
+ "oneEnemyOrLessVisiblePct": "42%",
+ "twoPlusCarsVisiblePct": "98%",
+ "attackPct": "0%",
+ "longestNoThreatGap": 0,
+ "longestNoThreatGapAt": 0,
+ "longestNoEventGap": 0,
+ "firstEnemyVisible": 0.05,
+ "firstEnemyNear150": 3.525,
+ "firstAttackTell": null,
+ "firstKill": 4.225,
+ "firstDamage": null,
+ "killTimes": [
+  4.2,
+  5.8
+ ],
+ "killsPerMin": 23.2,
+ "meanSecondsBetweenKills": 6.5,
+ "medianKillGap": 4.2,
+ "longestKillGap": 7.1,
+ "damageEvents": 0,
+ "damageTimes": [],
+ "armorLost": 0,
+ "damagePerMin": 0,
+ "visibleAheadPt": {
+  "min": 1100,
+  "max": 3000
+ },
+ "busiest": {
+  "file": "camA-003-3.1s-t.png",
+  "calls": 106,
+  "tris": 268139
+ },
+ "mostTris": {
+  "file": "camA-004-5.0s-t.png",
+  "calls": 100,
+  "tris": 275135
+ },
+ "maxCalls": 106,
+ "maxTris": 275135,
+ "simMsPerStep": 0.051,
+ "headlessRenderMs": {
+  "median": 4,
+  "max": 3850
+ },
+ "replayMatch": null,
+ "wreckLog": [
+  "4.2 bruiser shunt hold",
+  "5.8 bruiser gun approach",
+  "8.3 bruiser gun approach",
+  "10.1 bruiser gun hold",
+  "11.0 bruiser gun approach"
+ ],
+ "errors": [],
+ "shots": [
+  {
+   "file": "camA-000-0.0s-title.png",
+   "t": 0,
+   "calls": 28,
+   "tris": 22745
+  },
+  {
+   "file": "camA-001-0.6s-burnout.png",
+   "t": 0.6,
+   "calls": 91,
+   "tris": 225550
+  },
+  {
+   "file": "camA-002-1.6s-go.png",
+   "t": 1.6,
+   "calls": 100,
+   "tris": 270291
+  },
+  {
+   "file": "camA-003-3.1s-t.png",
+   "t": 3.1,
+   "calls": 106,
+   "tris": 268139
+  },
+  {
+   "file": "camA-004-5.0s-t.png",
+   "t": 5,
+   "calls": 100,
+   "tris": 275135
+  }
+ ]
+}

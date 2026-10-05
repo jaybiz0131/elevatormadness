@@ -1,0 +1,269 @@
+{
+ "tag": "run3-passive",
+ "style": "passive",
+ "seed": 5,
+ "camera": "B",
+ "look": "night",
+ "runLength": 78.65833333333333,
+ "cause": "Shot by a Gunner van",
+ "score": 2770,
+ "kills": 12,
+ "carKills": 1,
+ "gunKills": 11,
+ "passiveWrecks": 0,
+ "slams": 0,
+ "drifts": 0,
+ "turbos": 0,
+ "civHits": 4,
+ "wallHits": 2,
+ "comboPeak": 3,
+ "rounds": 146,
+ "hairpins": 2,
+ "topSpeed": 612,
+ "avgSpeed": 518,
+ "gasPct": "0%",
+ "firePct": "30%",
+ "noEnemyVisiblePct": "2%",
+ "noThreatPct": "2%",
+ "noEnemyNear150Pct": "58%",
+ "oneEnemyOrLessVisiblePct": "11%",
+ "twoPlusCarsVisiblePct": "98%",
+ "attackPct": "3%",
+ "longestNoThreatGap": 0.8,
+ "longestNoThreatGapAt": 22.2,
+ "longestNoEventGap": 0,
+ "firstEnemyVisible": 0.05,
+ "firstEnemyNear150": 4.508333333333334,
+ "firstAttackTell": 67.56666666666666,
+ "firstKill": 11.666666666666666,
+ "firstDamage": 21.791666666666668,
+ "killTimes": [
+  11.7,
+  21.3,
+  22,
+  22.2,
+  26.2,
+  38.6,
+  39.8,
+  51.4,
+  51.6,
+  51.9,
+  63.9,
+  70.5
+ ],
+ "killsPerMin": 9.2,
+ "meanSecondsBetweenKills": 6.6,
+ "medianKillGap": 6.6,
+ "longestKillGap": 12.4,
+ "damageEvents": 5,
+ "damageTimes": [
+  21.8,
+  26.4,
+  46.8,
+  71.5,
+  73.6
+ ],
+ "armorLost": 3,
+ "damagePerMin": 3.81,
+ "visibleAheadPt": {
+  "min": 280,
+  "max": 3000
+ },
+ "busiest": {
+  "file": "run3-passive-013-39.8s-kill7.png",
+  "calls": 123,
+  "tris": 306132
+ },
+ "mostTris": {
+  "file": "run3-passive-017-50.0s-t.png",
+  "calls": 118,
+  "tris": 359399
+ },
+ "maxCalls": 123,
+ "maxTris": 359399,
+ "simMsPerStep": 0.023,
+ "headlessRenderMs": {
+  "median": 4,
+  "max": 4992
+ },
+ "replayMatch": null,
+ "wreckLog": [
+  "11.7 bruiser gun approach",
+  "21.3 weak gun approach",
+  "21.9 weak gun approach",
+  "22.1 weak gun approach",
+  "26.2 weak gun approach",
+  "38.5 weak gun approach",
+  "39.8 weak chain approach",
+  "51.4 bruiser gun approach",
+  "51.6 weak gun approach",
+  "51.9 weak gun approach",
+  "63.8 weak gun approach",
+  "70.5 bruiser gun approach"
+ ],
+ "errors": [],
+ "shots": [
+  {
+   "file": "run3-passive-000-0.0s-title.png",
+   "t": 0,
+   "calls": 28,
+   "tris": 22745
+  },
+  {
+   "file": "run3-passive-001-0.7s-burnout.png",
+   "t": 0.7,
+   "calls": 95,
+   "tris": 245711
+  },
+  {
+   "file": "run3-passive-002-1.6s-go.png",
+   "t": 1.6,
+   "calls": 99,
+   "tris": 242881
+  },
+  {
+   "file": "run3-passive-003-3.1s-t.png",
+   "t": 3.1,
+   "calls": 91,
+   "tris": 250290
+  },
+  {
+   "file": "run3-passive-004-5.0s-t.png",
+   "t": 5,
+   "calls": 106,
+   "tris": 274127
+  },
+  {
+   "file": "run3-passive-005-10.0s-t.png",
+   "t": 10,
+   "calls": 101,
+   "tris": 302378
+  },
+  {
+   "file": "run3-passive-006-15.0s-t.png",
+   "t": 15,
+   "calls": 106,
+   "tris": 257404
+  },
+  {
+   "file": "run3-passive-007-20.1s-t.png",
+   "t": 20.1,
+   "calls": 105,
+   "tris": 244826
+  },
+  {
+   "file": "run3-passive-008-21.8s-barrier.png",
+   "t": 21.8,
+   "calls": 94,
+   "tris": 176187
+  },
+  {
+   "file": "run3-passive-009-25.1s-t.png",
+   "t": 25.1,
+   "calls": 102,
+   "tris": 183597
+  },
+  {
+   "file": "run3-passive-010-26.4s-barrier.png",
+   "t": 26.4,
+   "calls": 95,
+   "tris": 221240
+  },
+  {
+   "file": "run3-passive-011-30.1s-t.png",
+   "t": 30.1,
+   "calls": 107,
+   "tris": 264995
+  },
+  {
+   "file": "run3-passive-012-35.0s-t.png",
+   "t": 35,
+   "calls": 102,
+   "tris": 305040
+  },
+  {
+   "file": "run3-passive-013-39.8s-kill7.png",
+   "t": 39.8,
+   "calls": 123,
+   "tris": 306132
+  },
+  {
+   "file": "run3-passive-014-40.1s-t.png",
+   "t": 40.1,
+   "calls": 121,
+   "tris": 316711
+  },
+  {
+   "file": "run3-passive-015-45.0s-t.png",
+   "t": 45,
+   "calls": 121,
+   "tris": 288080
+  },
+  {
+   "file": "run3-passive-016-46.8s-hit-armor2.png",
+   "t": 46.8,
+   "calls": 112,
+   "tris": 270566
+  },
+  {
+   "file": "run3-passive-017-50.0s-t.png",
+   "t": 50,
+   "calls": 118,
+   "tris": 359399
+  },
+  {
+   "file": "run3-passive-018-55.0s-t.png",
+   "t": 55,
+   "calls": 95,
+   "tris": 250472
+  },
+  {
+   "file": "run3-passive-019-60.0s-t.png",
+   "t": 60,
+   "calls": 116,
+   "tris": 325672
+  },
+  {
+   "file": "run3-passive-020-65.0s-t.png",
+   "t": 65,
+   "calls": 104,
+   "tris": 295214
+  },
+  {
+   "file": "run3-passive-021-70.0s-t.png",
+   "t": 70,
+   "calls": 110,
+   "tris": 259336
+  },
+  {
+   "file": "run3-passive-022-71.5s-hit-armor1.png",
+   "t": 71.5,
+   "calls": 108,
+   "tris": 230452
+  },
+  {
+   "file": "run3-passive-023-73.6s-hit-armor0.png",
+   "t": 73.6,
+   "calls": 93,
+   "tris": 230802
+  },
+  {
+   "file": "run3-passive-024-73.6s-death.png",
+   "t": 73.6,
+   "calls": 93,
+   "tris": 230826
+  },
+  {
+   "file": "run3-passive-025-74.2s-death-late.png",
+   "t": 74.2,
+   "calls": 112,
+   "tris": 233899
+  },
+  {
+   "file": "run3-passive-026-75.6s-over-card.png",
+   "t": 75.6,
+   "calls": 102,
+   "tris": 218525
+  }
+ ]
+}
