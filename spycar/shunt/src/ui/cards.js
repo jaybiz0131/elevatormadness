@@ -1,22 +1,29 @@
 // Title, pause, death and settings cards. `app` carries the run and the bests; `screen` is what is showing.
 import { S } from '../settings.js';
-import { fmt, localDate } from '../sim/constants.js';
+import { T, fmt, localDate } from '../sim/constants.js';
 import { $, ui } from './dom.js';
 let screenNow = 'title', settingsFromNow = 'title';
 export function screen() { return screenNow; }
 export function settingsFrom() { return settingsFromNow; }
 export function setScreen(k) { screenNow = k; }
 export function setSettingsFrom(k) { settingsFromNow = k; }
+const STAR = '<svg viewBox="0 0 24 24" class="CLS"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 9.2l7.1-.6z"/></svg>';
+const mmss = (t) => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
 export function showCard(kind, app) {
-  const { G, dailyMode, best, bestDaily, cash } = app; screenNow = kind; ui.card.hidden = false; ui.card.classList.toggle('over', kind === 'over'); ui.logo.hidden = kind !== 'title'; ui.newBest.hidden = true; ui.bar.hidden = true; ui.settings.hidden = kind !== 'settings';
+  const { G, dailyMode, best, bestDaily, cash } = app; screenNow = kind; ui.card.hidden = false; ui.card.classList.toggle('over', kind === 'over'); ui.logo.hidden = kind !== 'title'; ui.stars.hidden = true; ui.newBest.hidden = true; ui.bar.hidden = true; ui.settings.hidden = kind !== 'settings';
   ui.score.hidden = kind === 'settings';
-  if (kind === 'title') { ui.title.textContent = dailyMode ? 'Daily run · ' + localDate() : 'Spy car brawler · gray-box'; ui.score.textContent = 'BEST ' + fmt(dailyMode ? bestDaily : best); ui.lines.innerHTML = 'Slide to steer. Flick to Slam.<br>Cash ' + fmt(cash) + (app.diag ? '<br><span style="font-size:11px;opacity:0.7">' + app.diag + '</span>' : ''); ui.primary.textContent = 'TOUCH TO DRIVE'; ui.a.textContent = dailyMode ? 'RANDOM ROAD' : 'DAILY RUN'; ui.b.textContent = 'SETTINGS'; ui.c.hidden = true; }
+  if (kind === 'title') { ui.title.textContent = dailyMode ? 'Daily run · ' + localDate() : 'Spy car brawler · gray-box'; ui.score.textContent = 'BEST ' + fmt(dailyMode ? bestDaily : best); ui.lines.innerHTML = 'Slide to steer. Hold FIRE to shoot.<br>Reach the city.<br>Cash ' + fmt(cash) + (app.diag ? '<br><span style="font-size:11px;opacity:0.7">' + app.diag + '</span>' : ''); ui.primary.textContent = 'TOUCH TO DRIVE'; ui.a.textContent = dailyMode ? 'RANDOM ROAD' : 'DAILY RUN'; ui.b.textContent = 'SETTINGS'; ui.c.hidden = true; }
   if (kind === 'pause') { ui.title.textContent = 'Paused'; ui.score.textContent = fmt(G.score); ui.lines.textContent = ''; ui.primary.textContent = 'RESUME'; ui.a.textContent = 'RESTART'; ui.b.textContent = 'SETTINGS'; ui.c.hidden = false; ui.c.textContent = 'QUIT TO TITLE'; }
-  if (kind === 'over') { const isBest = G.score > (dailyMode ? bestDaily : best); ui.title.textContent = G.cause || 'Wrecked'; ui.score.textContent = fmt(G.score); ui.newBest.hidden = !isBest; const earned = Math.round(G.score * 0.1);
+  if (kind === 'over') { const won = G.won; const isBest = G.score > (dailyMode ? bestDaily : best); ui.title.textContent = won ? 'City reached' : (G.cause || 'Wrecked'); ui.score.textContent = fmt(G.score); ui.newBest.hidden = !isBest; const earned = Math.round(G.score * 0.1);
+    if (won) { ui.stars.hidden = false; ui.stars.innerHTML = [1, 2, 3].map(i => STAR.replace('CLS', i <= G.stars ? 'on' : 'off')).join(''); }
+    const city = Math.min(100, Math.floor(100 * G.dist / T.goal.city));
     // no "next car at 5,000" promise: the garage does not exist yet (audit, UI section)
-    ui.lines.innerHTML = 'BEST ' + fmt(Math.max(G.score, dailyMode ? bestDaily : best)) + ' &nbsp;·&nbsp; WRECKS ' + G.kills + ' &nbsp;·&nbsp; SLAMS ' + G.slams + ' &nbsp;·&nbsp; COMBO ×' + G.comboPeak + ' &nbsp;·&nbsp; ' + Math.round(G.t) + ' s<br>DRIFTS ' + G.drifts + (G.driftSlams ? ' &nbsp;·&nbsp; DRIFT SLAMS ' + G.driftSlams : '') + ' &nbsp;·&nbsp; TOP ' + Math.round(G.topSpeed) + ' pt/s' + (G.hairpins ? ' &nbsp;·&nbsp; HAIRPINS ' + G.hairpins : '') + '<br>' + (G.civHits ? G.civHits + ' civilian' + (G.civHits > 1 ? 's' : '') + ' hit &nbsp;·&nbsp; ' : '') + '+' + fmt(earned) + ' cash';
-    ui.primary.textContent = 'DRIVE AGAIN'; ui.a.textContent = 'NEW ROAD'; ui.b.textContent = 'TITLE'; ui.c.hidden = false; ui.c.textContent = 'SETTINGS'; }
+    const bestTxt = fmt(Math.max(G.score, dailyMode ? bestDaily : best));
+    ui.lines.innerHTML = (won ? 'KILLS ' + G.kills + ' &nbsp;·&nbsp; BEST COMBO ×' + G.comboPeak + '<br>ARMOR LEFT ' + G.armorLeft + ' &nbsp;·&nbsp; ' + mmss(G.t) + (G.nearMisses ? ' &nbsp;·&nbsp; NEAR MISSES ' + G.nearMisses : '') + '<br>' + (G.stars < 3 ? 'NEXT STAR AT ' + fmt(T.goal.stars[G.stars]) + ' &nbsp;·&nbsp; ' : '') + 'BEST ' + bestTxt
+      : 'CITY ' + city + '% &nbsp;·&nbsp; BEST ' + bestTxt + '<br>WRECKS ' + G.kills + ' &nbsp;·&nbsp; COMBO ×' + G.comboPeak + ' &nbsp;·&nbsp; ' + mmss(G.t) + '<br>SLAMS ' + G.slams + ' &nbsp;·&nbsp; DRIFTS ' + G.drifts + (G.nearMisses ? ' &nbsp;·&nbsp; NEAR MISSES ' + G.nearMisses : ''))
+      + '<br>' + (G.civHits ? G.civHits + ' civilian' + (G.civHits > 1 ? 's' : '') + ' hit &nbsp;·&nbsp; ' : '') + '+' + fmt(earned) + ' cash';
+    ui.primary.textContent = won ? 'GO AGAIN' : 'DRIVE AGAIN'; ui.a.textContent = 'NEW ROAD'; ui.b.textContent = 'TITLE'; ui.c.hidden = false; ui.c.textContent = 'SETTINGS'; }
   if (kind === 'settings') { ui.title.textContent = 'Settings'; ui.lines.textContent = ''; ui.primary.textContent = 'BACK'; ui.a.hidden = true; ui.b.hidden = true; ui.c.hidden = true; refreshSettings(); return; }
   ui.a.hidden = false; ui.b.hidden = false;
 }
-export function refreshSettings() { for (const [id, key] of [['sSound', 'sound'], ['sMusic', 'music'], ['sHaptics', 'haptics'], ['sShake', 'shake'], ['sMotion', 'motion'], ['sTapSlam', 'tapSlam'], ['sAutoDrift', 'autoDrift']]) { const el = $(id); el.classList.toggle('on', !!S[key]); el.setAttribute('aria-checked', S[key] ? 'true' : 'false'); } $('sHand').textContent = S.left ? 'LEFT' : 'RIGHT'; $('sSens').value = S.sens; $('sSensVal').textContent = S.sens.toFixed(1) + '×'; ui.special.classList.toggle('left', S.left); ui.pad.classList.toggle('left', S.left); ui.gas.classList.toggle('left', S.left); ui.fire.classList.toggle('left', S.left); }
+export function refreshSettings() { for (const [id, key] of [['sSound', 'sound'], ['sMusic', 'music'], ['sHaptics', 'haptics'], ['sShake', 'shake'], ['sMotion', 'motion'], ['sTapSlam', 'tapSlam'], ['sAutoDrift', 'autoDrift']]) { const el = $(id); el.classList.toggle('on', !!S[key]); el.setAttribute('aria-checked', S[key] ? 'true' : 'false'); } $('sHand').textContent = S.left ? 'LEFT' : 'RIGHT'; $('sCam').textContent = S.camera; { const f = $('sFps'); f.classList.toggle('on', !!S.showFps); f.setAttribute('aria-checked', S.showFps ? 'true' : 'false'); } $('sSens').value = S.sens; $('sSensVal').textContent = S.sens.toFixed(1) + '×'; ui.special.classList.toggle('left', S.left); ui.pad.classList.toggle('left', S.left); ui.gas.classList.toggle('left', S.left); ui.fire.classList.toggle('left', S.left); }

@@ -6,6 +6,7 @@
 //   mode: active  (default) rams enemies, Slams in the Bruiser hold/tell window, takes ramps and trucks, fires specials
 //         passive  holds the lane with a thumb down, never Slams: checks that damage and death work
 //         idle     never touches the screen after the run starts: the "game plays itself" test (gate: < 5 wrecks/min)
+//         novice   a weak driver: no gas, holds FIRE all the time, aims late, brakes late for corners, never Slams or drifts
 //         sweep    makes ordinary fast lane changes with real pointer events at 450, 600 and 900 pt/s and counts
 //                  the flicks the detector sees and the Slams that fire (gate: < 1 accidental Slam per 10 min)
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
@@ -28,6 +29,7 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 }, devi
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error' && !/ERR_CERT|net::/.test(m.text())) errors.push('console: ' + m.text()); });
+await page.addInitScript(() => { if (new URLSearchParams(location.search).get('fine')) globalThis.__fineHash = true; });
 await page.goto(pageUrl + '?' + [seed !== null ? 'seed=' + seed : '', opt.query || ''].filter(Boolean).join('&'));   // --query=r=canvas&wall=1 adds page options
 await page.waitForTimeout(600);
 if (shots) try { await page.screenshot({ path: path.join(out, 'shunt-title.png'), timeout: 10000 }); } catch (e) { console.log('title screenshot skipped'); }
@@ -56,21 +58,26 @@ for (let i = 0; i < seconds * 10; i++) {
     const road = g.road.at(g.dist); const center = road.center, width = road.width; let want = center, slam = 0;
     const e = enemies[0];
     if (e) { if (Math.abs(e.y - g.dist) < 80 && Math.abs(e.x - g.x) < 100 && Math.abs(e.x - g.x) > 30 && g.slamCd <= 0 && (e.state === 'hold' || e.state === 'tell' || e.kind !== 'bruiser')) slam = Math.sign(e.x - g.x); want = e.y > g.dist + 60 ? e.x : g.x + Math.sign(e.x - g.x || 1) * -40; }
-    for (const c of civs) if (Math.abs(c.x - want) < 40) want = c.x + (c.x < center ? 70 : -70);
+    // traffic: if a civilian blocks the wanted spot within 450 pt, take the nearest lane that is open over that stretch (weave lines leave one gap)
+    { const blockers = g.cars.filter(c => c.alive && !c.wrecked && (c.kind === 'civ' || c.kind === 'armored') && c.y > g.dist + 10 && c.y < g.dist + 450); const nl = g.road.laneCount(g.dist + 250); const wide = (c) => c.kind === 'armored' ? 86 : 46;
+      if (blockers.some(c => Math.abs(c.x - want) < wide(c))) { let best = null; for (let i = 0; i < nl; i++) { const lx = g.road.laneX(g.dist + 250, i); if (blockers.some(c => Math.abs(c.x - lx) < wide(c))) continue; if (best === null || Math.abs(lx - g.x) < Math.abs(best - g.x)) best = lx; } if (best !== null) want = best; else for (const c of civs) if (Math.abs(c.x - want) < 40) want = c.x + (c.x < center ? 70 : -70); } }
     const truck = g.cars.find(c => c.kind === 'truck' && !c.loaded && c.y > g.dist); if (truck && truck.y - g.dist < 600) want = truck.x;
     const ramp = g.ramps.find(r => !r.used && r.y > g.dist); if (ramp && ramp.y - g.dist < 450) want = ramp.x;
     const barrier = g.barriers.find(b => !b.hit && b.y > g.dist && b.y - g.dist < 400); if (barrier && !ramp) want = center - width / 2 + 30;
     // drift plan: an enemy beside or just ahead at speed → hold the pad and steer into it for a drift slam; a civ dead ahead → brake
     let drift = 0, brake = false; if (e && g.speed > 500 && Math.abs(e.y - g.dist) < 140 && Math.abs(e.x - g.x) > 30 && Math.abs(e.x - g.x) < 130 && !g.drifting) drift = Math.sign(e.x - g.x);
     if (g.drifting) drift = g.driftDir; if (g.drifting && g.driftT > 1.8) drift = 0;
-    const ahead = civs.find(c => Math.abs(c.x - g.x) < 30 && c.y - g.dist > 40 && c.y - g.dist < 170); if (ahead && !g.drifting) brake = true;
+    const ahead = civs.find(c => Math.abs(c.x - g.x) < 30 && c.y - g.dist > 40 && c.y - g.dist < 170); if (ahead && !g.drifting && g.speed > 400) brake = true;
     // corners: a hard corner ahead and too fast for grip → brake, then drift through it toward the inside
     const cn = g.road.cornerAhead(g.dist, 2.2 * g.speed); if (cn && cn.hard) { const inCorner = g.dist >= cn.s0 - 60 && g.dist <= cn.s1; if (inCorner) { const w = g.road.at(g.dist).width; want = 195 + cn.dir * (w / 2 - 40); if (g.speed > cn.vmax * 0.9 && !g.drifting && !drift) drift = cn.dir; else if (g.drifting) drift = g.driftDir; } else if (g.speed > cn.vmax * 1.05) brake = true; }
+    if (mode === 'novice' && Math.floor(g.t * 10) % 2 === 0) { const lunge = g.cars.find(c => c.alive && (c.state === 'tell') && Math.abs(c.y - g.dist) < 110 && Math.abs(c.x - g.x) < 120); if (lunge) want = g.x + (lunge.x > g.x ? -80 : 80); }   // a weak driver sometimes sees the flash and moves
+    if (mode === 'novice') { slam = 0; drift = 0; brake = !!(cn && cn.hard && g.speed > cn.vmax * 1.05 && cn.s0 - g.dist < 1.3 * g.speed && g.dist < cn.s1); }   // a weak driver: no Slam, no drift, late braking
     // gas: a clear lane ahead and no hard corner coming; fire: a live enemy within the gun's reach and roughly ahead
     const clearAhead = !civs.some(c => Math.abs(c.x - g.x) < 40 && c.y - g.dist > 0 && c.y - g.dist < 320) && !(cn && cn.hard && g.dist > cn.s0 - 2.2 * g.speed && g.dist < cn.s1); const gas = mode === 'active' && clearAhead && !brake && !drift;
-    const fire = mode === 'active' && g.cars.some(c => c.alive && !c.wrecked && c.kind !== 'civ' && c.kind !== 'truck' && c.y > g.dist + 20 && c.y < g.dist + 600 && Math.abs(c.x - g.x) < 90);
+    const fire = (mode === 'novice') || mode === 'active' && g.cars.some(c => c.alive && !c.wrecked && c.kind !== 'civ' && c.kind !== 'truck' && c.y > g.dist - 40 && c.y < g.dist + 800 && Math.abs(c.x - g.x) < 160);   // the gatling has no aim help and a one second spin-up: the bot holds FIRE while any enemy is about, and steers into its lane
     return { phase: window.__shunt.phase, t: g.t, x: g.x, want, slam, drift, brake, gas, fire, speed: g.speed, drifting: g.drifting, tier: g.driftTier, score: g.score, armor: g.armor, armorLost: g.armorLost, kills: g.kills, passive: g.passiveWrecks, carKills: g.carKills, gunKills: g.gunKills, slams: g.slams, flicks: g.flicks, misses: g.flickMisses, special: g.special, lastEvent: g.lastEvent, near: near.length, cause: g.killedBy, gun: g.gun, wave: g.wave };
   }, mode);
+  if (s.phase === 'won' || s.phase === 'victory') { console.log('CITY REACHED at', s.t.toFixed(1), 's: score', s.score, 'kills', s.kills, 'armor', s.armor); break; }
   if (s.phase === 'over' || (opt.sync && s.phase === 'dying')) { console.log('DIED at', s.t.toFixed(1), 's:', s.cause, '| score', s.score, 'kills', s.kills, 'slams', s.slams); await page.waitForTimeout(900); if (shots) try { await page.screenshot({ path: path.join(out, 'shunt-over.png'), timeout: 10000 }); } catch (e) {} break; }
   if (s.phase === 'playing') { samples++; if (s.near >= 2) twoPlus++; if (s.t > 3 && s.t - s.lastEvent > maxGap) maxGap = s.t - s.lastEvent; }
   if (mode === 'sweep') { sweepTimer += 0.1; if (sweepTimer >= 1.5) { sweepTimer = 0; const speed = SPEEDS[sweepN % SPEEDS.length]; await sweep(speed, 62 + 62 * (Math.floor(sweepN / SPEEDS.length) % 2)); } }

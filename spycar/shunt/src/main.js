@@ -12,10 +12,10 @@ import { input, bindInput } from './input/input.js';
 import { createCanvasRenderer } from './render/canvas.js';
 import { createThreeRenderer } from './render/three/index.js';
 import { createHud } from './ui/hud.js';
-import { createPerf } from './ui/perf.js';
+import { createPerf, createFpsBadge } from './ui/perf.js';
 import { createStudio } from './render/three/studio.js';
 
-let syncRun = false, phase = 'title', now = 0, lastT = 0, elapsed = 0, countdown = 0, pausedFrom = 'playing';
+let capElapsed = 0, syncRun = false, phase = 'title', now = 0, lastT = 0, elapsed = 0, countdown = 0, pausedFrom = 'playing';
 const Q = new URLSearchParams(location.search);
 let seed = Q.get('seed') !== null ? (Number(Q.get('seed')) >>> 0) : (Math.random() * 4294967296) >>> 0, dailyMode = false, best = 0, bestDaily = 0, cash = 0, hadRun = false;
 try { best = Number(localStorage.getItem('shunt-best') || 0); bestDaily = Number(localStorage.getItem('shunt-best-' + localDate()) || 0); cash = Number(localStorage.getItem('shunt-cash') || 0); } catch (e) {}
@@ -27,6 +27,7 @@ const useCanvas = Q.get('r') === 'canvas';
 const renderer = useCanvas ? createCanvasRenderer(cv) : createThreeRenderer(cv, { look: Q.get('look') || 'night' });
 const hud = useCanvas ? null : createHud($('ui'), renderer);
 const perf = createPerf(Q, renderer, hud);
+const fpsBadge = createFpsBadge($('fpsBadge')); fpsBadge.set(S.showFps);
 if (!useCanvas && Q.get('tune') === '1') import('./render/three/tune.js').then(m => m.createTune(renderer, null));
 if (hud) hud.lookToggle([{ key: 'night', label: 'NIGHT' }, { key: 'dusk', label: 'DUSK' }, { key: 'bluehour', label: 'BLUE HOUR' }], renderer.look, (k) => renderer.setLook(k));
 
@@ -51,6 +52,12 @@ function finishDeath() {
   showCard('over', app); if (G.score > prev) { ui.newBest.hidden = false; audio.chime(); }
 }
 
+function finishWin() {
+  phase = 'victory'; hideCallout(); lookBar(true); const prev = dailyMode ? bestDaily : best; const earned = Math.round(G.score * 0.1); cash += earned;
+  try { if (G.score > prev) { if (dailyMode) { bestDaily = G.score; localStorage.setItem('shunt-best-' + localDate(), String(bestDaily)); } else { best = G.score; localStorage.setItem('shunt-best', String(best)); } } localStorage.setItem('shunt-cash', String(cash)); } catch (e) {}
+  showCard('over', app); if (G.score > prev) { ui.newBest.hidden = false; audio.chime(); }
+}
+
 // ---------------- the sim's outbox ----------------
 setInputSource(input);
 setSink((ev) => {
@@ -59,6 +66,7 @@ setSink((ev) => {
     else if (e.k === 'buzz') buzz(e.p);
     else if (e.k === 'say') { if (e.text === null) hideCallout(); else callout(e.text, e.sub, e.ms, e.big); }
     else if (e.k === 'rebase') input.carAnchor += e.d;
+    else if (e.k === 'won') { phase = 'won'; ui.special.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; input.reset(); callout('City reached', '', 2400, true); }
     else if (e.k === 'died') { phase = 'dying'; ui.special.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; input.reset(); }
     else if (e.k === 'special') { if (e.show) { const first = ui.special.hidden; ui.special.hidden = false; if (first) pulseSpecial(); } updateSpecial(G); ui.special.classList.toggle('armed', !!e.armed && !!(G.special && G.special.ammo > 0)); }
     else if (e.k === 'pulse') pulseSpecial();
@@ -69,22 +77,23 @@ function simulate(dt, playing) {
   const minute = G.t / 60;
   audio.setEngine(clamp((Math.abs(G.speed) - 300) / 1000, 0, 1) + (G.air > 0 ? 0.2 : 0) + (G.burnout > 0 ? 0.6 : 0) + (G.in.gas && playing ? 0.15 : 0), playing); audio.setGunSpin(playing ? G.gunSpin : 0); ui.fire.classList.toggle('hot', G.hot > 0);
   audio.setDrive(playing && G.air <= 0 ? clamp((Math.abs(G.slip) * 180 / Math.PI - 8) / 30, 0, 1) + (G.burnout > 0 ? 0.6 : 0) : 0, playing && G.scraping ? 1 : 0);
-  audio.music(dt, G.wave === 'pressure' ? (minute > 1 ? 2 : 1) : 0);
+  audio.music(dt, G.finale ? 3 : G.prog > 0.3 ? 2 : 1);
 }
 
 // ---------------- input and UI wiring ----------------
 bindInput({
   onTouch() { audio.init(); audio.resume(); },
-  canTouch() { return !(phase === 'over' || phase === 'paused' || phase === 'countdown'); },
+  canTouch() { return !(phase === 'over' || phase === 'victory' || phase === 'paused' || phase === 'countdown'); },
   onStart() { if (phase === 'title') { freshRun(false); startPlaying(); } },
-  onRestartKey() { if (phase === 'over') { restartAndPlay(false); return true; } return false; },
+  onRestartKey() { if (phase === 'over' || phase === 'victory') { restartAndPlay(false); return true; } return false; },
   onPause() { togglePause(); },
   onHide() { if (phase === 'playing' || phase === 'countdown') pause(); },
 });
 for (const [id, key] of [['sSound', 'sound'], ['sMusic', 'music'], ['sHaptics', 'haptics'], ['sShake', 'shake'], ['sMotion', 'motion'], ['sHand', 'left'], ['sTapSlam', 'tapSlam'], ['sAutoDrift', 'autoDrift']]) $(id).addEventListener('click', () => { S[key] = !S[key]; saveSettings(); audio.apply(); refreshSettings(); });
 $('sSens').addEventListener('input', e => { S.sens = parseFloat(e.target.value); saveSettings(); refreshSettings(); });
 $('sBench').addEventListener('click', () => { ui.card.hidden = true; perf.startBench('1', loadReplay); });
-$('sPerf').addEventListener('click', () => { $('sPerf').classList.toggle('on', perf.togglePerf()); });
+$('sFps').addEventListener('click', () => { S.showFps = !S.showFps; saveSettings(); fpsBadge.set(S.showFps); refreshSettings(); });
+$('sCam').addEventListener('click', () => { S.camera = S.camera === 'A' ? 'B' : 'A'; saveSettings(); refreshSettings(); });
 ui.primary.addEventListener('click', () => { audio.init(); audio.resume(); if (screen() === 'title') { freshRun(false); startPlaying(); } else if (screen() === 'pause') resume(); else if (screen() === 'over') restartAndPlay(false); else if (screen() === 'settings') { if (settingsFrom() === 'pause') showCard('pause', app); else if (settingsFrom() === 'over') showCard('over', app); else enterTitle(); } });
 ui.a.addEventListener('click', () => { audio.init(); if (screen() === 'title') { dailyMode = !dailyMode; freshRun(true); showCard('title', app); } else if (screen() === 'pause') { freshRun(false); startPlaying(); phase = 'playing'; } else if (screen() === 'over') restartAndPlay(true); });
 ui.b.addEventListener('click', () => { audio.init(); if (screen() === 'title' || screen() === 'pause') { setSettingsFrom(screen()); showCard('settings', app); } else if (screen() === 'over') { freshRun(false); enterTitle(); } });
@@ -92,14 +101,16 @@ ui.c.addEventListener('click', () => { audio.init(); if (screen() === 'pause') {
 
 // ---------------- loop ----------------
 function frame(t) {
-  const ts = t / 1000; if (!lastT) lastT = ts; const dt = Math.min(Math.max(ts - lastT, 0), 1 / 20); lastT = ts; now = ts; input.now = ts; input.playing = phase === 'playing';
+  const ts = t / 1000; if (!lastT) lastT = ts; const rawDt = ts - lastT; fpsBadge.frame(rawDt, ts); const dt = Math.min(Math.max(ts - lastT, 0), 1 / 20); lastT = ts; now = ts; input.now = ts; input.playing = phase === 'playing';
   if (phase !== 'paused' && !syncRun) {
     elapsed += dt;
     if (phase === 'countdown') { countdown -= dt; const n = Math.ceil(countdown); if (n <= 0) { phase = 'playing'; hideCallout(); ui.callout.classList.remove('big'); } else callout(String(n), '', 0, true); }
     else if (phase === 'title') simulate(dt, false);
     else if (phase === 'playing') simulate(dt, true);
     else if (phase === 'dying') { G.deathT += dt; simulate(dt * 0.3, false); if (G.deathT >= 1.2) finishDeath(); }
+    else if (phase === 'won') { G.winT += dt; simulate(dt, false); if (G.winT >= 2.6) finishWin(); }
     else if (phase === 'over') G.replayT += dt;
+    else if (phase === 'victory') simulate(dt, false);
     const st = { G, phase, elapsed, best, bestDaily, dailyMode }; renderer.render(dt, st); if (hud) hud.update(st); perf.frame(dt, st);
   }
   requestAnimationFrame(frame);
@@ -120,7 +131,10 @@ window.__shunt = {
   get phase() { return phase; }, get G() { return G; }, get T() { return T; }, get S() { return S; }, input, slamTarget, app,
   fireSpecial: () => input.requestSpecial(), trySlam: (d) => input.requestSlam(d),
   startPlaying: () => { freshRun(false); startPlaying(); },
-  record: (bot) => startRecording(bot), exportReplay, loadReplay, runSteps: (n) => { syncRun = true; return runSteps(n, phase === 'playing'); }, hashState, STEP: STEP_LEN,
+  resume: () => { syncRun = false; lastT = 0; },   // hand the sim back to the frame loop after synchronous stepping (capture tools)
+  audio, record: (bot) => startRecording(bot), exportReplay, loadReplay, runSteps: (n) => { syncRun = true; return runSteps(n, phase === 'playing'); }, hashState, STEP: STEP_LEN,
   renderer: () => renderer, perf, get phaseName() { return phase; },
+  // for the capture tool: render one frame now (the sim is stepped by runSteps, which stops the frame loop simulating)
+  renderFrame: (dt) => { capElapsed += dt; const st = { G, phase, elapsed: capElapsed, best, bestDaily, dailyMode }; renderer.render(dt, st); if (hud) hud.update(st); },
 };
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start); else start();

@@ -43,3 +43,15 @@ Jack's calls after Stop Point 1: the sim is open again. Done in step A (commit "
   baselines retired; new ones recorded with `--sync` bots (sim-paced) into replays/.
 - `?lite=1` (half res, no shadows/post) for headless bots; `?cam=pitch,dist,fov` for camera comparison shots.
 - This container's SwiftShader is ~4 fps at full quality: use `--sync` for every bot; never two browsers at once.
+
+## Sprint D, Stop 1: FUN FIRST (branch `shunt-3d`)
+Jack's v18 verdict: not fun yet (nothing happening, no goal, hits feel weak). Done in this stop, sim changed (replay rev `D1`):
+- Settings > Developer: Camera A (high, Sprint 3D) / B (low and close, Sprint 4) and Show FPS (now + lowest in 10 s), both remembered (`localStorage` key `shunt-settings`: `camera`, `showFps`).
+- Pacing director (`src/sim/director.js`, replaces the scripted first minute and the 40 s / 10 s wave cycle): waves every 8 to 15 s by progress (Darts, Rams, Gunners, a Bulwark), a floor so the road is never quiet (spawns at once if no attacker in the window), weave lines of slow traffic, pickups (armor, missiles) when low, near-miss bonus. Names: Dart = kind `weak`, Ram = `bruiser`, Gunner = `gunner`, Bulwark = `armored`. Dart is now a real attacker (short tell, 0.5 armor clip).
+- Gatling (`wpn_gatling.glb`, built by `tools/make-gatling.mjs`, inlined with Vite `?inline`): `T.gatling`, no aim help, 1 s spin-up, 20 rounds/s, spray of +-3 degrees. Hit: sparks + flash + tick + tiny kick. Kill: 60 ms hit stop, shake, flash, bigger explosion, score popup. Ram hits: crunch sample, sparks, shove (`slideVx`), kick.
+- Goal: `T.goal.city` = 120,000 pt (about 3 minutes), progress bar at the top, combo x2..x5 (3 s chain, 4 s hold, crash resets), finale at 90% (soft heavy wave + Bulwark), `win()` at the city, end card with stars (`T.goal.stars`).
+- Mercy rules (for weak drivers): half damage for 60 s, `T.mercy` pause after a hit (double on one pip), heavy enemies become Darts on one pip, armor crate within 1.5 s when on one pip, finale enemies are soft.
+- Hero car: static meshes merged by material (about 90 meshes to 10): the frame was 187 to 197 draw calls before this stop, 114 after (full quality).
+- Bug found by determinism check: `nearLane` could return `undefined` (player off the lane range) which spawned a NaN car and a NaN bot input; fixed, and `input.snapshot` refuses NaN.
+- Baselines: `replays/fun-s{1,2,3}-{active,idle}.json` and `replays/beauty.json` (rev D1). The six `wall-*.json` Sprint 4 baselines are retired (they cannot match this sim).
+- Tools: `tools/pacing.mjs` (dead-time report from replays, `--weakAttacks` after D1), `tools/killcam.mjs` (frame-by-frame capture of a kill sequence), `tools/wincard.mjs` (finale and end card shots), `tools/make-gatling.mjs`, playtest `novice` mode and `?fine=1` per-6-step hashes for debugging a replay divergence.

@@ -1,0 +1,9 @@
+file                    bot     secs  end        no-enemy%  longest-no-enemy  no-attacker%  longest-no-attacker  kills  s/kill  longest-kill-gap  avg-on-screen
+wall-s1-active.json     active   107.4 died            8.7               2.0          33.2                  7.2     54     2.0               5.7           1.29
+wall-s1-idle.json       idle      51.9 died            0.8               0.4           8.7                  3.0      6     8.7              17.1           3.11
+wall-s2-active.json     active   120.0 alive           4.0               2.1          18.6                  8.0     46     2.6              16.7           1.48
+wall-s2-idle.json       idle      47.1 died            3.2               1.5           5.3                  2.5      1    47.1              31.3           3.52
+wall-s3-active.json     active   120.0 alive           4.8               1.3          19.7                  3.0     50     2.4              11.4           1.49
+wall-s3-idle.json       idle      22.9 died            0.9               0.2           6.6                  1.5      0     -                22.9           2.26
+ALL (time weighted): no-enemy 4.7%  no-attacker 19.2%  longest no-enemy 2.1 s  longest no-attacker 8.0 s  kills 157  s/kill 3.0  longest kill gap 31.3 s  total 469 s
+errors none

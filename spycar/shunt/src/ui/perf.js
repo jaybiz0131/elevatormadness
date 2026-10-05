@@ -2,6 +2,24 @@
 // the beauty route, then shows average fps, 1% low, worst frame and the resolution scale it settled on. ?bench=soak: ten minutes,
 // first minute against last. ?shots=1 plays the same run for the postcard tool. Headless numbers are not iPhone numbers.
 import bench from '../../replays/beauty.json';
+// Show FPS (Settings > Developer, remembered): the current rate (last half second) and the lowest rate seen in the last 10 s, from raw
+// frame times, so a hitch shows. Separate from the ?perf=1 overlay, which is the detailed one.
+export function createFpsBadge(el) {
+  const ring = new Float32Array(1200); let n = 0, head = 0, acc = 0, frames = 0, shown = 0, on = false;   // up to 120 fps x 10 s of per-frame times
+  const t = new Float32Array(1200);
+  return {
+    set(v) { on = !!v; el.hidden = !on; if (on) { n = 0; head = 0; acc = 0; frames = 0; shown = 0; } },
+    reset() { n = 0; head = 0; acc = 0; frames = 0; },
+    frame(raw, now) {
+      if (!on || raw <= 0 || raw > 0.5) return;
+      ring[head] = raw; t[head] = now; head = (head + 1) % ring.length; n = Math.min(n + 1, ring.length); acc += raw; frames++;
+      if (now - shown < 0.25) return; shown = now;
+      const cur = frames / acc; acc = 0; frames = 0; let worst = 0;
+      for (let i = 0; i < n; i++) { const k = (head - 1 - i + ring.length) % ring.length; if (now - t[k] > 10) break; if (ring[k] > worst) worst = ring[k]; }
+      el.textContent = Math.round(cur) + ' FPS\nLOW ' + Math.round(1 / Math.max(worst, 1e-3)) + ' (10 s)';
+    },
+  };
+}
 export function createPerf(Q, renderer, hud) {
   let mode = Q.get('bench'); let show = Q.get('perf') === '1' || !!mode; const shots = Q.get('shots') === '1';
   let el = null; function overlay() { if (el) return; el = document.createElement('div'); el.style.cssText = 'position:absolute;left:12px;top:calc(110px + var(--safe-top,0px));font:600 13px/1.4 monospace;color:#9fe;background:rgba(0,0,0,0.55);padding:6px 8px;border-radius:6px;pointer-events:none;white-space:pre;z-index:5'; document.getElementById('ui').appendChild(el); }

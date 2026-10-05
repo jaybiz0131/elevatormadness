@@ -1,5 +1,5 @@
 import { REF, T, clamp, fmt, lerp } from './constants.js';
-import { event, playerLane } from './director.js';
+import { event, playerLane, progress } from './director.js';
 import { emit, hap, say, sfx } from './events.js';
 import { DISTRICTS } from './road.js';
 import { G, compact, recordReplay } from './state.js';
@@ -57,7 +57,7 @@ export function physics(dt, playing) {
     // the log row for the corner the car is in (the next corner is announced before this one's apex, so never "the last row")
     if (cn) { const L = cornerRow(cn); if (L) { if (cn.hard && Math.abs(G.dist - cn.apex) < 30 && !L.apexSpeed) L.apexSpeed = Math.round(G.speed); if (G.drifting) L.drift = true; if (G.scraping) L.scraped = true; if (L.enterT === undefined) { L.enterT = G.t; L.s0 = cn.s0; L.s1 = cn.s1; } if (G.braking) L.braked = true; } }
     for (let i = G.cornerLog.length - 1; i >= 0 && i >= G.cornerLog.length - 4; i--) { const L = G.cornerLog[i]; if (L.enterT !== undefined && L.exitT === undefined && G.dist > L.s1 + 500) L.exitT = G.t; } }   // the window includes 500 pt of exit, where a hit costs its time
-  if (G.invuln > 0) G.invuln -= dt;
+  if (G.invuln > 0) G.invuln -= dt; if (G.mercyT > 0) G.mercyT -= dt;
   // --- cars
   for (const c of G.cars) {
     if (!c.alive) continue; c.t += dt; if (c.hitCd > 0) c.hitCd -= dt; if (c.honk > 0) c.honk -= dt; if (c.hitFlash > 0) c.hitFlash -= dt;
@@ -65,7 +65,7 @@ export function physics(dt, playing) {
     if (c.wrecked) { c.debrisT -= dt; c.y += c.speed * dt; c.x += c.vx * dt; c.vx *= Math.exp(-dt * 2.2); c.speed += (G.speed * 0.3 - c.speed) * Math.min(1, dt * 1.5); c.spin += (3 + Math.abs(c.vx) / 60) * dt; c.flip = Math.min(1, c.flip + dt * 2); if (c.y < G.dist - 500 || c.debrisT < -3) c.alive = false; continue; }
     const a = G.road.at(c.y); const hw = c.w / 2; const l = a.center - a.width / 2 + hw, r = a.center + a.width / 2 - hw;
     // traffic model: each car has a world speed
-    if (c.kind === 'civ' || c.kind === 'weak' || c.kind === 'truck' || c.kind === 'armored') {
+    if (c.kind === 'civ' || c.kind === 'truck' || c.kind === 'armored') {
       const kc = Math.abs(G.road.at(c.y).k); const slow = 1 - T.corner.trafficSlow * clamp(kc * 250, 0, 1);   // traffic slows for corners
       c.speed += (G.cruise * c.factor * slow - c.speed) * Math.min(1, dt * 2);
       // civilians change lanes occasionally with a blinker first
@@ -73,7 +73,7 @@ export function physics(dt, playing) {
       if (c.lane >= G.road.laneCount(c.y)) c.lane = G.road.laneCount(c.y) - 1;   // bug 9
       const tx = c.kind === 'armored' ? (G.road.laneX(c.y, c.lane) + G.road.laneX(c.y, Math.min(c.lane + 1, G.road.laneCount(c.y) - 1))) / 2 : G.road.laneX(c.y, c.lane);
       if (Math.abs(c.vx) < 60) c.x += (tx - c.x) * Math.min(1, dt * 2.5);
-    } else if (c.kind === 'bruiser' || c.kind === 'gunner') {
+    } else if (c.kind === 'bruiser' || c.kind === 'gunner' || c.kind === 'weak') {
       if (c.lane >= G.road.laneCount(c.y)) c.lane = G.road.laneCount(c.y) - 1;
       enemyAI(c, dt, playing);
     }
@@ -97,8 +97,8 @@ export function physics(dt, playing) {
   for (const s of G.slicks) { s.t -= dt; for (const c of live) if (c.alive && !c.wrecked && c.kind !== 'truck' && Math.abs(c.x - s.x) < 30 && Math.abs(c.y - s.y) < 40 && !c.spun) { c.spun = true; c.vx = (G.rng() < 0.5 ? -1 : 1) * 300; c.shunted = true; creditCar(c, 'oil'); c.spinOut = 1.0; if (c.kind === 'civ') c.penalised = true; } }
   compact(G.slicks, s => s.t > 0);
   // bullets
-  for (const b of G.bullets) { b.py = b.y; b.y += (b.vy === undefined ? T.bulletSpeed : b.vy) * dt; b.x += (b.vx || 0) * dt; b.life = (b.life || 0) + dt; }
-  compact(G.bullets, b => { if (b.y > G.dist + 900 || b.y < G.dist - 400 || b.life > 0.8 || Math.abs(b.x - REF) > 700) return false; for (const c of live) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck') continue; if (Math.abs(b.x - c.x) < c.w / 2 && Math.abs(b.y - c.y) < c.l / 2) { gunHit(c, b); return false; } } for (const br of G.barrels) if (br.alive && Math.abs(b.x - br.x) < 12 && Math.abs(b.y - br.y) < 14) { explodeBarrel(br, true); return false; } return true; });
+  for (const b of G.bullets) { b.py = b.y; b.y += (b.vy === undefined ? T.bulletSpeed : b.vy) * dt; b.x += (b.vx || 0) * dt; b.life = (b.life || 0) + dt; }   // road space: the round keeps the car's own speed, so it closes on traffic at the muzzle speed
+  compact(G.bullets, b => { if (b.y > G.dist + 900 || b.y < G.dist - 400 || b.life > 0.62 || Math.abs(b.x - REF) > 700) return false; for (const c of live) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck') continue; if (Math.abs(b.x - c.x) < c.w / 2 && Math.abs(b.y - c.y) < c.l / 2) { gunHit(c, b); return false; } } for (const br of G.barrels) if (br.alive && Math.abs(b.x - br.x) < 12 && Math.abs(b.y - br.y) < 14) { explodeBarrel(br, true); return false; } return true; });
   // missiles: arc, smoke, splash 40 pt
   for (const m of G.missiles) { let target = null, best = 1e9; for (const c of live) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck' || c.y <= m.y - 20) continue; const d = Math.hypot(c.x - m.x, c.y - m.y); if (d < best) { best = d; target = c; } } m.t += dt; m.py = m.y; if (target) m.x += (target.x - m.x) * Math.min(1, dt * 5); m.y += (700 + 400 * Math.min(1, m.t * 2)) * dt; if (G.rng() < 0.7) addDebris(m.x + (G.rng() - 0.5) * 6, m.y - 10, 0, G.speed * 0.5, 0.5, 'rgba(200,200,200,0.5)', 6, true); if (target && Math.abs(m.x - target.x) < 22 && Math.abs(m.y - target.y) < target.l / 2 + 10) { m.dead = true; G.fx.push({ x: m.x, y: m.y, t: 0, life: 0.5, big: true }); for (const c of live) if (c.alive && !c.wrecked && c.kind !== 'civ' && c.kind !== 'truck' && Math.abs(c.x - m.x) < 40 + c.w / 2 && Math.abs(c.y - m.y) < 40 + c.l / 2) wreck(c, 'missile', true); } if (m.y > G.dist + 1200) m.dead = true; }
   compact(G.missiles, m => !m.dead);
@@ -261,8 +261,9 @@ export function driveEffects(dt) {
   compact(G.ribbons, r => { if (!(r.done && r.t > 6) && !(r.pts.length && r.pts[r.pts.length - 2] < G.dist - 500)) return true; pool.ribbons.push(r); return false; });
 }
 export function enemyAI(c, dt, playing) {
-  const py = G.dist, px = G.x; const closeCap = T.bruiser.closeCap, dropCap = T.bruiser.dropCap;
-  const slotY = () => c.kind === 'gunner' ? py - 230 : py + 6;
+  const py = G.dist, px = G.x; const P = c.kind === 'weak' ? T.dart : T.bruiser; const closeCap = P.closeCap, dropCap = P.dropCap; const soft = c.soft ? 1.5 : 1;   // soft: the finale's enemies are slower to strike
+  if (c.slotOff === undefined) c.slotOff = c.kind === 'weak' ? (G.rng() * 2 - 1) * 60 : 0;
+  const slotY = () => c.kind === 'gunner' ? py - 230 : py + 6 + c.slotOff;
   const slotLane = () => { const pl = playerLane(); const n = G.road.laneCount(c.y); let l = pl + c.side; if (l < 0 || l >= n) { c.side = -c.side; l = pl + c.side; } return clamp(l, 0, n - 1); };
   // chase speed: player speed plus a closing term toward the slot, capped
   const target = slotY(); const closing = clamp((target - c.y) * 1.6, -dropCap, closeCap);
@@ -270,18 +271,18 @@ export function enemyAI(c, dt, playing) {
   const wanted = Math.min(gripMax, Math.max(G.speed + closing, G.cruise * 0.5)); c.speed += (wanted - c.speed) * Math.min(1, dt * 3);
   if (c.spinOut > 0) { c.spinOut -= dt; c.spin += 8 * dt; return; } else c.spin *= Math.exp(-dt * 6);
   if (!playing) return;
-  if (c.kind === 'bruiser') {
-    if (c.state === 'approach') { c.lane = slotLane(); const tx = G.road.laneX(c.y, c.lane); c.x += (tx - c.x) * Math.min(1, dt * 4); if (Math.abs(c.y - target) < 40 && Math.abs(c.x - tx) < 8) { c.state = 'hold'; c.t = 0; c.holdFor = c.slowDuel ? 2.2 : T.bruiser.hold[0] + G.rng() * (T.bruiser.hold[1] - T.bruiser.hold[0]); if (c.teach && G.teach === null && G.script === 3) G.teach = 'slam'; } }
-    else if (c.state === 'hold') { const tx = G.road.laneX(c.y, c.lane) + G.vx * 0.05; c.x += (tx - c.x) * Math.min(1, dt * 4); if (c.t >= c.holdFor) { c.state = 'tell'; c.t = 0; c.lean = 0; sfx.sight(); } }
-    else if (c.state === 'tell') { c.lean = (c.t / T.bruiser.tell) * (px < c.x ? -1 : 1) * 8; if (c.t >= T.bruiser.tell) { c.state = 'swerve'; c.t = 0; c.dir = px < c.x ? -1 : 1; c.swerveLeft = T.bruiser.lunge; event(); } }
-    else if (c.state === 'swerve') { const stepX = Math.min(c.swerveLeft, T.bruiser.lungeSpeed * dt); c.x += c.dir * stepX; c.swerveLeft -= stepX; if (c.swerveLeft <= 0 || c.t > 0.5) { c.state = 'recover'; c.t = 0; c.lean = 0; } }
-    else if (c.state === 'recover') { const tx = G.road.laneX(c.y, c.lane); c.x += (tx - c.x) * Math.min(1, dt * 3); if (c.t >= T.bruiser.recover) { c.state = 'approach'; c.t = 0; c.side = G.rng() < 0.3 ? -c.side : c.side; } }
+  if (c.kind === 'bruiser' || c.kind === 'weak') {
+    if (c.state === 'approach') { c.lane = slotLane(); const tx = G.road.laneX(c.y, c.lane); c.x += (tx - c.x) * Math.min(1, dt * 4); if (Math.abs(c.y - target) < 40 && Math.abs(c.x - tx) < 8) { c.state = 'hold'; c.t = 0; c.holdFor = (P.hold[0] + G.rng() * (P.hold[1] - P.hold[0])) * soft; } }
+    else if (c.state === 'hold') { const tx = G.road.laneX(c.y, c.lane) + G.vx * 0.05; c.x += (tx - c.x) * Math.min(1, dt * 4); if (c.t >= c.holdFor && G.mercyT <= 0) { c.state = 'tell'; c.t = 0; c.lean = 0; sfx.sight(); } }
+    else if (c.state === 'tell') { c.lean = Math.min(1, c.t / (P.tell * soft)) * (px < c.x ? -1 : 1) * 8; if (c.t >= P.tell * soft) { c.state = 'swerve'; c.t = 0; c.dir = px < c.x ? -1 : 1; c.swerveLeft = P.lunge; event(); } }
+    else if (c.state === 'swerve') { const stepX = Math.min(c.swerveLeft, P.lungeSpeed * dt); c.x += c.dir * stepX; c.swerveLeft -= stepX; if (c.swerveLeft <= 0 || c.t > 0.5) { c.state = 'recover'; c.t = 0; c.lean = 0; } }
+    else if (c.state === 'recover') { const tx = G.road.laneX(c.y, c.lane); c.x += (tx - c.x) * Math.min(1, dt * 3); if (c.t >= P.recover) { c.state = 'approach'; c.t = 0; c.side = G.rng() < 0.3 ? -c.side : c.side; } }
   } else if (c.kind === 'gunner') {
     // sits behind, red sight line for 0.8 s, fires along it, then repositions
     c.lane = c.lane === undefined ? playerLane() : c.lane; const tx = G.road.laneX(c.y, c.lane); c.x += (tx - c.x) * Math.min(1, dt * 3);
     if (c.cd > 0) c.cd -= dt;
-    if (c.state !== 'sight' && c.cd <= 0 && Math.abs(c.y - target) < 120 && c.y < py) { c.state = 'sight'; c.sight = 0; c.sightX = c.x; sfx.sight(); event(); }
-    if (c.state === 'sight') { c.sight += dt; if (c.sight >= T.gunner.sight) { c.state = 'approach'; c.cd = T.gunner.cooldown; c.lane = playerLane(); G.fx.push({ x: c.sightX, y: c.y + 300, t: 0, life: 0.25, line: true, x0: c.sightX, y0: c.y }); sfx.cannon(); if (G.air <= 0 && Math.abs(G.x - c.sightX) < 22 && G.dist > c.y) damage(1, c, 'Shot by a Gunner van'); } }
+    if (c.state !== 'sight' && c.cd <= 0 && G.mercyT <= 0 && Math.abs(c.y - target) < 120 && c.y < py) { c.state = 'sight'; c.sight = 0; c.sightX = c.x; sfx.sight(); event(); }
+    if (c.state === 'sight') { c.sight += dt; if (c.sight >= T.gunner.sight * (c.soft ? 1.4 : 1)) { c.state = 'approach'; c.cd = T.gunner.cooldown * soft; c.lane = playerLane(); G.fx.push({ x: c.sightX, y: c.y + 300, t: 0, life: 0.25, line: true, x0: c.sightX, y0: c.y }); sfx.cannon(); if (G.air <= 0 && Math.abs(G.x - c.sightX) < 22 && G.dist > c.y) damage(1, c, 'Shot by a Gunner'); } }
   }
 }
 export function carPair(a, b) {
@@ -306,7 +307,7 @@ export function resolveShunt(mover, other) {
 }
 export function contactPlayer(c) {
   // Close Call: passing a civilian within 12 pt at speed, without touching it
-  if (c.kind === 'civ' && !c.wrecked && !c.closeCalled && !c.penalised && G.speed > 380) { const gapX = Math.abs(c.x - G.x) - (c.w + 34) / 2; if (gapX >= 0 && gapX <= 12 && Math.abs(c.y - G.dist) < (c.l + 60) / 2) { c.closeCalled = true; addScore(T.score.closeCall, c.x, c.y, false, 'CLOSE CALL'); G.comboT = Math.min(T.combo.window, G.comboT + 0.5); sfx.ping(false); event(); } }
+  if (c.kind === 'civ' && !c.wrecked && !c.closeCalled && !c.penalised && G.speed > 380) { const gapX = Math.abs(c.x - G.x) - (c.w + 34) / 2; if (gapX >= 0 && gapX <= T.pace.nearMiss && Math.abs(c.y - G.dist) < (c.l + 60) / 2) { c.closeCalled = true; G.nearMisses++; addScore(Math.round(T.score.closeCall * (1 + clamp((G.speed - 480) / 600, 0, 1))), c.x, c.y, false, 'NEAR MISS'); if (G.combo > 0) G.comboT = Math.min(T.combo.hold, G.comboT + 0.6); G.speedLines = Math.max(G.speedLines, 0.25); sfx.whoosh(); hap(8); event(); } }
   if (c.wrecked) { const dx = c.x - G.x, dy = c.y - G.dist; if (Math.abs(dx) < (c.w + 34) / 2 && Math.abs(dy) < (c.l + 60) / 2) { c.vx += Math.sign(dx || 1) * 200; G.vx -= Math.sign(dx || 1) * 60; spark(G.x, G.dist, 2); } return; }
   const dx = c.x - G.x, dy = c.y - G.dist; const hw = (c.w + 34) / 2, hl = (c.l + 60) / 2;
   if (Math.abs(dx) >= hw || Math.abs(dy) >= hl) return;
@@ -314,26 +315,26 @@ export function contactPlayer(c) {
   const s = Math.sign(dx || 1);
   if (c.kind === 'truck') { if (!side && dy > 0) { G.x -= s * 2; G.speed *= 0.98; G.boost = -40; } else { c.x += s * (hw - Math.abs(dx)); G.x -= s * 2; } return; }
   if (c.kind === 'civ') { if (side) { c.vx = s * 180; c.honk = 0.6; G.x -= s * (hw - Math.abs(dx)); G.vx = -s * 100; } else { c.y += (hl - Math.abs(dy)); c.honk = 0.6; G.boost = -60; } if (!c.penalised) { c.penalised = true; G.civHits++; G.driftDirty = true; addScore(T.score.civilian, c.x, c.y, true, 'CIVILIAN'); G.combo = 0; G.comboT = 0; sfx.horn(); hap([15, 40, 15]); } return; }
-  if (c.kind === 'armored') { if (!side && dy > 0) { if (c.hitCd <= 0) { c.hitCd = T.rearCd; damage(1, c, 'Rammed the armored truck'); G.boost = -150; G.x -= s * 4; } } else { G.x -= s * (hw - Math.abs(dx)); G.vx = -s * 150; if (G.slamT > 0) { G.slamT = 0; damage(0, null); spark(G.x, G.dist, 6); sfx.crunch(true); } } return; }
+  if (c.kind === 'armored') { if (!side && dy > 0) { if (c.hitCd <= 0) { c.hitCd = T.rearCd; damage(0.5, c, 'Rammed a Bulwark'); G.boost = -150; G.speed = Math.min(G.speed, Math.max(T.drive.minSpeed, c.speed * 0.85)); G.x -= s * 4; /* one hit, then the car falls in behind it: no riding the truck down to zero armor */ } } else { G.x -= s * (hw - Math.abs(dx)); G.vx = -s * 150; if (G.slamT > 0) { G.slamT = 0; damage(0, null); spark(G.x, G.dist, 6); sfx.crunch(true); } } return; }
   if (side) {
     const slamming = G.slamT > 0;
     const attacking = c.state === 'swerve' && !slamming;                         // a Bruiser landing its lunge
     const intent = slamming || (G.relVx * s > T.shuntIntent && G.steerVx * s > 0);   // the player is actually steering into the car, not being slid by the road
     if (attacking) {
-      // the Bruiser's hit lands: the player takes the damage and the push; the Bruiser is not flung, so an idle driver cannot farm lunges
-      damage(1, c, 'Rammed by a Bruiser'); G.x -= s * T.bruiser.push; G.vx = -s * 120; c.vx = s * 90; c.state = 'recover'; c.t = 0;
-      spark(G.x + s * 17, G.dist, 8); sfx.crunch(false); hap(30); kickShake(-s * 6, 0, 0.3); G.sq = 0.9; G.hitStop = Math.max(G.hitStop, 0.02); event(); return;
+      // a Ram's or Dart's lunge lands: the player takes the damage, a crunch and a shove that can be felt; the attacker is not flung, so an idle driver cannot farm lunges
+      const Pn = c.kind === 'weak' ? T.dart : T.bruiser; damage(Pn.damage, c, c.kind === 'weak' ? 'Clipped by a Dart' : 'Smashed by a Ram'); G.x -= s * Pn.push; G.slideVx = -s * Pn.shove; G.vx = -s * Pn.shove; G.boost = Math.min(G.boost, -70); c.vx = s * 90; c.state = 'recover'; c.t = 0;
+      spark(G.x + s * 17, G.dist, c.kind === 'weak' ? 10 : 18); G.fx.push({ x: G.x + s * 17, y: G.dist, t: 0, life: 0.12, hit: true }); sfx.ram(c.kind === 'weak'); hap([50, 30, 70]); kickShake(-s * (c.kind === 'weak' ? 7 : 12), 3, c.kind === 'weak' ? 0.5 : 0.7); G.sq = c.kind === 'weak' ? 0.92 : 0.86; G.hitStop = Math.max(G.hitStop, c.kind === 'weak' ? 0.03 : 0.05); event(); return;
     }
     if (!intent) { c.x += s * (hw - Math.abs(dx)) * 0.5; G.x -= s * (hw - Math.abs(dx)) * 0.5; c.vx = s * 60; G.vx = -s * 40; if (c.hitCd <= 0) { c.hitCd = T.rearCd; spark(G.x + s * 17, G.dist, 2); sfx.ping(false); } return; }   // a brush, nothing more
     const power = Math.max(T.shuntMin, Math.abs(G.relVx) * T.shuntMul) * (slamming ? T.slam.power : 1);
     c.vx = s * power; c.x += s * (hw - Math.abs(dx)) * 0.5; c.shunted = true; creditCar(c, slamming ? 'slam' : 'shunt'); if (slamming) { c.slammed = true; c.spin = 0.4 * s; }
     G.x -= s * (hw - Math.abs(dx)) * 0.5; G.vx = slamming ? G.vx * 0.2 : -G.vx * 0.3;
-    spark(G.x + s * 17, G.dist, slamming ? 14 : 8); sfx.crunch(slamming); hap(slamming ? 60 : 30); kickShake(-s * (slamming ? 10 : 5), 0, slamming ? 0.5 : 0.3); G.sq = 0.9; G.hitStop = Math.max(G.hitStop, slamming ? 0.07 : 0.02);
+    spark(G.x + s * 17, G.dist, slamming ? 20 : 12); G.fx.push({ x: G.x + s * 17, y: G.dist, t: 0, life: 0.12, hit: true }); sfx.ram(!slamming); hap(slamming ? 60 : 35); kickShake(-s * (slamming ? 12 : 7), 2, slamming ? 0.6 : 0.4); G.sq = 0.9; G.hitStop = Math.max(G.hitStop, slamming ? 0.07 : 0.04);
     if (slamming) { G.slamT = 0; emit({ k: 'rebase', d: G.x - G.slamX0 }); G.targetX = G.x; G.slams++; say('Slam', '', 400); }   // no "+0" pop: the wreck pays, by cause
     event();
   } else if (dy > 0) {
     // rear-ending at speed: no armor loss, 10% speed loss for 0.5 s, damages the car ahead (per-car cooldown)
-    if (c.hitCd <= 0) { c.hitCd = T.rearCd; c.y += (hl - Math.abs(dy)) + 10; c.speed = Math.max(c.speed, G.speed * 1.05); c.hp -= c.kind === 'weak' ? 1 : 1.5; creditCar(c, 'ram'); G.boost = -Math.min(60, G.speed * 0.1); spark(G.x, G.dist + 30, 6); sfx.crunch(false); hap(25); kickShake(0, 6, 0.25); G.sq = 0.92; event(); if (c.hp <= 0) wreck(c, 'ram', true); }
+    if (c.hitCd <= 0) { c.hitCd = T.rearCd; c.y += (hl - Math.abs(dy)) + 10; c.speed = Math.max(c.speed, G.speed * 1.05); c.hp -= c.kind === 'weak' ? 1.5 : 2; creditCar(c, 'ram'); G.boost = -Math.min(60, G.speed * 0.1); spark(G.x, G.dist + 30, 10); G.fx.push({ x: G.x, y: G.dist + 34, t: 0, life: 0.12, hit: true }); sfx.ram(true); hap(25); kickShake(0, 8, 0.35); G.sq = 0.92; G.hitStop = Math.max(G.hitStop, 0.03); event(); if (c.hp <= 0) wreck(c, 'ram', true); }
     else { c.y += (hl - Math.abs(dy)); }
   } else { c.y -= (hl - Math.abs(dy)); if (c.hitCd <= 0) { c.hitCd = T.rearCd; G.boost = 60; } }
 }
@@ -354,32 +355,26 @@ export function trySlam(dir) {
 export function damage(amount, by, cause) {
   if (amount <= 0) return; if (G.invuln > 0 || G.nitro > 0) return;
   if (G.t < T.graceSeconds) amount *= 0.5;   // 30 s of half damage, then the road is dangerous
-  G.driftDirty = true;
-  G.damageAcc += amount; if (G.damageAcc < 1) { G.vignette = 0.5; sfx.crunch(false); return; }
+  G.driftDirty = true; G.combo = 0; G.comboT = 0;   // a crash ends the chain
+  G.mercyT = T.mercy * (G.armor <= 1 ? 2 : 1); G.damageAcc += amount; if (G.damageAcc < 1) { G.vignette = 0.5; G.invuln = Math.max(G.invuln, 0.5); sfx.crunch(false); return; }
   G.damageAcc -= 1; G.armor--; G.armorLost++; G.invuln = T.invuln; G.flashT = T.invuln; G.vignette = 1; G.smoke = 2.5; kickShake(0, 0, 0.9); G.hitStop = Math.max(G.hitStop, 0.04); sfx.damage(); hap([60, 30, 60]);
   G.cause = cause || (by ? 'Hit by a car' : 'Crashed'); say(G.armor > 0 ? 'Armor ' + G.armor : 'Wrecked', '', 700);
 }
-// The rotary guns (Sprint 4): FIRE held spins the barrels up, then rounds leave along the car's heading at the rotary rate with a
-// little aim help toward the nearest enemy in range. Heat climbs per round; an overheated gun rests. Spread and cannon upgrades
-// fire the same way with their own patterns. Bullets fly in their own direction (vx, vy), so a spin sprays the whole street.
+// The gatling (Sprint D): FIRE held spins the barrels up over a second (the whine), then rounds leave the hood muzzle along the car's own
+// heading in a narrow spray, at a heavy fast rhythm. There is no aim help: the player aims by steering. Heat climbs per round; an
+// overheated gun rests (the barrels keep their spin, so it is ready again quickly). Rounds keep the car's forward speed, so they always
+// close on traffic at the muzzle speed.
 export function gun(dt) {
-  const R = T.rotary; const want = G.in.fire && G.air <= 0 && G.hot <= 0 && G.burnout <= 0;
+  const R = T.gatling; const want = G.in.fire && G.air <= 0 && G.hot <= 0 && G.burnout <= 0;
   if (G.hot > 0) { G.hot -= dt; if (G.hot <= 0) { G.heat = 0; say('Guns cool', '', 500); } }
-  G.gunSpin = clamp(G.gunSpin + (want ? dt / R.spinUp : -dt / (R.spinUp * 2)), 0, 1);
+  else G.gunSpin = clamp(G.gunSpin + (want ? dt / R.spinUp : -dt / R.spinDown), 0, 1);
   G.heat = Math.max(0, G.heat - R.cool * dt);
-  G.gunCd -= dt; if (!want || G.gunSpin < 0.6 || G.gunCd > 0) return;
-  // direction: the body heading, bent toward the nearest live enemy within range and the assist cone
-  let ang = G.heading; let best = null, bestD = 1e9;
-  for (const c of G.cars) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck') continue; const dx = c.x - G.x, dy = c.y - G.dist; const d = Math.hypot(dx, dy); if (d > T.gunRange || d < 20) continue; const a = Math.atan2(dx, dy); let da = a - G.heading; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI; if (Math.abs(da) < R.assist * Math.PI / 180 && d < bestD) { bestD = d; best = da; } }
-  if (best !== null) ang += best;
-  G.shots++; const side = G.shots % 2 ? -1 : 1; const ca = Math.cos(ang), sa = Math.sin(ang);
-  const shoot = (off, dmg, knock, spreadDeg) => { const a2 = ang + (spreadDeg || 0) * Math.PI / 180; const vx = T.bulletSpeed * Math.sin(a2) + G.vx * 0.2, vy = T.bulletSpeed * Math.cos(a2) + Math.max(0, G.fwd) * 0.2; G.bullets.push({ x: G.x + ca * off + sa * 24, y: G.dist - sa * off + ca * 24, vx, vy, dmg, knock, life: 0 }); };
-  const jitter = (G.rng() * 2 - 1) * R.spread;
-  if (G.gun === 'spread') { G.gunCd = 1 / 6; for (const d of [-14, 0, 14]) shoot(side * 9, 1, false, d + jitter); G.heat += R.heatPer * 1.5; sfx.shot(); }
-  else if (G.gun === 'cannon') { G.gunCd = 1 / 3; shoot(0, 2.5, true, jitter * 0.4); G.heat += R.heatPer * 3; sfx.cannon(); kickShake(0, 3); }
-  else { G.gunCd = 1 / R.rate; shoot(side * 9, 1, false, jitter); G.heat += R.heatPer; sfx.shot(); }
-  G.flashT2 = 0.05; G.kick.y += 0.4;
-  if (G.heat >= 1) { G.hot = R.rest; G.gunSpin = 0; say('Overheated', 'let the guns cool', 800); sfx.ping(false); hap([20, 20, 20]); }
+  G.gunCd -= dt; if (!want || G.gunSpin < 1 || G.gunCd > 0) return;
+  G.gunCd = Math.max(G.gunCd, -dt) + 1 / R.rate; G.shots++;
+  const h = G.heading, a2 = h + (G.rng() * 2 - 1) * R.spread * Math.PI / 180, MUZZLE = 1100;
+  G.bullets.push({ x: G.x + Math.sin(h) * R.muzzle, y: G.dist + Math.cos(h) * R.muzzle, vx: MUZZLE * Math.sin(a2) + G.vx * 0.2, vy: MUZZLE * Math.cos(a2) + Math.max(0, G.fwd), dmg: R.dmg, knock: false, life: 0, tr: G.shots % R.tracerEvery === 0 });
+  G.heat += R.heatPer; sfx.shot(); G.flashT2 = 0.06; G.kick.y += 0.3;
+  if (G.heat >= 1) { G.hot = R.rest; G.gunSpin = 0.6; say('Overheated', 'let the guns cool', 800); sfx.ping(false); hap([20, 20, 20]); }
 }
 // The 360: the body turns a full circle at the spin rate while the velocity keeps the drift path; a finished circle pays
 // score and a tier-3 turbo, and the body snaps back behind the velocity with the drift exit wobble.
@@ -390,7 +385,13 @@ export function spinStep(dt) {
   if (G.spinA >= Math.PI * 2) { G.spinning = false; G.spins++; G.heading = G.phi; G.slip = 0; G.driftCharge = T.drift.tiers[2]; G.driftTier = 3; G.driftDirty = false; endDrift(true); addScore(T.spin.score, G.x, G.dist + 40, false, '360'); say('360', 'spin turbo', 900, true); hap([30, 30, 60]); }
   if (G.drifting) driftStep(dt);
 }
-export function gunHit(c, b) { if (c.kind === 'armored') { spark(b.x, b.y, 2); sfx.ping(false); return; } c.hp -= b.dmg; c.hitFlash = 0.08; spark(b.x, b.y, 3); if (b.knock) { c.vx += (b.x < c.x ? 1 : -1) * 260 * (c.kind === 'weak' ? 1.4 : 1); c.shunted = true; creditCar(c, 'shunt'); } sfx.ping(c.hp <= 0); if (c.hp <= 0) wreck(c, 'gun', true); }
+// every round that lands: a spark burst and flash at the impact, a tick, a tiny camera twitch; the round that kills is a wreck (below)
+export function gunHit(c, b) {
+  G.fx.push({ x: b.x, y: b.y, t: 0, life: 0.09, hit: true });
+  if (c.kind === 'armored') { spark(b.x, b.y, 3); sfx.ping(false); return; }
+  c.hp -= b.dmg; c.hitFlash = 0.08; spark(b.x, b.y, 4); sfx.hit(); G.kick.y += 0.55; G.trauma = Math.max(G.trauma, 0.08);
+  if (c.hp <= 0) wreck(c, 'gun', true);
+}
 // Score by cause. `credit` (or the car's own credit flag) says the player caused this wreck: then it pays base × the cause
 // multiplier (car kills 3× a gun kill, player-caused chains 2×), feeds the combo and may drop a crate. A passive wreck, an
 // enemy-on-enemy accident the player had no hand in, pays nothing and counts separately.
@@ -398,21 +399,24 @@ export function wreck(c, how, credit) {
   if (c.wrecked || !c.alive) return;
   credit = !!(credit || c.credit); if ((how === 'rail' || how === 'wall') && c.how) how = c.how;   // the push that sent it into the wall is the cause
   c.wrecked = true; c.debrisT = 1.5; c.speed = Math.max(c.speed * 0.6, G.speed * 0.3); c.vx = (c.vx || 0) + (G.rng() * 2 - 1) * 80; c.flip = 0; c.credit = credit;
-  G.fx.push({ x: c.x, y: c.y, t: 0, life: 0.6, big: true }); addMark(c.x, c.y, 3, false);
+  G.fx.push({ x: c.x, y: c.y, t: 0, life: credit ? 0.8 : 0.6, big: true, kill: credit }); addMark(c.x, c.y, 3, false);
   for (let i = 0; i < 4; i++) addDebris(c.x, c.y, (G.rng() * 2 - 1) * 260, c.speed + (G.rng() - 0.3) * 200, 1 + G.rng(), '#3a2a2a', 6 + G.rng() * 6, false);
   if (!credit) { G.passiveWrecks++; sfx.wreck(); kickShake(0, 0, 0.35); event(); return; }
   const base = c.kind === 'bruiser' ? T.score.bruiser : c.kind === 'gunner' ? T.score.gunner : c.kind === 'armored' ? T.score.armored : T.score.weak;
   const mul = T.score.cause[how] || 1;
   const label = how === 'stomp' ? 'STOMP' : how === 'chain' ? 'CHAIN WRECK' : how === 'slam' ? 'SLAM KILL' : how === 'shunt' ? 'SHUNT' : how === 'ram' ? 'RAMMED' : how === 'oil' ? 'SPUN OUT' : how === 'wall' || how === 'rail' ? 'INTO THE WALL' : how === 'barrel' ? 'BLASTED' : '';
   G.kills++; if (how === 'gun' || how === 'missile') G.gunKills++; else G.carKills++; if (G.wreckLog) G.wreckLog.push(G.t.toFixed(1) + ' ' + c.kind + ' ' + how + ' ' + (c.state || ''));
-  G.combo = Math.min(T.combo.max, G.combo + 1); G.comboT = T.combo.window; G.comboPeak = Math.max(G.comboPeak, G.combo);
+  // combo: a kill within `window` s of the last raises the multiplier (x2 up to x5); a kill in the last second of the hold keeps it without raising it
+  if (G.combo === 0) G.combo = 1; else if (G.comboT > T.combo.hold - T.combo.window) G.combo = Math.min(T.combo.max, G.combo + 1);
+  G.comboT = T.combo.hold; G.comboPeak = Math.max(G.comboPeak, G.combo); G.lastKillT = G.t;
   addScore(base * mul, c.x, c.y, false, label);
-  const hs = how === 'stomp' ? 0.09 : how === 'chain' ? 0.09 : (how === 'slam' ? 0.07 : 0.04); G.hitStop = Math.min(0.12, Math.max(G.hitStop, hs));
-  kickShake(0, 0, how === 'gun' ? 0.6 : how === 'stomp' ? 1.0 : 0.8); if (how === 'stomp') { sfx.stomp(); G.punch = 0.1; } else sfx.wreck(); if (G.combo > 1) sfx.chain(G.combo); hap(how === 'chain' ? [30, 30, 30] : how === 'stomp' ? [80, 30, 120] : 45);
+  // every kill: 60 ms of hit stop, a bigger shake than a hit, a flash, an explosion (the renderer reads the fx), a punchy sound
+  const hs = how === 'stomp' ? 0.09 : how === 'chain' ? 0.09 : (how === 'slam' ? 0.07 : 0); G.hitStop = Math.min(0.12, Math.max(G.hitStop, hs, T.gatling.killStop)); G.killFlash = 0.16;
+  kickShake((G.rng() * 2 - 1) * 3, 3, how === 'gun' ? 0.5 : how === 'stomp' ? 1.0 : 0.7); if (how === 'stomp') { sfx.stomp(); G.punch = 0.1; } else sfx.kill(G.combo); hap(how === 'chain' ? [30, 30, 30] : how === 'stomp' ? [80, 30, 120] : 45);
   if (how === 'chain') G.slowmo = Math.max(G.slowmo, 0.3), G.slowmoRate = 0.5;
   if (G.combo >= 3) G.bestMoment = G.t;
   event();
-  if (G.rng() < T.crateDrop) G.crates.push({ x: c.x, y: c.y, vy: 0, t: 0, kind: ['ammo', 'gun'][Math.floor(G.rng() * 2)], speed: G.speed * 0.3 });   // crates never carry armor
+  if (G.rng() < T.crateDrop) G.crates.push({ x: c.x, y: c.y, vy: 0, t: 0, kind: 'ammo', speed: G.speed * 0.3 });   // crates never carry armor
 }
 export function explodeBarrel(b, credit) {
   if (!b.alive) return; b.alive = false; G.fx.push({ x: b.x, y: b.y, t: 0, life: 0.6, big: true, orange: true }); sfx.wreck(); kickShake(0, 0, credit ? 0.8 : 0.4); G.hitStop = Math.max(G.hitStop, 0.04);
@@ -424,7 +428,7 @@ export function explodeBarrel(b, credit) {
 }
 export function addScore(base, x, y, quiet, label) {
   const mul = quiet ? 1 : Math.max(1, G.combo); const p = Math.round(base * mul); G.score = Math.max(0, G.score + p);
-  if (x !== undefined) G.pops.push({ x, y, text: (p < 0 ? '' : '+') + fmt(p) + (label ? ' ' + label : ''), t: 0, bad: p < 0, small: quiet && !label });
+  if (x !== undefined) G.pops.push({ x, y, text: (p < 0 ? '' : '+') + fmt(p) + (label ? ' ' + label : '') + (!quiet && mul > 1 ? ' x' + mul : ''), t: 0, bad: p < 0, small: quiet && !label, big: !quiet && base >= 100 });
 }
 export function spark(x, y, n) { for (let i = 0; i < n; i++) { const s = pool.sparks.pop() || {}; s.x = x; s.y = y; s.vx = (G.rng() * 2 - 1) * 260; s.vy = -G.speed * 0.5 + (G.rng() * 2 - 1) * 120; s.t = 0; s.col = null; G.sparks.push(s); } }
 // Shake (audit, game feel): a directional kick that decays without overshoot, plus trauma-based noise shake scaled by trauma²,
@@ -444,9 +448,8 @@ export function giveSpecial(kind) { if (G.special && G.special.kind === kind) { 
 export function pickup(kind, x, y) {
   sfx.chime(); hap([15, 30, 40]); G.slowmo = Math.max(G.slowmo, 0.15); G.slowmoRate = 0.5; G.fx.push({ x, y, t: 0, life: 0.4, burst: true }); event();
   if (kind === 'crate') addScore(T.score.crate, x, y, false, 'CRATE');
-  if (kind === 'armor') { G.armor = Math.min(T.armor, G.armor + 1); G.pops.push({ x, y, text: 'ARMOR +1', t: 0 }); }
-  if (kind === 'ammo') { if (!G.special) giveSpecial('missiles'); else { G.special.ammo = Math.min(9, G.special.ammo + 3); G.pops.push({ x, y, text: 'AMMO +3', t: 0 }); emit({ k: 'special', armed: true }); } }
-  if (kind === 'gun') { G.gun = G.gun === 'twin' ? 'spread' : G.gun === 'spread' ? 'cannon' : 'spread'; G.pops.push({ x, y, text: G.gun === 'spread' ? 'SPREAD SHOT' : 'HEAVY CANNON', t: 0 }); say(G.gun === 'spread' ? 'Spread shot' : 'Heavy cannon', '', 1000); }
+  if (kind === 'armor') { G.armor = Math.min(T.armor, G.armor + 1); G.pops.push({ x, y, text: 'ARMOR +1', t: 0, big: true }); say('Armor +1', '', 900); }
+  if (kind === 'ammo') { if (!G.special) giveSpecial('missiles'); else { G.special.ammo = Math.min(9, G.special.ammo + 3); G.pops.push({ x, y, text: 'MISSILES +3', t: 0, big: true }); emit({ k: 'special', armed: true }); } }
   if (kind === 'oil') giveSpecial('oil'); if (kind === 'nitroPick') giveSpecial('nitro');
 }
 export function fireSpecial() {
@@ -456,6 +459,12 @@ export function fireSpecial() {
   if (G.special.kind === 'oil') { G.slicks.push({ x: G.x, y: G.dist - 60, t: 6, r: lvl >= 2 ? 36 : 26 }); sfx.ping(false); hap(15); }
   if (G.special.kind === 'nitro') { G.nitro = lvl >= 2 ? 2.0 : 1.5; G.speedLines = G.nitro; G.invuln = Math.max(G.invuln, 0.3); sfx.nitro(); hap([20, 20, 60]); say('Nitro', '', 500); }
   emit({ k: 'special', armed: false });
+}
+// the city: the run ends here. A bonus for arriving (and for the armor still on the car), then the stars by score.
+export function win() {
+  G.won = true; G.winT = 0; G.slowmo = 0.9; G.slowmoRate = 0.4; sfx.win(); hap([40, 30, 80, 30, 120]); G.killFlash = 0.3;
+  const bonus = T.goal.bonus + T.goal.bonusArmor * G.armor; G.score += bonus; G.pops.push({ x: G.x, y: G.dist + 80, text: '+' + fmt(bonus) + ' CITY', t: 0, big: true });
+  G.stars = 1 + (G.score >= T.goal.stars[1] ? 1 : 0) + (G.score >= T.goal.stars[2] ? 1 : 0); G.armorLeft = G.armor; emit({ k: 'won' });
 }
 export function die() {
   G.dead = true; G.deathT = 0; G.slowmo = 1.2; G.slowmoRate = 0.25; sfx.death(); hap([80, 40, 80, 40, 120]); kickShake(0, 0, 1.0); G.fx.push({ x: G.x, y: G.dist, t: 0, life: 1.2, big: true, player: true });

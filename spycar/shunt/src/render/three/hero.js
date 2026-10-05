@@ -18,6 +18,16 @@ function loft(sections, capStart = true, capEnd = true) {
 // a body ring: 10 points clockwise seen from the front, from the bottom left round the shoulder and the crown to the bottom right
 function ring(w, h0, h1, crown, flank = 0.12) { return [[-w * 0.92, h0], [-w, h0 + flank], [-w * 0.98, h1 - 0.04], [-w * 0.9, h1], [-w * 0.45, h1 + crown * 0.7], [0, h1 + crown], [w * 0.45, h1 + crown * 0.7], [w * 0.9, h1], [w * 0.98, h1 - 0.04], [w, h0 + flank], [w * 0.92, h0]]; }
 function rect(w, y0, y1, taper = 1) { return [[-w, y0], [-w * taper, y1], [w * taper, y1], [w, y0]]; }
+// every static mesh that shares a material becomes one mesh: same look, a fraction of the draw calls. Only the materials in `shadowMats` cast shadows.
+function mergeByMaterial(group, shadowMats) {
+  const buckets = new Map();
+  for (const child of [...group.children]) {
+    if (!child.isMesh || child.userData.keep) continue;
+    child.updateMatrix(); let geo = child.geometry.index ? child.geometry.toNonIndexed() : child.geometry.clone(); geo.deleteAttribute('uv'); if (!geo.attributes.normal) geo.computeVertexNormals(); geo.applyMatrix4(child.matrix);
+    if (!buckets.has(child.material)) buckets.set(child.material, []); buckets.get(child.material).push(geo); group.remove(child); child.geometry.dispose();
+  }
+  for (const [mat, list] of buckets) { const mesh = new Mesh(mergeGeometries(list, false), mat); mesh.castShadow = shadowMats.has(mat); group.add(mesh); for (const g of list) g.dispose(); }
+}
 export function buildHero(opts = {}) {
   const L = HERO.length, W = HERO.width, hw = W / 2; const z = (u) => -L / 2 + u * L;
   const paintColor = new Color(opts.paint || '#f4f6fa'); const accent = new Color(opts.accent || '#37e6ff');
@@ -67,9 +77,7 @@ export function buildHero(opts = {}) {
   for (const sx of [-1, 1]) { const v = new Mesh(new BoxGeometry(0.16, 0.02, 0.34), M.trim); v.position.set(sx * 0.32, 0.72, z(0.17)); v.rotation.y = sx * 0.25; g.add(v); }
   for (let i = 0; i < 4; i++) for (const sx of [-1, 1]) { const lv = new Mesh(new BoxGeometry(0.3, 0.03, 0.06), M.trim); lv.position.set(sx * 0.42, 0.96 + i * 0.005, z(0.82 + i * 0.03)); g.add(lv); }
   for (const sx of [-1, 1]) { const mr = new Mesh(new BoxGeometry(0.22, 0.08, 0.14), M.trim); mr.position.set(sx * (hw + 0.1), 0.98, z(0.4)); g.add(mr); const intake = new Mesh(new BoxGeometry(0.06, 0.26, 0.5), M.trim); intake.position.set(sx * (hw * 0.99), 0.62, z(0.68)); g.add(intake); }
-  // side gun pods: a dark housing just behind the front wheel with the rotary barrel pointing forward (pops out when firing)
-  const pods = []; for (const sx of [-1, 1]) { const pod = new Group(); pod.position.set(sx * (hw - 0.08), 0.6, z(0.4)); const house = new Mesh(new BoxGeometry(0.18, 0.2, 0.42), M.trim); pod.add(house); const barrel = new Mesh(new CylinderGeometry(0.05, 0.05, 0.5, 8).rotateX(Math.PI / 2), M.rim); barrel.position.set(sx * 0.02, 0, -0.42); pod.add(barrel); for (let k = 0; k < 3; k++) { const b = new Mesh(new CylinderGeometry(0.018, 0.018, 0.52, 6).rotateX(Math.PI / 2), M.trim); const a = k * Math.PI * 2 / 3; b.position.set(sx * 0.02 + Math.cos(a) * 0.045, Math.sin(a) * 0.045, -0.44); barrel.add(b); } g.add(pod); pods.push({ pod, barrel, sx, home: pod.position.x }); }
-  g.userData.pods = pods;
+  // (the side gun pods are gone: the gatling on the hood, wpn_gatling.glb, replaces the machine guns; cars.js attaches it)
   // wheels: 0.72 m, pushed to the corners, dark rims with five spokes
   const R = 0.36; const wheelGeo = new CylinderGeometry(R, R, 0.3, 24).rotateZ(Math.PI / 2); const rimGeo = new CylinderGeometry(R * 0.66, R * 0.66, 0.32, 16).rotateZ(Math.PI / 2);
   for (const sx of [-1, 1]) for (const u of [0.2, 0.805]) { const w = new Mesh(wheelGeo, M.tyre); w.position.set(sx * (hw - 0.08), R, z(u)); w.castShadow = true; g.add(w); const r = new Mesh(rimGeo, M.rim); r.position.copy(w.position); g.add(r); for (let s = 0; s < 5; s++) { const sp = new Mesh(new BoxGeometry(0.34, 0.05, R * 1.1), M.trim); sp.position.copy(w.position); sp.rotation.x = s * Math.PI * 2 / 5; g.add(sp); } }
@@ -83,5 +91,6 @@ export function buildHero(opts = {}) {
   for (const sx of [-1, 1]) { const cb = new Mesh(new BoxGeometry(0.05, 0.3, 0.06), M.tailAccent); cb.position.set(sx * (hw * 0.86), 0.68, z(1.0) + 0.025); g.add(cb); const ex = new Mesh(new CylinderGeometry(0.06, 0.07, 0.2, 10).rotateX(Math.PI / 2), M.rim); ex.position.set(sx * 0.42, H0 + 0.2, z(0.99)); g.add(ex); }
   for (let i = -2; i <= 2; i++) { const blade = new Mesh(new BoxGeometry(0.03, 0.14, 0.34), M.trim); blade.position.set(i * 0.3, H0 + 0.02, z(0.96)); g.add(blade); }
   const dg = new Mesh(new BoxGeometry(W * 0.7, 0.02, 0.03), M.glow); dg.position.set(0, H0 + 0.14, z(1.0) + 0.02); g.add(dg);
+  mergeByMaterial(g, new Set([M.paint, M.paint2, M.tyre]));   // about 90 small meshes become ten draw calls (the budget is 150 for the whole frame)
   g.userData.materials = M; return g;
 }

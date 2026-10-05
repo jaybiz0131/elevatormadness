@@ -36,3 +36,8 @@ control that makes it work on a phone. A true open world would mean a new game, 
 ## Rules carried forward
 - Original IP only. Deterministic sim. Renderer only reads sim state. Never push to main. Every sprint ends with bots, replays,
   commit, push, publish, postcards, report. When the sim changes, record new baselines and retire the old ones in the same commit.
+
+## Update (2026-10-05): Sprint D, Stop 1, fun first
+Jack's v18 verdict was "not fun yet": nothing happening, no goal, weak hits. Before any new level content this stop adds a pacing
+director, the hood gatling with heavy hit and kill feedback, and a three minute run with a progress bar, combos and a finale. See
+`design/fun/stop1-report.md`. Handbrake 180, the intro and the levels have not been started.

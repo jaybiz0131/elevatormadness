@@ -25,7 +25,8 @@ export function createThreeRenderer(canvas, opts = {}) {
   // ?lite=1: half resolution, no shadows, no post: for headless bots on software GL, where the sim must run at pace
   const LITE = new URLSearchParams(location.search).get('lite') === '1';
   // ?cam=pitch,dist,fov overrides the road camera for comparison shots (e.g. ?cam=47,76,42)
-  { const c = new URLSearchParams(location.search).get('cam'); if (c) { const [p, d, f] = c.split(',').map(Number); if (p) CAM.pitch = p; if (d) CAM.dist = d; if (f) CAM.fov = f; } }
+  const camQ = new URLSearchParams(location.search).get('cam');
+  const applyCamQ = () => { if (camQ) { const [p, d, f] = camQ.split(',').map(Number); if (p) CAM.pitch = p; if (d) CAM.dist = d; if (f) CAM.fov = f; } };
   renderer.shadowMap.enabled = !LITE; renderer.shadowMap.type = PCFShadowMap; renderer.toneMapping = 0; renderer.autoClear = true; renderer.info.autoReset = false;
   const scene = new Scene();
   const roadCam = new RoadCamera(view.SW / H); const camera = roadCam.cam;
@@ -65,7 +66,7 @@ export function createThreeRenderer(canvas, opts = {}) {
   function placeKey(target) { const texel = (2 * SB) / key.shadow.mapSize.x; key.target.position.set(Math.round(target.x / texel) * texel, 0, Math.round(target.z / texel) * texel); key.position.copy(key.target.position).addScaledVector(SUN, 220); key.target.updateMatrixWorld(); }
   let roadRef = null;
   function render(dt, st) {
-    if (state.lost) return; state.elapsed = st.elapsed; const G = st.G; roadRef = G.road;
+    if (state.lost) return; roadCam.setPreset(S.camera); applyCamQ(); state.elapsed = st.elapsed; const G = st.G; roadRef = G.road;
     const alpha = clamp(G.acc * 120, 0, 1); let rx, rdist, frame = null;
     if (st.phase === 'over' && G.replay.count) { const R = G.replay; const span = R.count / 30 / 0.6 + 0.5; const t = G.replayT % span; const idx = Math.min(R.count - 1, Math.floor(t * 0.6 * 30)); frame = R.frames[(R.head - R.count + idx + 45 * 2) % 45]; rx = frame.x; rdist = frame.y; }
     else { rx = lerp(G.px, G.x, alpha); rdist = lerp(G.pdist, G.dist, alpha); }   // rx is road-space x (centre 195)
@@ -91,6 +92,7 @@ export function createThreeRenderer(canvas, opts = {}) {
   // how far ahead (in road pt) the top centre of the screen reaches on the ground: the warning-time measure
   function visibleAhead(G) { V.set(0, 1, 0.5).unproject(camera); V2.copy(V).sub(camera.position).normalize(); if (V2.y >= 0) return 3000; const t = -camera.position.y / V2.y; V.copy(camera.position).addScaledVector(V2, t); let best = 0, bd = 1e18; for (let s = G.dist; s < G.dist + 3000; s += 20) { toWorld(G.road, REF, s, V2); const d = (V2.x - V.x) ** 2 + (V2.z - V.z) ** 2; if (d < bd) { bd = d; best = s; } } return best - G.dist; }
   async function prewarm() {
+    await cars.ready;   // the hood gatling model
     // every material compiled before play: one of each car kind in the scene, every batch with one instance, then one composer frame
     const temp = []; for (const k of Object.keys(cars.geo)) { const m = cars.acquire(k); m.userData.kind = k; temp.push(m); }
     fx.begin(); fx.glow(0, 0, 0, 1, 1, 1, 1, 0); fx.puff(0, 0, 0, 1, 0); fx.shadow(V.set(0, 0, 0), 1, 1); fx.ring(0, 0, 0, 1, 0xffffff, 0, 1); fx.spark(0, 0, 0, 0, 0, 0); fx.poolAt(0, 0, 0, 1, 1, 1, 0, 1); fx.cone(0, 0, 0, 1, 1, 1, 1, 0); fx.end();
@@ -98,7 +100,7 @@ export function createThreeRenderer(canvas, opts = {}) {
     for (const m of temp) cars.release(m); fx.begin(); fx.end();
   }
   // one line for the title card and the frame counter: what the device is running
-  function diag() { let gpu = '?'; try { const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch (e) {} return `${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} · ${String(gpu).slice(0, 40)} · post ${post.config}${state.postError ? ' · post failed: ' + state.postError : ''}${state.glError ? ' · ' + state.glError : ''}${state.lost ? ' · CONTEXT LOST' : ''} · shadow ${key.shadow.mapSize.x} · scale ${state.scale.toFixed(2)}/${state.cap.toFixed(2)} · dpr ${window.devicePixelRatio}`; }
+  function diag() { let gpu = '?'; try { const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch (e) {} return `${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} · ${String(gpu).slice(0, 40)} · post ${post.config}${state.postError ? ' · post failed: ' + state.postError : ''}${state.glError ? ' · ' + state.glError : ''}${state.lost ? ' · CONTEXT LOST' : ''}${cars.gatError ? ' · gatling model failed: ' + cars.gatError : ''} · shadow ${key.shadow.mapSize.x} · scale ${state.scale.toFixed(2)}/${state.cap.toFixed(2)} · dpr ${window.devicePixelRatio}`; }
   function stats() { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, textures: i.memory.textures, geometries: i.memory.geometries, scale: state.scale, cap: state.cap, frameMs: state.frameMs, programs: i.programs ? i.programs.length : 0 }; }
   function setLook(name) { look = lookFor(name); P = Object.assign({}, LOOKS[look]); if (IS_IOS) P.msaa = 2; applyLook(); }
   function reset() { roadCam.reset(); road.reset(); city.reset(); cars.reset(); fx.reset(); }

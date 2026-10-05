@@ -6,9 +6,11 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { T, REF, lerp } from '../../sim/constants.js';
 import { M, toWorld } from './scale.js';
 import { buildHero } from './hero.js';
+import { loadGatling } from './gatling.js';
+const V3 = new Vector3();
 const KIND_COL = { player: '#37e6ff', civ: '#cfe6ff', weak: '#3a3d46', bruiser: '#1a1b1f', gunner: '#1a1b1f', armored: '#20242b', truck: '#2fd36a', wreck: '#3a2a2a' };
 const CIV_TINTS = ['#cfe6ff', '#fff1c9', '#cdebdc', '#e9d9ff'];
-const RED = new Color('#ff3b3b'), WHITE = new Color('#ffffff'), DARK = new Color('#14161a'), GLASS = new Color('#1c2634'), GREY = new Color('#6a6f7a'), CYAN = new Color('#37e6ff');
+const AMBER = new Color('#ffb020'), RED = new Color('#ff3b3b'), WHITE = new Color('#ffffff'), DARK = new Color('#14161a'), GLASS = new Color('#1c2634'), GREY = new Color('#6a6f7a'), CYAN = new Color('#37e6ff');
 function box(w, h, l, x, y, z, c) { const g = new BoxGeometry(w, h, l); g.translate(x, y, z); const n = g.attributes.position.count; const col = new Float32Array(n * 3); for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; } g.setAttribute('color', new Float32BufferAttribute(col, 3)); return g; }
 // geometry in metres, body colour white (the material tints it), trim in fixed colours; forward is -z
 function carGeometry(kind) {
@@ -18,7 +20,7 @@ function carGeometry(kind) {
   if (kind === 'player') { parts.push(box(w * 0.6, h * 0.5, l * 0.42, 0, h * 0.55 + 0.35, l * 0.02, new Color('#0d7a8c'))); parts.push(box(w * 0.9, h * 0.35, l * 0.25, 0, h * 0.2 + 0.35, -l * 0.43, WHITE)); }   // cabin and nose
   else if (kind === 'truck') { parts.push(box(w, h, l * 0.62, 0, h / 2 + 0.35, l * 0.19, WHITE)); parts.push(box(w * 0.9, h * 0.5, l * 0.28, 0, h * 0.25 + 0.35, -l * 0.34, GLASS)); }
   else if (kind === 'armored') { parts.push(box(w * 0.85, h * 0.9, l * 0.7, 0, h * 0.45 + 0.35, 0, new Color('#2e333b'))); parts.push(box(w * 0.9, 0.2, 0.3, 0, h + 0.35, 0, RED)); }
-  else { parts.push(box(w * 0.78, h * 0.6, l * 0.45, 0, h * 0.55 + 0.35, l * 0.05, kind === 'civ' ? GLASS : DARK)); if (kind !== 'civ') parts.push(box(w * 0.7, 0.08, 0.5, 0, h * 0.85 + 0.37, 0, RED)); }
+  else { parts.push(box(w * 0.78, h * 0.6, l * 0.45, 0, h * 0.55 + 0.35, l * 0.05, kind === 'civ' ? GLASS : DARK)); if (kind !== 'civ') parts.push(box(w * 0.7, 0.08, kind === 'weak' ? 0.7 : 0.5, 0, h * 0.85 + 0.37, 0, kind === 'weak' ? AMBER : RED)); if (kind === 'weak') parts.push(box(w * 0.9, 0.06, 0.28, 0, h * 0.75 + 0.4, l * 0.46, AMBER)); }   // a Dart: low, wide spoiler, amber trim
   if (kind === 'bruiser') { parts.push(box(0.45, 0.6, 1.6, -w / 2 - 0.2, 0.7, 0, GREY)); parts.push(box(0.45, 0.6, 1.6, w / 2 + 0.2, 0.7, 0, GREY)); }
   if (kind === 'gunner') parts.push(box(0.5, 0.4, 1.4, 0, h + 0.5, -l * 0.3, new Color('#555555')));
   for (const sx of [-1, 1]) for (const sz of [-0.3, 0.32]) parts.push(box(0.32, 0.7, 0.7, sx * (w / 2 - 0.1), 0.35, sz * l, DARK));   // wheels
@@ -34,6 +36,8 @@ export class CarSystem {
     this.player = buildHero({ paint: '#f4f6fa', emissive: '#bfeeff', emissiveIntensity: 0.22, envMapIntensity: 2.2, metalness: 0.25 }); this.player.traverse(o => { o.frustumCulled = false; }); scene.add(this.player);
     // readability: a cyan silhouette drawn only where the depth test fails, so the player shows through whatever covers it
     const outline = new Mesh(this.geo.player, new MeshStandardMaterial({ color: CYAN, emissive: CYAN, emissiveIntensity: 1.5, transparent: true, opacity: 0.55, depthFunc: 4 /* GreaterDepth */, depthWrite: false })); outline.renderOrder = 30; outline.position.y = -0.35; this.player.add(outline);
+    // the hood gatling (wpn_gatling.glb) loads asynchronously; prewarm waits for `ready`
+    this.gat = null; this.barrelA = 0; this.lastT = 0; this.ready = loadGatling().then(g => { g.position.set(0, 0.78, -1.35); this.player.add(g); this.gat = g; }).catch(e => { this.gatError = String(e && e.message || e); });
   }
   acquire(kind) { let m = this.free[kind].pop(); if (!m) { m = new Mesh(this.geo[kind], this.mat[kind]); m.castShadow = true; m.frustumCulled = false; } this.scene.add(m); return m; }
   release(m) { this.scene.remove(m); this.free[m.userData.kind].push(m); }
@@ -52,7 +56,7 @@ export class CarSystem {
       if (c.kind === 'truck') { if (!c.loaded) fx.glow(p.x - fx_ * l * 0.5, p.y + 2.6, p.z - fz_ * l * 0.5, 1.2, 1, 0.82, 0.25, 0.4 + 0.4 * Math.sin(elapsed * 6)); continue; }
       if (c.kind === 'civ') { if (c.blink > 0 && Math.floor(c.blink * 8) % 2 === 0) { const sx = c.blinkDir < 0 ? -1 : 1; fx.glow(p.x + rx * sx * w / 2, p.y + 0.9, p.z + rz * sx * w / 2, 0.6, 1, 0.7, 0.28, 0.9); } continue; }
       // enemies: red headlights, brake lights flashing in the tell, a white flash when hit
-      for (const sx of [-1, 1]) fx.glow(p.x + fx_ * l * 0.5 + rx * sx * w * 0.35, p.y + 0.7, p.z + fz_ * l * 0.5 + rz * sx * w * 0.35, c.kind === 'armored' ? 1.1 : 0.9, 1, 0.23, 0.23, 0.9);
+      for (const sx of [-1, 1]) fx.glow(p.x + fx_ * l * 0.5 + rx * sx * w * 0.35, p.y + 0.7, p.z + fz_ * l * 0.5 + rz * sx * w * 0.35, c.kind === 'armored' ? 1.1 : 0.9, 1, c.kind === 'weak' ? 0.66 : 0.23, c.kind === 'weak' ? 0.12 : 0.23, 0.9);
       const brake = c.state === 'tell' && Math.floor(c.t * 12) % 2 === 0; if (brake) for (const sx of [-1, 1]) fx.glow(p.x - fx_ * l * 0.5 + rx * sx * w * 0.35, p.y + 0.8, p.z - fz_ * l * 0.5 + rz * sx * w * 0.35, 0.8, 1, 0.42, 0.42, 1);
       if (c.hitFlash > 0) fx.glow(p.x, p.y + 1, p.z, w * 1.2, 1, 1, 1, 0.8);
       if (c.state === 'tell' || c.state === 'swerve' || c.state === 'sight') { const pulse = 0.55 + 0.45 * Math.sin(elapsed * 18); fx.ring(p.x, p.y + 0.04, p.z, Math.max(w, l) * 0.6, 0xff3b3b, pulse, 1); fx.glow(p.x, p.y + 0.8, p.z, l * 0.8, 1, 0.23, 0.23, 0.35 * pulse); }
@@ -62,10 +66,22 @@ export class CarSystem {
     for (const [c, m] of this.meshOf) if (m.userData.stamp !== stamp) { this.release(m); this.meshOf.delete(c); }
   }
   updatePlayer(G, rx, rdist, fx, st, elapsed) {
-    const m = this.player; const z = G.jumpZ; const lift = z * 3.5; const lean = (st.lean !== undefined ? st.lean : G.lean) * Math.PI / 180;
+    const m = this.player; const spin = G.gunSpin || 0; const z = G.jumpZ; const lift = z * 3.5; const lean = (st.lean !== undefined ? st.lean : G.lean) * Math.PI / 180;
     this.place(m, G, rx, rdist, lean, lift); m.scale.set((2 - G.sq), G.sq, 1 + z * 0.1);
-    // the rotary pods slide out as the barrels spin up; the barrels turn with the spin; a muzzle flash at the tips when a round leaves
-    const spin = G.gunSpin || 0; for (const pd of m.userData.pods) { pd.pod.position.x = pd.home + pd.sx * 0.16 * spin; pd.barrel.rotation.z += spin * 0.9; }
+    // the hood gatling: the barrel cluster spins with G.gunSpin (a full turn takes about 0.3 s at speed), the cyan trim glows brighter
+    // with every muzzle flash, brass leaves the ejection port on every round, and a flash blooms at the muzzle
+    m.updateMatrixWorld(true);
+    if (this.gat) {
+      const u = this.gat.userData; const dtR = Math.min(0.05, Math.max(0, elapsed - this.lastT)); this.lastT = elapsed;
+      this.barrelA += spin * 24 * dtR; u.barrels.rotation.z = this.barrelA;
+      const flash = G.flashT2 > 0 ? Math.min(1, G.flashT2 / 0.06) : 0;
+      if (u.trimMat) { u.trimMat.emissiveIntensity = 0.6 + 0.8 * spin + 5.5 * flash; }
+      if (st.phase === 'playing' && G.shots !== this.lastShots) { u.eject.getWorldPosition(V3); this.brassSide = (this.brassSide || 0) ^ 1; fx.brass(V3.x, V3.y, V3.z, m.rotation.y, G.shots - (this.lastShots || 0), G.speed * M); }
+      this.lastShots = G.shots;
+      if (flash > 0) { u.muzzle.getWorldPosition(V3); const k = G.shots % 2 ? 1 : 0.8; const fwx = Math.sin(-m.rotation.y) * 1.0, fwz = -Math.cos(-m.rotation.y) * 1.0;
+        fx.glow(V3.x, V3.y, V3.z, 0.5 * k, 4.5, 3.8, 2.4, flash); fx.glow(V3.x + fwx * 0.4, V3.y, V3.z + fwz * 0.4, 1.4 * k, 3.0, 1.6, 0.5, flash * 0.9); fx.glow(V3.x + fwx * 1.2, V3.y, V3.z + fwz * 1.2, 0.8, 1.6, 0.9, 0.3, flash * 0.6);
+        u.muzzle.parent.getWorldPosition(V3); fx.glow(V3.x, V3.y + 0.4, V3.z, 1.0, 0.25, 1.0, 1.4, flash * 0.7); }   // the cyan trim blooms
+    }
     m.visible = !(st.phase === 'playing' && G.flashT > 0 && Math.floor(elapsed * 16) % 2 === 0);
     const p = m.position; fx.shadow(p, 34 * M * (1 - z * 0.2), 60 * M * (1 - z * 0.2), p.y - lift);
     const fx_ = Math.sin(-m.rotation.y), fz_ = -Math.cos(-m.rotation.y); const rx_ = Math.cos(-m.rotation.y), rz_ = Math.sin(-m.rotation.y); const w = 34 * M, l = 60 * M;

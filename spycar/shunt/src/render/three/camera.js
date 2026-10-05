@@ -5,6 +5,8 @@ import { PerspectiveCamera, Vector3, Quaternion, Euler, Raycaster } from 'three'
 import { clamp } from '../../sim/constants.js';
 import { M } from './scale.js';
 export const CAM = { fov: 42, pitch: 47, dist: 76, pitchHi: 56, distHi: 92, fovSpeed: 12, distSpeed: 26, lowerThird: 1 / 3, leadS: 0.4, leadCap: 0.44, spring: 14, roll: 5, shakeM: 1.2, shakeDeg: 2, look: 1.5 };
+// the two presets Jack compares (Settings > Developer): A is the Sprint 3D view, higher and farther; B is the Sprint 4 view, lower and closer
+export const CAMS = { A: { fov: 40, pitch: 55, dist: 90, pitchHi: 62, distHi: 104, distSpeed: 28 }, B: { fov: 42, pitch: 47, dist: 76, pitchHi: 56, distHi: 92, distSpeed: 26 } };
 const noise1 = (t) => Math.sin(t) * 0.6 + Math.sin(t * 2.3 + 1.3) * 0.4;
 export class RoadCamera {
   constructor(aspect) {
@@ -13,6 +15,7 @@ export class RoadCamera {
     this.anchor = new Vector3(); this.pos = new Vector3(); this.fwd = new Vector3(); this.right = new Vector3(); this.q = new Quaternion(); this.e = new Euler();
     this.WP = { X: 0, Y: 0 }; this.psiInit = false;
   }
+  setPreset(name) { if (this.preset === name || !CAMS[name]) return; this.preset = name; Object.assign(CAM, CAMS[name]); }
   reset() { this.psiInit = false; this.psiV = 0; this.zoom = 0; this.roll = 0; this.look = 0; this.fovKick = 0; this.lift = 0; this.blocked = false; }
   // the meshes that may stand between the camera and the car (the city's building chunks): when one does, the camera lifts
   // toward the high view (pitchHi, distHi) until the line is clear again. Tested every other frame on the previous frame's position.

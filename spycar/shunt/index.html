@@ -58,6 +58,7 @@
   #card .logo { font-size: 54px; font-weight: 700; letter-spacing: 0.3em; color: var(--player); text-shadow: 0 0 24px rgba(55,230,255,0.5); }
   #card .title { font-size: 15px; letter-spacing: 0.2em; color: var(--fg-dim); text-transform: uppercase; text-align: center; }
   #card .score { font-size: 52px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+  #card .stars { display: flex; gap: 10px; margin: 2px 0 4px; } #card .stars svg { width: 44px; height: 44px; overflow: visible; } #card .stars svg path { fill: rgba(255,255,255,0.14); } #card .stars svg.on path { fill: #ffd23f; filter: drop-shadow(0 0 8px rgba(255,210,63,0.7)); }
   #card .newbest { font-size: 18px; letter-spacing: 0.2em; color: var(--pickup); font-weight: 700; }
   #card .lines { font-size: 13px; color: var(--fg-dim); letter-spacing: 0.06em; text-align: center; line-height: 1.6; }
   #card .btn { width: 100%; max-width: 310px; height: 56px; border-radius: 28px; border: 0; background: rgba(255,255,255,0.92); color: #07101c; font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: 0.12em; }
@@ -81,6 +82,8 @@
   #card.over { justify-content: flex-end; padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.2) 38%, rgba(0,0,0,0.82) 52%); }
   .btn:focus-visible { outline: 2px solid var(--player); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { .callout { transition: none; } #special.pulse { animation: none; } }
+  #fpsBadge { position: absolute; right: 16px; top: calc(70px + var(--safe-top, 0px)); font: 700 13px/1.3 monospace; color: #9fe; background: rgba(0,0,0,0.55); padding: 3px 7px; border-radius: 6px; pointer-events: none; z-index: 9; white-space: pre; }
+  #fpsBadge[hidden] { display: none; }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&display=swap">
 </head>
@@ -90,6 +93,7 @@
     <div id="shake"><canvas id="cv"></canvas></div>
     <div id="ui">
       <div class="callout" id="callout" style="opacity:0"></div>
+      <div id="fpsBadge" hidden></div>
       <button id="pause" class="tap" aria-label="Pause"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect x="4" y="3" width="4" height="14" rx="1" fill="currentColor"/><rect x="12" y="3" width="4" height="14" rx="1" fill="currentColor"/></svg></button>
       <button id="special" class="tap" aria-label="Special weapon" hidden><span id="specialIcon"></span><span class="pips" id="specialPips"></span></button>
       <button id="pad" class="tap" aria-label="Brake, hold while steering to drift, hold at a stop to reverse" hidden>BRAKE</button>
@@ -99,6 +103,7 @@
         <div class="logo" id="cardLogo" hidden>SHUNT</div>
         <div class="title" id="cardTitle"></div>
         <div class="score" id="cardScore">0</div>
+        <div class="stars" id="cardStars" hidden></div>
         <div class="newbest" id="cardNewBest" hidden>NEW BEST</div>
         <div class="lines" id="cardLines"></div>
         <div class="bar" id="cardBar" hidden><i id="cardBarFill" style="width:0%"></i></div>
@@ -116,8 +121,9 @@
           <label><span>Screen shake</span><button class="sw tap" id="sShake" role="switch" aria-label="Screen shake"></button></label>
           <label><span>Reduce motion</span><button class="sw tap" id="sMotion" role="switch" aria-label="Reduce motion"></button></label>
           <div class="grp">Developer</div>
-          <label><span>Benchmark <b>90 s run, then results</b></span><button class="sw seg tap" id="sBench">RUN</button></label>
-          <label><span>Frame counter</span><button class="sw tap" id="sPerf" role="switch" aria-label="Frame counter"></button></label>
+          <label><span>Benchmark <b>a skilled run, then results</b></span><button class="sw seg tap" id="sBench">RUN</button></label>
+          <label><span>Camera <b>A high, B low and close</b></span><button class="sw seg tap" id="sCam" aria-label="Camera A or B">B</button></label>
+          <label><span>Show FPS <b>now and lowest in 10 s</b></span><button class="sw tap" id="sFps" role="switch" aria-label="Show FPS"></button></label>
         </div>
         <button class="btn tap" id="btnPrimary">DRIVE AGAIN</button>
         <div class="row" id="cardRow">
