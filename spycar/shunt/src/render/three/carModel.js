@@ -7,7 +7,7 @@
 // Wheels: measured from the mesh by vertical rays through each axle near the outer edge (ground contact to tyre top = diameter).
 // Paint: per facet by position (u along from the nose, h up, s out from the centre line) and facet angle, into vertex colours plus a
 // `surf` attribute (roughness, metalness, glow, brake flag) that one shared material reads: one draw call for the whole body.
-import { MeshStandardMaterial, Color, Matrix4, Vector3, Box3, Float32BufferAttribute } from 'three';
+import { MeshStandardMaterial, MeshPhysicalMaterial, Color, Matrix4, Vector3, Box3, Float32BufferAttribute } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import MODELS from 'virtual:models';
@@ -16,7 +16,11 @@ const AXES = ['x', 'y', 'z'];
 export async function fitGlb(url, { length, width, nose = 'auto' }) {
   const gltf = await new GLTFLoader().loadAsync(url); gltf.scene.updateMatrixWorld(true);
   const parts = [];
-  gltf.scene.traverse((o) => { if (!o.isMesh) return; let g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); for (const k of Object.keys(g.attributes)) if (k !== 'position') g.deleteAttribute(k); g = g.index ? g.toNonIndexed() : g; parts.push(g); });
+  // a textured model keeps its UVs and normals and hands back its first material's base colour and normal maps; an untextured one is
+  // reduced to positions (flat-shaded and painted in code)
+  let tex = null; gltf.scene.traverse((o) => { if (!tex && o.isMesh && o.material && o.material.map) tex = { map: o.material.map, normalMap: o.material.normalMap || null }; });
+  const keep = tex ? ['position', 'normal', 'uv'] : ['position'];
+  gltf.scene.traverse((o) => { if (!o.isMesh) return; let g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); for (const k of Object.keys(g.attributes)) if (!keep.includes(k)) g.deleteAttribute(k); g = g.index ? g.toNonIndexed() : g; parts.push(g); });
   if (!parts.length) throw new Error('no meshes in the model');
   const geo = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);
   const box = new Box3().setFromBufferAttribute(geo.attributes.position); const size = box.getSize(new Vector3()), ctr = box.getCenter(new Vector3());
@@ -31,9 +35,9 @@ export async function fitGlb(url, { length, width, nose = 'auto' }) {
   const s2 = new Box3().setFromBufferAttribute(geo.attributes.position).getSize(new Vector3());
   const k = Math.min(length / s2.z, width / s2.x); geo.scale(k, k, k);
   const b3 = new Box3().setFromBufferAttribute(geo.attributes.position); geo.translate(0, -b3.min.y, -(b3.min.z + b3.max.z) / 2);
-  geo.computeVertexNormals(); geo.computeBoundingSphere();
+  if (!tex || !geo.attributes.normal) geo.computeVertexNormals(); geo.computeBoundingSphere();
   const fin = new Box3().setFromBufferAttribute(geo.attributes.position).getSize(new Vector3());
-  return { geo, size: fin, info: { triangles: geo.attributes.position.count / 3, meshes: parts.length, lengthAxis: lenAx, upAxis: upAx, nose: (noseSign > 0 ? '+' : '-') + lenAx, noseFrom: nose === 'auto' ? 'roof' : 'set', scale: +k.toFixed(3), size: [fin.x, fin.y, fin.z].map(v => +v.toFixed(2)) } };
+  return { geo, size: fin, tex, info: { textured: !!tex, triangles: geo.attributes.position.count / 3, meshes: parts.length, lengthAxis: lenAx, upAxis: upAx, nose: (noseSign > 0 ? '+' : '-') + lenAx, noseFrom: nose === 'auto' ? 'roof' : 'set', scale: +k.toFixed(3), size: [fin.x, fin.y, fin.z].map(v => +v.toFixed(2)) } };
 }
 // all ray hits (heights) of the vertical line through (x, z) with the mesh
 function hitsVertical(p, x, z) {
@@ -90,12 +94,15 @@ export function paintCar(geo, size, wheels, pal) {
   geo.setAttribute('color', new Float32BufferAttribute(col, 3)); geo.setAttribute('surf', new Float32BufferAttribute(surf, 4)); return counts;
 }
 // the shared material: vertex colours carry the paint; `surf` carries roughness, metalness, glow and the brake flag (lit by `brake`)
-export function carMaterial(brake, key) {
-  const m = new MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 1, envMapIntensity: 1.7 });
+// opts.tex: a textured model's maps; the material becomes a clear-coated physical one, smooth-shaded, the texture carries the colour
+// (the vertex colours are white there, tinted only on the light regions) and `surf` still sets roughness, metalness and glow per region
+export function carMaterial(brake, key, opts = {}) {
+  const T = opts.tex; const m = T ? new MeshPhysicalMaterial({ vertexColors: true, map: T.map, normalMap: T.normalMap, roughness: 1, metalness: 1, clearcoat: opts.clearcoat ?? 1, clearcoatRoughness: opts.clearcoatRoughness ?? 0.05, envMapIntensity: opts.envMapIntensity ?? 1.5 })
+    : new MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 1, envMapIntensity: 1.7 });
   m.onBeforeCompile = (sh) => { sh.uniforms.uBrake = brake;
     sh.vertexShader = 'attribute vec4 surf; varying vec4 vSurf;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vSurf = surf;');
     sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = vSurf.x;').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = vSurf.y;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5);'); };
-  m.customProgramCacheKey = () => 'car-' + key; return m;
+  m.customProgramCacheKey = () => 'car-' + key + (T ? '-tex' : ''); return m;
 }
 // tag a code-built part (the hero's spinning wheels) with a palette entry so it draws with carMaterial
 export function tagPart(g, S) { g = g.index ? g.toNonIndexed() : g; const n = g.attributes.position.count; const c = new Float32Array(n * 3), su = new Float32Array(n * 4); for (let i = 0; i < n; i++) { c[i * 3] = S[0].r; c[i * 3 + 1] = S[0].g; c[i * 3 + 2] = S[0].b; su[i * 4] = S[1]; su[i * 4 + 1] = S[2]; su[i * 4 + 2] = S[3]; su[i * 4 + 3] = S[4]; } g.setAttribute('color', new Float32BufferAttribute(c, 3)); g.setAttribute('surf', new Float32BufferAttribute(su, 4)); for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color', 'surf'].includes(k)) g.deleteAttribute(k); return g; }
