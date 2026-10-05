@@ -18,7 +18,7 @@ export async function fitGlb(url, { length, width, nose = 'auto' }) {
   const parts = [];
   // a textured model keeps its UVs and normals and hands back its first material's base colour and normal maps; an untextured one is
   // reduced to positions (flat-shaded and painted in code)
-  let tex = null; gltf.scene.traverse((o) => { if (!tex && o.isMesh && o.material && o.material.map) tex = { map: o.material.map, normalMap: o.material.normalMap || null }; });
+  let tex = null; gltf.scene.traverse((o) => { if (!tex && o.isMesh && o.material && o.material.map) tex = { map: o.material.map, normalMap: o.material.normalMap || null, normalScale: o.material.normalScale ? o.material.normalScale.clone() : null }; });
   const keep = tex ? ['position', 'normal', 'uv'] : ['position'];
   gltf.scene.traverse((o) => { if (!o.isMesh) return; let g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); for (const k of Object.keys(g.attributes)) if (!keep.includes(k)) g.deleteAttribute(k); g = g.index ? g.toNonIndexed() : g; parts.push(g); });
   if (!parts.length) throw new Error('no meshes in the model');
@@ -99,9 +99,19 @@ export function paintCar(geo, size, wheels, pal) {
 export function carMaterial(brake, key, opts = {}) {
   const T = opts.tex; const m = T ? new MeshPhysicalMaterial({ vertexColors: true, map: T.map, normalMap: T.normalMap, roughness: 1, metalness: 1, clearcoat: opts.clearcoat ?? 1, clearcoatRoughness: opts.clearcoatRoughness ?? 0.05, envMapIntensity: opts.envMapIntensity ?? 1.5 })
     : new MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 1, envMapIntensity: 1.7 });
-  m.onBeforeCompile = (sh) => { sh.uniforms.uBrake = brake;
+  if (T && T.normalScale) m.normalScale.copy(T.normalScale);
+  const tint = new Color(opts.tint || '#ffffff');
+  m.onBeforeCompile = (sh) => { sh.uniforms.uBrake = brake; sh.uniforms.uTint = { value: tint };
+    // textured: a faint cyan self-light (0.07 on white panels) keeps the hue at night, when a metal finish mostly shows the navy sky
+    if (T) {   // textured: per texel, white panels (bright, colourless) take the tint as glossy metal paint; dark and coloured texels keep
+      // the texture's colour with a rougher, less metallic finish; tail lights glow only where the texel is red
+      sh.fragmentShader = 'uniform vec3 uTint;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+ vec3 tc = diffuseColor.rgb; float tl = dot(tc, vec3(0.299, 0.587, 0.114)); float ts = max(tc.r, max(tc.g, tc.b)) - min(tc.r, min(tc.g, tc.b));
+ float panelW = smoothstep(0.35, 0.6, tl) * (1.0 - smoothstep(0.12, 0.3, ts)); float redW = clamp((tc.r - max(tc.g, tc.b)) * 2.5, 0.0, 1.0);
+ diffuseColor.rgb = mix(tc, uTint * (0.55 + 0.45 * tl), panelW);`);
+    }
     sh.vertexShader = 'attribute vec4 surf; varying vec4 vSurf;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vSurf = surf;');
-    sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = vSurf.x;').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = vSurf.y;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5);'); };
+    sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = ' + (T ? 'mix(0.55, 0.2, panelW)' : 'vSurf.x') + ';').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = ' + (T ? 'mix(0.15, 0.45, panelW)' : 'vSurf.y') + ';').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5)' + (T ? ' * (vSurf.w > 0.5 ? max(redW * 1.6, 0.12) : 1.0) + uTint * panelW * 0.07' : '') + ';'); };
   m.customProgramCacheKey = () => 'car-' + key + (T ? '-tex' : ''); return m;
 }
 // tag a code-built part (the hero's spinning wheels) with a palette entry so it draws with carMaterial
