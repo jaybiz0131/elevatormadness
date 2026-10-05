@@ -7,8 +7,12 @@
 | **C (current)** | 3D engine and corners, run as the "Look to 8" stop points. This session: Stop 1 Environment (dark wet road, real smoke, prop kit), Stop 2 Cars (five enemy looks, hero polish, hero top-view design), Stop 3 UI and performance (HUD and title polish, showroom title screen with the hero car turning, tune panel, fonts, under 150 draw calls). |
 | D | First: the hood gatling and the handbrake 180 (below). Then the downhill drop plus the first 5-stage mission: drop camera, intro orbit camera, slow-motion kill shot. Level 1 intro, Acts 1 and 2, the boss climax and the payoff (see Level 1 below). |
 | E | Act 3, the city maze (see Level 1 below). Rest of scope to be confirmed with Jack. |
-| F | Supply pit stop with the Mule's arm (see Level 1 below). Rest of scope to be confirmed with Jack. |
+| F | Supply pit stop with the Mule's arm (see Level 1 below), with "The Refit" dock cinematic as segment 5 (below). Rest of scope to be confirmed with Jack. |
 | G | Scope to be confirmed with Jack. |
+
+## Carried into Sprint D from Sprint C (Jack, 2026-10-05)
+- Traffic colours: at dusk, silver and white traffic both read as cream. Swap silver (`#b8bec8`, `CIV_BODY` in
+  `spycar/shunt/src/render/three/cars.js`) for a mid gunmetal grey, then recheck all three looks.
 
 ## Sprint D, first item: the hood gatling and the handbrake 180 (Jack, 2026-10-05; record only)
 - The plain machine guns become one hood-mounted gatling gun: fixed forward, firing along the car's heading in a tight spray cone (about
@@ -17,6 +21,24 @@
 - Barrel heat instead of ammo: hold it too long and it overheats briefly.
 - Handbrake 180: brake plus a hard steer whips the car round to a stop facing backward, so the player can fire behind.
 - This is a sim change (weapons and handling): new baseline replays in the same commit, as for every sim change.
+
+## Sprint F, segment 5: "The Refit", the Mule dock cinematic (Jack, 2026-10-05; record only, do not build yet)
+The Mule docks with the hero and bolts the arsenal onto the car in one short cinematic.
+- Length: about 4 s the first time, 2 s on repeats; tap to skip. Enemies hold back while it plays.
+- Determinism: the sim must stay deterministic, so replays still match. The cinematic is presentation plus a fixed, recorded sim
+  state (an enemy hold and a fixed duration in sim steps), never frame-clock timing. A skip resolves on a sim step.
+- Beats:
+  1. Lock: the arm clamps on; cut to a low front three-quarter camera.
+  2. Open: a cyan seam glow runs over the hero; the Mule's bays open with green light; time drops to 0.4x.
+  3. Build: the arm locks on 5 modules one at a time, each with a clank, sparks and a camera punch: the gatling on the hood,
+     missile pods on the flanks, the laser on the roof, the rocket booster at the rear, jump jets under the skirts.
+  4. Reveal: a half orbit round the car; the HUD weapon icons light up.
+  5. Release: the Mule peels off; full speed, a boost burst, back to the chase cam.
+- Models: each module is its own GLB, attached to named mount points on the hero. Plan the mount empties in the hero model:
+  `mount_hood`, `mount_flank_L`, `mount_flank_R`, `mount_roof`, `mount_rear`, `mount_skirt_FL`, `mount_skirt_FR`, `mount_skirt_RL`,
+  `mount_skirt_RR`.
+- The car stays a car: modules bolt on, nothing unfolds or stands up. Nothing from any transforming-robot franchise, in either the
+  sound or the motion.
 
 ## Level 1 plan (Jack, 2026-10-05; record only, build in the sprints named)
 Goal: arcade feel on mobile. Quick to start, big moments, readable at a glance, a score to beat. Driving skill raises the score, but a

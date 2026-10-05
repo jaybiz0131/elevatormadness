@@ -65,7 +65,7 @@ hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mo
   Next: Jack's Dart GLB (set its nose in ENEMY_NOSE after a side-view check), then the other four; Stop 3.
 - Stop 2 done (v17): camera A/B toggle, landmark night lights, simplified cones/rooftop_ac/newsstand, traffic_car.glb with per-car
   body colour (one draw).
-- Stop 3 UI and performance (v18, waiting on Jack's go-ahead):
+- Stop 3 UI and performance (v18, accepted by Jack 2026-10-05):
   - Showroom title (`src/render/three/showroom.js`): the hero on a slow turntable under a studio environment map (softboxes), key plus
     magenta and violet rims, a dark lacquer floor with a mirrored reflection (the floor is 94 to 100% opaque: the car is HDR under it),
     magenta/violet neon tubes and haze, drawn through the game's post chain while the title card is up (28 calls, 23k triangles).
@@ -80,3 +80,8 @@ hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mo
   - Tune panel: static import (the lazy chunk never loaded in the single-file build), Settings > Developer > Tune panel, per-look
     working copies, 13 px touch rows, Copy look JSON, Reset this look.
   - Traffic: plain non-metallic paint and a 60% hue hold after lighting so the four colours read at dusk and blue hour; rims grey.
+- Sprint C status: code done (v18, https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn). The sprint closes on Jack's iPhone playtest of
+  v18. Do not start Sprint D until then.
+- Recorded in design/roadmap.md: Sprint F segment 5 "The Refit" (the Mule dock cinematic, mount points on the hero); carried into
+  Sprint D: swap silver traffic for a mid gunmetal grey (silver and white both read as cream at dusk).
+- Next: Jack's playtest notes on v18, then Sprint D (first item: the hood gatling and the handbrake 180).
