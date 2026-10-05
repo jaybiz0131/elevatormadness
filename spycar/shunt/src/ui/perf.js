@@ -3,17 +3,18 @@
 // first minute against last. ?shots=1 plays the same run for the postcard tool. Headless numbers are not iPhone numbers.
 import bench from '../../replays/beauty.json';
 import { S } from '../settings.js';
-// the debug readout: frames per second and draw calls for the whole frame (main pass, shadow pass and post), refreshed twice a
-// second; amber when calls pass the 150 budget or fps drops under 55. On from Settings > Debug readout, or ?debug=1.
-const CALL_BUDGET = 150;
+// Show FPS (Settings > Developer > Show FPS, remembered; or ?debug=1): a small readout in the top right corner with the current frames
+// per second and the lowest over the last 10 seconds. FPS is measured over half-second windows; the low is the worst of the last 20
+// windows. Amber under 55. Draw calls and triangles are in the Frame counter (?perf=1).
 function createDebug(Q, renderer) {
-  const force = Q.get('debug') === '1'; let el = null, t = 0, n = 0, acc = 0;
-  return function (dt, elapsed) {
-    const on = force || S.debug; if (!on) { if (el) el.hidden = true; return; }
+  const force = Q.get('debug') === '1'; let el = null, t = 0, n = 0, acc = 0; const win = new Float32Array(20); let wn = 0, wi = 0;
+  return function (dt) {
+    const on = force || S.debug; if (!on) { if (el) el.hidden = true; wn = 0; return; }
     if (!el) { el = document.createElement('div'); el.id = 'dbg'; document.getElementById('ui').appendChild(el); } el.hidden = false;
     n++; acc += dt; if (performance.now() - t < 500) return; t = performance.now();
-    const fps = n / Math.max(1e-3, acc); n = 0; acc = 0; const s = renderer.stats ? renderer.stats() : null; const calls = s ? s.calls : 0;
-    el.textContent = `FPS ${fps.toFixed(0)}\nCALLS ${calls}` + (s ? `\nTRIS ${(s.triangles / 1000).toFixed(0)}k` : ''); el.classList.toggle('over', calls > CALL_BUDGET || fps < 55);
+    const fps = n / Math.max(1e-3, acc); n = 0; acc = 0; win[wi] = fps; wi = (wi + 1) % win.length; wn = Math.min(win.length, wn + 1);
+    let low = fps; for (let k = 0; k < wn; k++) low = Math.min(low, win[k]);
+    el.textContent = `${fps.toFixed(0)} FPS\nLOW ${low.toFixed(0)} (10 s)`; el.classList.toggle('over', low < 55);
   };
 }
 export function createPerf(Q, renderer, hud) {
@@ -23,7 +24,7 @@ export function createPerf(Q, renderer, hud) {
   const frames = []; let t = 0, acc = 0, n = 0, worst = 0, running = false, results = null, soakStart = 0, loops = 0, lastPerf = 0, minutesDone = false; const minutes = [];
   const debug = createDebug(Q, renderer);
   function frame(dt, st) {
-    debug(dt, st.elapsed);
+    debug(dt);
     if (!show && !shots) return; const ms = dt * 1000; acc += ms; n++; worst = Math.max(worst, ms); if (running) frames.push(ms);
     const wall = performance.now() / 1000;   // the soak runs on wall time, not the frame-capped elapsed clock
     if (mode === 'soak' && running) { const m = Math.floor((wall - soakStart) / 60); if (!minutes[m]) minutes[m] = { ms: [], mem: [] }; minutes[m].ms.push(ms); if (performance.memory && n % 60 === 0) minutes[m].mem.push(performance.memory.usedJSHeapSize); }
