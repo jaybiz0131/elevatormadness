@@ -16,7 +16,8 @@ export class Explosions {
   constructor() { this.slots = Array.from({ length: SLOTS }, () => ({ on: false, t: 0, x: 0, y: 0, z: 0, s: 1, seed: 0 })); this.n = 0; this.last = 0; }
   spawn(x, y, z, kind, seed) { const e = this.slots.find(q => !q.on) || this.slots.reduce((a, q) => q.t > a.t ? q : a, this.slots[0]); e.on = true; e.t = 0; e.x = x; e.y = y; e.z = z; e.s = SIZE[kind] || 1; e.seed = seed * 97 + this.n++; }
   // brightness the explosions add to a car at world (x, z): a hot flash for the first 0.35 s, within 38 m
-  boost(x, z) { let b = 0; for (const e of this.slots) { if (!e.on || e.t > 0.35) continue; const d = Math.hypot(x - e.x, z - e.z); const r = 22 + 14 * e.s; if (d < r) b += (1 - d / r) * (1 - e.t / 0.35) * 0.9 * Math.min(1.6, e.s); } return Math.min(1.8, b); }
+  // Stop 3 brightness: the flash, then the fireball keeps lighting what is near it for about a second and a half
+  boost(x, z) { let b = 0; for (const e of this.slots) { if (!e.on || e.t > 1.5) continue; const d = Math.hypot(x - e.x, z - e.z); const r = 26 + 16 * e.s; if (d < r) { const f = e.t < 0.35 ? 1 - e.t / 0.35 * 0.6 : 0.4 * (1 - (e.t - 0.35) / 1.15); b += (1 - d / r) * f * 1.3 * Math.min(1.6, e.s); } } return Math.min(2.2, b); }
   update(fx, dt) {
     const low = Q.level === 'low', R = low ? 0.7 : 1;   // Low: smaller flash, rings and road pool (they are the big fill-rate items), fewer lobes, debris and sparks
     for (const e of this.slots) { if (!e.on) continue; e.t += dt; if (e.t >= LIFE) { e.on = false; continue; } const a = e.t, s = e.s, k = a / LIFE, x = e.x, y = e.y, z = e.z, sd = e.seed;
@@ -33,9 +34,9 @@ export class Explosions {
         const nl = low ? 6 : 12; for (let i = 0; i < nl; i++) { const h = hash(sd + i * 3.3), h2 = hash(sd * 1.7 + i * 5.1), h3 = hash(sd * 2.3 + i * 7.7); const ang = h * 6.2832, rr = (0.5 + h2) * (1.2 + 5.5 * kk) * s, up = (0.3 + h3) * (1.5 + 6 * kk) * s;
           const fade = Math.max(0, 1 - Math.max(0, kk - 0.15 - 0.4 * h3) * 1.5); fx.glow(x + Math.cos(ang) * rr, y + 1.2 + up, z + Math.sin(ang) * rr, (1.6 + 2.6 * h2 + 3.2 * kk) * s, 2.5 - 0.9 * kk, 0.95 - 0.8 * kk * (0.6 + h), 0.1, 0.5 * fade); } }
       // 3. the shockwave: two rings racing out over the road
-      if (a < 0.6) { const kr = a / 0.6; fx.ring(x, y + 0.08, z, (4 + 30 * kr) * s * R, 0xffe3a8, (1 - kr) * 1.0, 1); const k2 = clamp((a - 0.07) / 0.6, 0, 1); if (a > 0.07) fx.ring(x, y + 0.1, z, (4 + 52 * k2) * s * R, 0xff9a40, (1 - k2) * 0.6, 1); }
+      if (a < 0.6) { const kr = a / 0.6; fx.ring(x, y + 0.08, z, (4 + 30 * kr) * s * R, 0xffe3a8, (1 - kr) * 0.4, 1); const k2 = clamp((a - 0.07) / 0.6, 0, 1); if (a > 0.07) fx.ring(x, y + 0.1, z, (4 + 52 * k2) * s * R, 0xff9a40, (1 - k2) * 0.22, 1); }   // Stop 3: quieter rings
       // 4. the road and the walls take the light: a wide orange pool on the asphalt that fades over about a second
-      if (a < 1.1) fx.poolAt(x, y, z, 1.0, 0.55, 0.22, 0.95 * Math.pow(1 - a / 1.1, 1.6), (24 + 14 * s) * R, 0, 1);
+      if (a < 1.6) fx.poolAt(x, y, z, 1.0, 0.55, 0.22, 0.8 * Math.pow(1 - a / 1.6, 1.6), (22 + 10 * s) * R, 0, 1);   // Stop 3: lasts longer
       // 5. hot debris on arcs, glowing for the first third of a second then charred; sparks on top
       const nd = Math.round((low ? 12 : 26) * Math.min(2, s)), nsp = Math.round((low ? 14 : 34) * Math.min(2, s));
       for (let i = 0; i < nd; i++) { const j = fx.debris.count; if (j >= Q.debris) break; const h = hash(sd + i * 1.7), h2 = hash(sd * 3.1 + i * 2.3), h3 = hash(sd * 5.3 + i);

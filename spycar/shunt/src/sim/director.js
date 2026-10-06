@@ -100,11 +100,11 @@ function pickups() {
   if (!kind || crateOut(kind)) { G.pickT = G.t + 6; return; }
   spawnCrate(kind); if (kind === 'armor') G.lastAidT = G.t;
 }
-// hairpin teaching (kept from the old script): time slows at the first hairpin until the pad is held
+// hairpin teaching (kept from the old script): time slows at the first hairpin until the car drifts (Stop 3: a hard steer starts it)
 function teaching() {
   if (!G.teachSet && G.t >= 8) { G.teachSet = true; G.teach = 'drift'; }
   if (G.teachT > 0) { G.teachT -= STEP; if (G.teachT <= 0) { G.teach = null; G.slowmo = 0; } }
-  if (G.teach === 'drift' && G.teachT <= 0) { const ca = G.road.cornerAhead(G.dist, 500); if (ca && ca.type === 'hairpin' && G.dist >= ca.s0 - 420) { G.teachT = 3; G.slowmo = 3; G.slowmoRate = 0.3; say('Hold to drift', ['hold the pad and steer', 'hold Shift and steer'], 2500); } }
+  if (G.teach === 'drift' && G.teachT <= 0) { const ca = G.road.cornerAhead(G.dist, 500); if (ca && ca.type === 'hairpin' && G.dist >= ca.s0 - 420) { G.teachT = 3; G.slowmo = 3; G.slowmoRate = 0.3; say('Steer hard to drift', ['drag your thumb far into the turn', 'hold left or right into the turn'], 2500); } }
   if (G.teachT > 0 && G.teach === 'drift' && G.drifting) { G.teach = null; G.teachT = 0; G.slowmo = 0; say(null); }
 }
 export function director() {

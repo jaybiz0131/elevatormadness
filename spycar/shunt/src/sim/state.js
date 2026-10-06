@@ -1,5 +1,6 @@
 import { REF, T, mulberry32 } from './constants.js';
 import { Road } from './road.js';
+import { crashReset } from './crash.js';
 export function makeCar(kind, x, y, extra) {
   const [w, l, mass] = T.sizes[kind];
   // px/py: position at the previous physics step, for interpolated rendering. credit: the player caused this car's motion or wreck.
@@ -9,8 +10,8 @@ export function makeCar(kind, x, y, extra) {
 // in-place compaction: keeps the elements that pass, in order, without allocating a new array (audit, "Smooth movement" 3)
 export function compact(arr, keep) { let n = 0; for (let i = 0; i < arr.length; i++) { const v = arr[i]; if (keep(v)) arr[n++] = v; } arr.length = n; return arr; }
 // replay ring buffer: 1.5 s at 30 Hz, every frame and car slot pre-allocated so recording allocates nothing
-export const REPLAY_FRAMES = 45, REPLAY_SLOTS = 24, REPLAY_FIELDS = ['kind', 'x', 'y', 'w', 'l', 'wrecked', 'tint', 'spin', 'flip', 'lean', 'state', 'blink', 'blinkDir', 'honk', 'debrisT', 'loaded', 'hitFlash', 't', 'sightX'];
-export function makeReplay() { const frames = []; for (let i = 0; i < REPLAY_FRAMES; i++) { const cars = []; for (let j = 0; j < REPLAY_SLOTS; j++) cars.push({ kind: 'civ', x: 0, y: 0, w: 34, l: 58, wrecked: false, tint: null, spin: 0, flip: 0, lean: 0, state: '', blink: 0, blinkDir: 0, honk: 0, debrisT: 0, loaded: false, hitFlash: 0, t: 0, sightX: 0 }); frames.push({ x: REF, y: 0, jumpZ: 0, lean: 0, n: 0, cars, district: 0 }); } return { frames, head: 0, count: 0, acc: 0 }; }
+export const REPLAY_FRAMES = 45, REPLAY_SLOTS = 24, REPLAY_FIELDS = ['kind', 'x', 'y', 'w', 'l', 'wrecked', 'tint', 'spin', 'flip', 'lean', 'state', 'blink', 'blinkDir', 'honk', 'debrisT', 'loaded', 'hitFlash', 't', 'sightX', 'h', 'qx', 'qy', 'qz', 'qw', 'crush', 'boom', 'civCrash', 'bodyH'];
+export function makeReplay() { const frames = []; for (let i = 0; i < REPLAY_FRAMES; i++) { const cars = []; for (let j = 0; j < REPLAY_SLOTS; j++) cars.push({ kind: 'civ', x: 0, y: 0, w: 34, l: 58, wrecked: false, tint: null, spin: 0, flip: 0, lean: 0, state: '', blink: 0, blinkDir: 0, honk: 0, debrisT: 0, loaded: false, hitFlash: 0, t: 0, sightX: 0, h: 0, qx: 0, qy: 0, qz: 0, qw: 1, crush: 0, boom: true, civCrash: false, bodyH: 0 }); frames.push({ x: REF, y: 0, jumpZ: 0, lean: 0, n: 0, cars, district: 0 }); } return { frames, head: 0, count: 0, acc: 0 }; }
 export function recordReplay(dt) {
   const R = G.replay; R.acc += dt; if (R.acc < 1 / 30) return; R.acc = 0;
   const f = R.frames[R.head]; R.head = (R.head + 1) % REPLAY_FRAMES; R.count = Math.min(REPLAY_FRAMES, R.count + 1);
@@ -31,7 +32,10 @@ export function newRun(seed, cfg) {
         air: 0, airTotal: 0, jumpZ: 0, slowmo: 0, slowmoRate: 0.7, hitStop: 0, trauma: 0, kick: { x: 0, y: 0 }, vignette: 0, smoke: 0, flashT: 0, nitro: 0, speedLines: 0, punch: 0, detour: 0,
         special: null, gun: 'twin', gunLevel: 1, nextRamp: T.ramp.first, rampIndex: 0, nextTruck: 30, truckIndex: 0, nextBarrel: 14, nextClosure: 24, nextFork: 45, nextOnramp: 55, nextSpawn: 0, lastEvent: 0, lastSpawnBurst: [], wave: 'pressure', waveT: T.pace.first, waveN: 0,
         waveIdx: 0, fillT: 0, fillCool: 0, weaveT: 9, pickT: 20, finale: 0, leadIn: false, won: false, winT: 0, stars: 0, limp: false, limpT: 0, limpCount: 0, killBursts: 0, timeScore: 0, scoreScore: 0, repaired: 0, grade: '', rating: 0, killBurst: 0, speedLoss: 0, prog: 0, opened: false, shown: {}, killFlash: 0, lastKillT: -9, lastAidT: -99, nearMisses: 0, armorLeft: 0,
-        scripted: false, script: 0, district: 0, nextDistrictY: 600 * 8, signShown: -1, cause: '', killedBy: '', boost: 0, grazeT: 0, grazePaid: 0, gunCd: 0, gunSpin: 0, heat: 0, hot: 0, shots: 0, reversing: false, gasT: 0, spinning: false, spinA: 0, spinDir: 0, spins: 0, spinArm: 0, slamT: 0, slamDir: 0, slamCd: 0, replay: makeReplay(), replayT: 0, deathT: 0, bestMoment: 0 };
+        scripted: false, script: 0, district: 0, nextDistrictY: 600 * 8, signShown: -1, cause: '', killedBy: '', boost: 0, grazeT: 0, grazePaid: 0, gunCd: 0, gunSpin: 0, heat: 0, hot: 0, shots: 0, reversing: false, gasT: 0, spinning: false, spinA: 0, spinDir: 0, spins: 0, spinArm: 0, slamT: 0, slamDir: 0, slamCd: 0, replay: makeReplay(), replayT: 0, deathT: 0, bestMoment: 0,
+        // Stop 3: crash physics hits waiting for the sim, counters, the hero rollover and the hero's body (roll, pitch, two wheels)
+        crashHits: [], pileups: 0, civCrashes: 0, wallSlams: 0, rolls: 0, twoWheels: 0, roll: null, body: { roll: 0, rollV: 0, pitch: 0, pitchV: 0, tilt: 0, two: false, twoT: 0, twoDir: 1, twoHeld: 0 }, autoLift: false, driftBuild: 0, prevPhi: 0, prevSpeed: 0, steerT: 0 };
+  crashReset();   // a fresh physics world for every run (replays rebuild it from the same start)
   G.x = REF; G.special = { kind: 'missiles', ammo: 3, level: 1 };   // Sprint 4: start armed, the supply truck tops it up
   return G;
 }

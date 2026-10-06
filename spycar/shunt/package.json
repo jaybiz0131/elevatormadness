@@ -10,6 +10,8 @@
     "replays": "node tools/replay.mjs"
   },
   "dependencies": {
+    "@dimforge/rapier3d-deterministic-compat": "0.21.0",
+    "fflate": "0.8.2",
     "postprocessing": "6.39.5",
     "three": "0.186.1"
   },

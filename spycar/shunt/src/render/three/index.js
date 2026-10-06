@@ -19,7 +19,7 @@ import { LOOKS, lookFor } from './looks.js';
 import { loadHeroModel, HERO_GLB_URL } from './heroModel.js';
 import { loadEnemyModels } from './enemyModels.js';
 import { loadPropModels } from './propModels.js';
-import { MODELS } from './carModel.js';
+import { MODELS, RIM } from './carModel.js';
 import { createShowroom } from './showroom.js';
 import { modelLine, MODEL_STATUS } from './glbLoad.js';
 import { Q, LEVELS, setLevel, parseOverrides } from '../../quality.js';
@@ -58,7 +58,7 @@ export function createThreeRenderer(canvas, opts = {}) {
   const state = { scale: 1, cap: 1, frameMs: 16, lost: false, chroma: 0, fovKick: 0, elapsed: 0, postError: null, glError: null, frames: 0 };
   function applyLook() {
     const az = P.sunAzimuth * Math.PI / 180, el = Math.max(3, P.sunElevation) * Math.PI / 180; SUN.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)); fx.setSun(SUN); fx.setLook(P);
-    key.color.set(P.sunColor); key.intensity = P.sunIntensity; hemi.color.set(P.hemiSky); hemi.groundColor.set(P.hemiGround); hemi.intensity = P.hemiIntensity;
+    key.color.set(P.sunColor); key.intensity = P.sunIntensity; RIM.col.value.set(P.rim || '#8fd0ff'); RIM.k.value = P.rimIntensity || 0; /* Stop 3: the cars' rim (carModel.js) */ hemi.color.set(P.hemiSky); hemi.groundColor.set(P.hemiGround); hemi.intensity = P.hemiIntensity;
     sky.apply(P, SUN); city.setLook(P); road.setLook(P); renderer.toneMappingExposure = P.exposure; post.apply(P);
     post.setLut(buildLut({ sat: P.gradeSat, contrast: P.gradeContrast, lift: [P.gradeLift + P.gradeWarm * 0.5, P.gradeLift, P.gradeLift - P.gradeWarm * 0.5], gain: [1 + P.gradeWarm * 0.6, 1, 1 - P.gradeWarm * 0.6] }), P.lutStrength);
     rain.material.opacity = P.rain * 0.35;

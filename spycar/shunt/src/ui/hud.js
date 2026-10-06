@@ -41,8 +41,9 @@ const CSS = `
 #hud .ghost.left { left: auto; right: 0; }
 #hud .ghost i { display: block; width: 44px; height: 44px; border-radius: 22px; background: #fff; margin: 0 auto 8px; animation: ghost 1.6s infinite; opacity: 0.7; }
 @keyframes ghost { 0% { transform: translateX(-40px); } 50% { transform: translateX(40px); } 100% { transform: translateX(-40px); } }
-#hud .pop { position: absolute; transform: translate(-50%, -100%); font-size: 21px; font-weight: 700; color: #ffd23f; text-shadow: 0 1px 4px rgba(0,0,0,0.8); white-space: nowrap; }
-#hud .pop.bad { color: #b8bcc6; } #hud .pop.small { font-size: 15px; } #hud .pop.big { font-size: 28px; color: #fff3a8; text-shadow: 0 0 10px rgba(255,160,40,0.8), 0 2px 4px rgba(0,0,0,0.9); }
+#hud .pop { position: absolute; transform: translate(-50%, -100%); font-size: 17px; font-weight: 700; color: #ffd23f; text-shadow: 0 1px 4px rgba(0,0,0,0.8); white-space: nowrap; }
+#hud .pop.ride { font-size: 16px; color: #ffe27a; letter-spacing: 0.04em; text-shadow: 0 1px 3px rgba(0,0,0,0.95); }
+#hud .pop.bad { color: #b8bcc6; } #hud .pop.small { font-size: 14px; } #hud .pop.big { font-size: 20px; color: #fff3a8; text-shadow: 0 0 10px rgba(255,160,40,0.8), 0 2px 4px rgba(0,0,0,0.9); }
 #hud .look { position: absolute; left: 16px; top: calc(290px + var(--safe-top, 0px)); pointer-events: auto; display: flex; gap: 6px; }
 #hud .look button { height: 32px; padding: 0 10px; border-radius: 16px; border: 0; background: rgba(20,24,30,0.7); color: #f4f6f8; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.08em; }
 #hud .look button.on { background: rgba(55,230,255,0.3); }
@@ -81,9 +82,10 @@ export function createHud(container, renderer) {
     // off-screen threats: red chevrons at the bottom for enemies behind, white at the top for the supply truck, placed by projection
     let ci = 0; for (const c of G.cars) { if (!c.alive || c.wrecked || ci >= chevs.length) continue; const enemy = (c.kind === 'bruiser' || c.kind === 'gunner') && c.y < G.dist - 300; const truck = c.kind === 'truck' && !c.loaded; if (!enemy && !truck) continue; renderer.project(c.x, c.y, pt); if (truck && pt.visible) continue; if (truck && pt.y > 0) continue; const e = chevs[ci++]; e.hidden = false; e.className = 'chev ' + (enemy ? 'down' : 'up'); e.style.left = (clamp(pt.x, 24, view.SW - 24) - 12) + 'px'; e.style.opacity = enemy ? 0.5 + 0.5 * Math.sin(st.elapsed * 12) : 1; }
     for (; ci < chevs.length; ci++) chevs[ci].hidden = true;
-    let pi = 0; const placed = []; for (const p of G.pops) { if (pi >= pops.length) break; renderer.project(p.x, p.y, pt, 1.2); const e = pops[pi++]; e.hidden = false; const cls = 'pop' + (p.bad ? ' bad' : '') + (p.small ? ' small' : '') + (p.big ? ' big' : '');
+    // Stop 3: a kill's score is a small number riding on its wreck as it flips (p.car), not a big popup
+    let pi = 0; const placed = []; for (const p of G.pops) { if (pi >= pops.length) break; const rc = p.ride && p.car; if (rc) renderer.project(rc.x, rc.y, pt, (rc.h || 0.6) + 1.6); else renderer.project(p.x, p.y, pt, 1.2); const e = pops[pi++]; e.hidden = false; const cls = 'pop' + (rc ? ' ride' : '') + (p.bad ? ' bad' : '') + (p.small ? ' small' : '') + (p.big ? ' big' : '');
       if (e.textContent !== p.text || e.className !== cls) { e.textContent = p.text; e.className = cls; e._w = 0; } if (!e._w) e._w = e.offsetWidth || 120;   // the width is measured once per text
-      let top = clamp(pt.y - 24 - p.t * 40, POP_TOP, POP_BOTTOM); const left = clamp(pt.x, e._w / 2 + 8, view.SW - e._w / 2 - 8);
+      let top = clamp(pt.y - (rc ? 8 + p.t * 10 : 24 + p.t * 40), POP_TOP, POP_BOTTOM); const left = clamp(pt.x, e._w / 2 + 8, view.SW - e._w / 2 - 8);
       for (let k = 0; k < 5 && placed.some(o => Math.abs(o.top - top) < 24 && Math.abs(o.left - left) < (o.w + e._w) / 2); k++) top = Math.max(POP_TOP, top - 24);   // two pops never sit on each other
       placed.push({ top, left, w: e._w }); e.style.left = left + 'px'; e.style.top = top + 'px'; e.style.opacity = 1 - p.t * p.t; }
     for (; pi < pops.length; pi++) pops[pi].hidden = true;

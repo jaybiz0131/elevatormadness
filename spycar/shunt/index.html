@@ -44,12 +44,15 @@
   #pad { right: 128px; width: 84px; height: 84px; border-radius: 42px; }
   #gas { position: absolute; right: 18px; bottom: calc(16px + var(--safe-bottom, 0px)); width: 100px; height: 100px; border-radius: 50px; border: 3px solid rgba(255,255,255,0.28); background: rgba(20,24,30,0.78); color: var(--fg-dim); font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: 0.14em; touch-action: none; -webkit-tap-highlight-color: transparent; }
   #gas.held { background: rgba(255,210,63,0.2); border-color: var(--pickup); color: var(--fg); }
-  #fire { position: absolute; right: 26px; bottom: calc(130px + var(--safe-bottom, 0px)); width: 84px; height: 84px; border-radius: 42px; border: 3px solid rgba(255,255,255,0.28); background: rgba(20,24,30,0.78); color: var(--fg-dim); font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.14em; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  #fire { position: absolute; right: 18px; bottom: calc(22px + var(--safe-bottom, 0px)); width: 104px; height: 104px; border-radius: 52px; border: 3px solid rgba(255,255,255,0.28); background: rgba(20,24,30,0.78); color: var(--fg-dim); font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.14em; touch-action: none; -webkit-tap-highlight-color: transparent; }
   #fire.held { background: rgba(255,80,60,0.25); border-color: #ff5a3c; color: var(--fg); }
   #fire.hot { border-color: #ff8a3c; box-shadow: 0 0 14px rgba(255,120,40,0.6); }
-  #gas.left { right: auto; left: 18px; } #fire.left { right: auto; left: 26px; } #pad.left { right: auto; left: 128px; }
+  #gas.left { right: auto; left: 18px; } #fire.left { right: auto; left: 18px; } #pad.left { right: auto; left: 128px; }
+  /* Stop 3 (Jack): no BRAKE (drift is automatic from steering) and no GAS (speed is automatic). Two buttons: FIRE, the main thumb spot, and
+     MISSILE beside it. The spot above FIRE (right 26px, bottom 142px, 84px) is kept free for the BOOST button that comes later. */
+  #pad, #gas, #pad[hidden], #gas[hidden] { display: none !important; }
   #gas[hidden], #fire[hidden] { display: none; }
-  #special { position: absolute; right: 132px; bottom: calc(134px + var(--safe-bottom, 0px)); width: 76px; height: 76px; border-radius: 38px; border: 3px solid rgba(255,255,255,0.35); background: rgba(20,24,30,0.88); color: var(--fg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; transition: transform 0.3s, opacity 0.3s; }
+  #special { position: absolute; right: 138px; bottom: calc(30px + var(--safe-bottom, 0px)); width: 82px; height: 82px; border-radius: 41px; border: 3px solid rgba(255,255,255,0.35); background: rgba(20,24,30,0.88); color: var(--fg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; transition: transform 0.3s, opacity 0.3s; }
   #special[hidden] { display: flex; opacity: 0; transform: translateY(40px) scale(0.6); }
   #special.armed { border-color: var(--pickup); box-shadow: 0 0 18px rgba(255,210,63,0.55); }
   #special.empty { opacity: 0.45; }
@@ -60,7 +63,7 @@
   #special .pips:empty { display: none; }
   #special.empty .pips { background: rgba(255,255,255,0.3); color: #fff; }
   #special.left .pips { right: auto; left: -8px; }
-  #special.left { right: auto; left: 132px; }
+  #special.left { right: auto; left: 138px; }
   @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
   #card { position: absolute; inset: 0; background: rgba(0,0,0,0.6); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 28px; box-sizing: border-box; }
   #card[hidden] { display: none; }
@@ -117,10 +120,10 @@
     <div id="ui">
       <div class="callout" id="callout" style="opacity:0"></div>
       <button id="pause" class="tap" aria-label="Pause"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect x="4" y="3" width="4" height="14" rx="1" fill="currentColor"/><rect x="12" y="3" width="4" height="14" rx="1" fill="currentColor"/></svg></button>
-      <button id="special" class="tap" aria-label="Special weapon" hidden><span id="specialIcon"></span><span class="pips" id="specialPips"></span></button>
+      <button id="special" class="tap" aria-label="Missile" hidden><span id="specialIcon"></span><span class="pips" id="specialPips"></span></button>
       <button id="pad" class="tap" aria-label="Brake, hold while steering to drift, hold at a stop to reverse" hidden>BRAKE</button>
       <button id="gas" class="tap" aria-label="Gas, hold to speed up" hidden>GAS</button>
-      <button id="fire" class="tap" aria-label="Fire, hold for the rotary guns" hidden>FIRE</button>
+      <button id="fire" class="tap" aria-label="Fire, hold for the gatling" hidden>FIRE</button>
       <div id="card" hidden>
         <div class="logo" id="cardLogo" hidden>SHUNT</div>
         <div class="title" id="cardTitle"></div>
@@ -137,7 +140,7 @@
           <label><span>Special button side</span><button class="sw seg tap" id="sHand">RIGHT</button></label>
           <label><span>Sensitivity <b id="sSensVal">1.0×</b></span><input id="sSens" type="range" min="0.7" max="1.6" step="0.1" value="1" aria-label="Sensitivity"></label>
           <label><span>Tap half to Slam</span><button class="sw tap" id="sTapSlam" role="switch" aria-label="Tap half to Slam"></button></label>
-          <label><span>Auto-drift <b>hard turns drift by themselves</b></span><button class="sw tap" id="sAutoDrift" role="switch" aria-label="Auto-drift"></button></label>
+          <label style="display:none"><span>Auto-drift <b>hard turns drift by themselves</b></span><button class="sw tap" id="sAutoDrift" role="switch" aria-label="Auto-drift"></button></label>
           <div class="grp">Accessibility</div>
           <label><span>Haptics</span><button class="sw tap" id="sHaptics" role="switch" aria-label="Haptics"></button></label>
           <label><span>Screen shake</span><button class="sw tap" id="sShake" role="switch" aria-label="Screen shake"></button></label>

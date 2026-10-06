@@ -108,6 +108,10 @@ export function paintCar(geo, size, wheels, pal) {
 // the shared material: vertex colours carry the paint; `surf` carries roughness, metalness, glow and the brake flag (lit by `brake`)
 // opts.tex: a textured model's maps; the material becomes a clear-coated physical one, smooth-shaded, the texture carries the colour
 // (the vertex colours are white there, tinted only on the light regions) and `surf` still sets roughness, metalness and glow per region
+// Stop 3 brightness: a view-angle rim on every car body (hero, enemies, traffic, wrecks): the edges facing away from the camera glow in the
+// look's rim colour, so every car reads against the night road. It fades out inside 50 m (close-ups and the title keep the paint). A light would also light the wet road (and a light from up the road
+// mirrors straight into the camera off it); this lights only the cars. Set per look in render/three/index.js.
+export const RIM = { col: { value: new Color('#8fd0ff') }, k: { value: 0 } };
 export function carMaterial(brake, key, opts = {}) {
   const T = opts.tex; const m = T ? new MeshPhysicalMaterial({ vertexColors: true, map: T.map, normalMap: T.normalMap, roughness: 1, metalness: 1, clearcoat: opts.clearcoat ?? 1, clearcoatRoughness: opts.clearcoatRoughness ?? 0.05, envMapIntensity: opts.envMapIntensity ?? 1.5 })
     : new MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 1, envMapIntensity: 1.7 });
@@ -137,6 +141,9 @@ export function carMaterial(brake, key, opts = {}) {
     }
     sh.vertexShader = 'attribute vec4 surf; varying vec4 vSurf;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vSurf = surf;');
     sh.fragmentShader = 'varying vec4 vSurf; uniform float uBrake; uniform float uHeadK;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = ' + (T ? (opts.instTint ? 'mix(0.55, 0.32, bodyW)' : 'mix(0.55, 0.2, panelW)') : 'vSurf.x') + ';').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = ' + (T ? (opts.instTint ? 'mix(0.15, 0.05, bodyW)' : 'mix(0.15, 0.45, panelW)') : 'vSurf.y') + ';').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * vSurf.z * (1.0 + vSurf.w * uBrake * 2.5) * (vSurf.w > 0.5 ? 1.0 : uHeadK)' + (T ? (opts.redGate ? ' * (vSurf.w > 0.5 ? max(redW * 1.6, 0.12) : 1.0)' : '') + ' + uTint * panelW * 0.07 * uTintOn' : '') + ';'); };
+  { const prev = m.onBeforeCompile; m.onBeforeCompile = (sh, r) => { prev(sh, r); sh.uniforms.uRimCol = RIM.col; sh.uniforms.uRimK = RIM.k;
+    sh.fragmentShader = 'uniform vec3 uRimCol; uniform float uRimK;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `{ float rimF = 1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0); outgoingLight += uRimCol * uRimK * rimF * rimF * rimF * smoothstep(18.0, 50.0, length(vViewPosition)); }
+      #include <opaque_fragment>`); }; }
   m.customProgramCacheKey = () => 'car-' + key + (T ? '-tex' : '') + (opts.redGate ? '-rg' : '') + (opts.instTint ? '-it' : ''); return m;
 }
 // tag a code-built part (the hero's spinning wheels) with a palette entry so it draws with carMaterial

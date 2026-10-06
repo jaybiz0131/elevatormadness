@@ -1,20 +1,34 @@
 # Shunt roadmap
 
-## Master plan: seven sprints, A to G (Jack's numbering; use this everywhere)
+## Master plan: eight sprints, A to H (Jack's numbering; use this everywhere)
+Updated 2026-10-06 at the start of Sprint D, Stop 3. This replaces the A to G table and the Level 1 sprint column written on 2026-10-05.
+
 | Sprint | Scope |
 |--------|-------|
 | A, B | Done before the 3D port (gray-box driving; Sprint B driving constants). |
-| **C (current)** | 3D engine and corners, run as the "Look to 8" stop points. This session: Stop 1 Environment (dark wet road, real smoke, prop kit), Stop 2 Cars (five enemy looks, hero polish, hero top-view design), Stop 3 UI and performance (HUD and title polish, showroom title screen with the hero car turning, tune panel, fonts, under 150 draw calls). |
-| D | First: the hood gatling and the handbrake 180 (below). Then the downhill drop plus the first 5-stage mission: drop camera, intro orbit camera, slow-motion kill shot. Level 1 intro, Acts 1 and 2, the boss climax and the payoff (see Level 1 below). |
-| E | Act 3, the city maze (see Level 1 below). Rest of scope to be confirmed with Jack. |
-| F | Supply pit stop with the Mule's arm (see Level 1 below), with "The Refit" dock cinematic as segment 5 (below). Rest of scope to be confirmed with Jack. |
-| G | Scope to be confirmed with Jack. |
+| C | Done. 3D engine and corners ("Look to 8"): environment, cars, UI and performance. |
+| **D (current): the core chase** | Stop 1 Fun first (done: pacing director, hood gatling, a three minute run with a goal). Stop 2 Looks finished, hits hard, never dies (done, v24 passed Jack's iPhone gate: models 19/19, FPS 53, low 51). **Stop 3 Physics and feel**: hybrid crash physics (wrecks flip, tumble, roll, pile up, slam into buildings), suspension and lean, two-wheel corners, hero rollover, automatic drift (no BRAKE button), FIRE and MISSILE buttons with room for BOOST, instant gatling, carnage-first kill feedback, brightness pass. Stop 4 Camera director plus a Camera Lab, plus hills and jumps. Stop 5 Heat, boost, roadblocks, the drone, Jack's audio and music, a turn-around move. |
+| E: course, part 1 | The course system; the intro drift; the country highway; the drop with the building jump; the tunnel into the city. |
+| F: course, part 2 | The city interstate; the streets; the maze; the tunnel escape. |
+| G: Mule Refit, boss, payoff | "The Refit" Mule cinematic (the arm lifts the car and bolts the weapons on, quick; see below); the boss fight; the payoff (results, unlocks, showroom orbit, play again). |
+| H | Polish and ship. |
+
+Rules for every stop: deterministic sim, the renderer only reads sim state, never push to main; when the sim changes, record new
+baselines (each replay twice with the same hash, plus one through the live 3D loop) and retire the old ones in the same commit.
+Budgets: under 150 draw calls, under 400k triangles, under 15 MB, Jack's iPhone FPS low 50+. No em dashes in player-facing text.
+
+## Models held back (kept out of the build until their sprint; `NOT_YET` in `spycar/shunt/vite.config.js`)
+- `boss.glb` (the villain car): Sprint G, the boss fight.
+- `wpn_missile.glb`, `wpn_laser.glb`, `wpn_booster.glb` (the weapon modules): Sprint G, The Refit.
+Full table: `design/stop2/model-inventory.md`.
 
 ## Carried into Sprint D from Sprint C (Jack, 2026-10-05)
 - Traffic colours: at dusk, silver and white traffic both read as cream. Swap silver (`#b8bec8`, `CIV_BODY` in
   `spycar/shunt/src/render/three/cars.js`) for a mid gunmetal grey, then recheck all three looks.
 
 ## Sprint D, first item: the hood gatling and the handbrake 180 (Jack, 2026-10-05; record only)
+Status 2026-10-06: the gatling shipped in Stop 1 (Stop 3 makes it fire instantly, no spin-up). The handbrake 180 is replaced by a
+turn-around move in Stop 5: Stop 3 removes the BRAKE button (drift is automatic from steering).
 - The plain machine guns become one hood-mounted gatling gun: fixed forward, firing along the car's heading in a tight spray cone (about
   8 degrees); the player aims by steering.
 - Heavy feel: spin-up whine, deep roar, shell casings, a glowing barrel, camera shake, and a muzzle flash that lights the road.
@@ -24,8 +38,8 @@
 - Handbrake 180: brake plus a hard steer whips the car round to a stop facing backward, so the player can fire behind.
 - This is a sim change (weapons and handling): new baseline replays in the same commit, as for every sim change.
 
-## Sprint F, segment 5: "The Refit", the Mule dock cinematic (Jack, 2026-10-05; record only, do not build yet)
-The Mule docks with the hero and bolts the arsenal onto the car in one short cinematic.
+## Sprint G: "The Refit", the Mule cinematic (Jack, 2026-10-05, moved to Sprint G on 2026-10-06; record only, do not build yet)
+The Mule docks with the hero, its arm lifts the car, and it bolts the arsenal on in one short, quick cinematic.
 - Length: about 4 s the first time, 2 s on repeats; tap to skip. Enemies hold back while it plays.
 - Determinism: the sim must stay deterministic, so replays still match. The cinematic is presentation plus a fixed, recorded sim
   state (an enemy hold and a fixed duration in sim steps), never frame-clock timing. A skip resolves on a sim step.
@@ -39,30 +53,30 @@ The Mule docks with the hero and bolts the arsenal onto the car in one short cin
 - Models: each module is its own GLB, attached to named mount points on the hero. Plan the mount empties in the hero model:
   `mount_hood`, `mount_flank_L`, `mount_flank_R`, `mount_roof`, `mount_rear`, `mount_skirt_FL`, `mount_skirt_FR`, `mount_skirt_RL`,
   `mount_skirt_RR`.
-- Module files (Jack, 2026-10-05, in `assets/models/`, kept out of the build until Sprint F): `wpn_missile.glb` (flanks, mirrored
+- Module files (Jack, 2026-10-05, in `assets/models/`, kept out of the build until Sprint G): `wpn_missile.glb` (flanks, mirrored
   pair), `wpn_laser.glb` (roof, lens along -X), `wpn_booster.glb` (rear, mirrored pair; four small copies as the jump jets). All are
   very dark: plan an emissive boost on their cyan trim (it can also carry the Open beat's cyan seam glow).
 - The car stays a car: modules bolt on, nothing unfolds or stands up. Nothing from any transforming-robot franchise, in either the
   sound or the motion.
 
-## Level 1 plan (Jack, 2026-10-05; record only, build in the sprints named)
+## Level 1 plan (Jack, 2026-10-05; sprint column updated 2026-10-06)
 Goal: arcade feel on mobile. Quick to start, big moments, readable at a glance, a score to beat. Driving skill raises the score, but a
 weak driver still finishes Level 1 and sees the whole movie: steering assist, soft barrier bounces, generous armor, no hard fail on the
 first run.
 
 | Beat | Sprint | What it is |
 |------|--------|------------|
-| Intro | D | Hero blasts in from the side, drifts hard to a stop, beat, then GO. Camera from a low side angle sweeping into the chase cam. |
-| Act 1: country highway at dusk | D | Open road, learn the controls, the city skyline glowing on the horizon (skyline.jpg backdrop). Lower, more 3D chase camera. |
-| Act 2: the drop | D | Downhill high-speed run into the city, big air, tricks. Camera pulls back and low to show the car airborne. |
-| Act 3: the city | E | The road opens into a compact maze of 3 or 4 blocks with 2 or 3 exit routes. The player turns at intersections; enemies flank from side streets and alleys. Camera rises and zooms out as buildings get taller. Green arrows on the road plus an edge-of-screen pointer guide the way out; any route works. |
-| Climax: boss fight | D | A named villain car (magenta and black): entrance cutscene, on-screen health bar with its name, 2 or 3 attack phases. Replaces the Bulwark showdown; the Bulwark stays a regular heavy enemy. Model: `assets/models/boss.glb` (Jack, 2026-10-05, Meshy, 8,011 triangles), kept out of the build until then (`NOT_YET` in `spycar/shunt/vite.config.js`). When built: strong emissive magenta edge lines, magenta underglow and a rim light, because a black car disappears on the night road. |
-| Payoff | D | Results, unlocks, showroom orbit, play again. |
-| Supply pit stop | F | The Mule extends mule_arm and docks alongside the hero; both race locked together while gear transfers. Never drive into a trailer. (The arm ships folded on the Mule's right side from Sprint C.) |
+| Intro | E | Hero blasts in from the side, drifts hard to a stop, beat, then GO. Camera from a low side angle sweeping into the chase cam. |
+| Act 1: country highway at dusk | E | Open road, learn the controls, the city skyline glowing on the horizon (skyline.jpg backdrop). |
+| Act 2: the drop | E | Downhill high-speed run into the city, big air, the building jump, then the tunnel into the city. Camera pulls back and low to show the car airborne. |
+| Act 3: the city | F | The city interstate, then the streets, then a compact maze of 3 or 4 blocks with 2 or 3 exit routes, then the tunnel escape. Enemies flank from side streets and alleys. Green arrows on the road plus an edge-of-screen pointer guide the way out; any route works. |
+| The Refit | G | The Mule's arm lifts the car and bolts the weapons on (see above). Never drive into a trailer. |
+| Climax: boss fight | G | A named villain car (magenta and black): entrance cutscene, on-screen health bar with its name, 2 or 3 attack phases. The Bulwark stays a regular heavy enemy. Model: `assets/models/boss.glb` (8,011 triangles), held back until then. When built: strong emissive magenta edge lines, magenta underglow and a rim light, because a black car disappears on the night road. |
+| Payoff | G | Results, unlocks, showroom orbit, play again. |
 
 Level design rule (Jack, 2026-10-04): every level is written like a film, with a beginning, a middle and an end, building to a climax
-and a payoff. Getting the first level right comes first; it becomes the template for the rest. Camera changes between stages (road,
-drop chase, orbit, slow-motion kill shot) are part of what makes each stage feel different, and of showing off the car.
+and a payoff. Camera changes between stages are part of what makes each stage feel different, and of showing off the car (the camera
+director is Sprint D, Stop 4).
 
 ## Superseded: the 4-to-10 numbering below
 The table below was written by an earlier Claude session on 2026-10-03 with its own sprint numbers (4 to 10). Those numbers are
@@ -106,6 +120,9 @@ control that makes it work on a phone. A true open world would mean a new game, 
 ## Rules carried forward
 - Original IP only. Deterministic sim. Renderer only reads sim state. Never push to main. Every sprint ends with bots, replays,
   commit, push, publish, postcards, report. When the sim changes, record new baselines and retire the old ones in the same commit.
+
+## Update (2026-10-06): Sprint D, Stop 3, physics and feel
+See the master plan at the top and `design/stop3/stop3-report.md`.
 
 ## Update (2026-10-05): Sprint D, Stop 1, fun first
 Jack's v18 verdict was "not fun yet": nothing happening, no goal, weak hits. Before any new level content this stop adds a pacing

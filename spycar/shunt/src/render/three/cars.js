@@ -1,7 +1,7 @@
 // Placeholder cars: boxes with the 2D build's class colours (player cyan, enemies black with red, civilians pastel, trucks green,
 // the armored truck dark with red). One merged vertex-coloured geometry per kind, one draw call per car, pooled meshes. Headlights,
 // tail lights, blinkers, the Bruiser tell arrow, the Gunner sight line and hit flashes are additive glows and markers batched by fx.
-import { BoxGeometry, Mesh, MeshStandardMaterial, Color, Vector3, Float32BufferAttribute, Group, Object3D, Matrix4 } from 'three';
+import { BoxGeometry, Mesh, MeshStandardMaterial, Color, Vector3, Float32BufferAttribute, Group, Object3D, Matrix4, Quaternion } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { T, REF, lerp, clamp } from '../../sim/constants.js';
 import { M, toWorld } from './scale.js';
@@ -11,7 +11,7 @@ import { HEAD_K } from './heroModel.js';
 import { loadGatling } from './gatling.js';
 import { Explosions } from './explosions.js';
 const FADE_FAR = 2300, FADE_SPAN = 600;   // enemy lights fade out between 1,700 and 2,300 pt ahead
-const V3 = new Vector3();
+const V3 = new Vector3(), UP = new Vector3(0, 1, 0), QY = new Quaternion(), QB = new Quaternion(), OFF = new Vector3();
 const KIND_COL = { player: '#37e6ff', civ: '#cfe6ff', weak: '#3a3d46', bruiser: '#1a1b1f', gunner: '#1a1b1f', armored: '#20242b', truck: '#2fd36a', wreck: '#3a2a2a' };
 const CIV_TINTS = ['#cfe6ff', '#fff1c9', '#cdebdc', '#e9d9ff'];
 // the traffic model's body colours, one per sim tint (silver, dark red, white, navy); never cyan, that is the hero's
@@ -59,7 +59,12 @@ export class CarSystem {
     const at = im.userData.attach; if (at && at.mesh.count < at.mesh.instanceMatrix.count) { this.attachM.multiplyMatrices(o.matrix, at.local); at.mesh.setMatrixAt(at.mesh.count, this.attachM); at.mesh.instanceColor.setXYZ(at.mesh.count, tint, tint, tint); at.mesh.count++; } }   // an attached part (the Mule's arm)
   acquire(kind) { let m = this.free[kind].pop(); if (!m) { m = new Mesh(this.geo[kind], this.mat[kind]); m.castShadow = true; m.frustumCulled = false; } this.scene.add(m); return m; }
   release(m) { this.scene.remove(m); this.free[m.userData.kind].push(m); }
-  place(mesh, G, x, s, yaw, lift) { toWorld(G.road, x, s, this.pos); mesh.position.copy(this.pos); mesh.position.y += lift; mesh.rotation.set(0, -(G.road.frame(s).psi + yaw), 0, 'YXZ'); }
+  place(mesh, G, x, s, yaw, lift) { toWorld(G.road, x, s, this.pos); mesh.position.copy(this.pos); mesh.position.y += lift; mesh.rotation.set(0, -(G.road.frame(s).psi + yaw), 0, 'YXZ'); mesh.scale.set(1, 1, 1); }
+  // a crash-physics wreck (Stop 3): its body pose is in the straightened road frame (crash.js), so turn it by the road heading at its s;
+  // the box centre is c.h above the road and the model stands on its own y = 0, so step down half the box height along the body's up
+  placeBody(mesh, G, x, s, c) { toWorld(G.road, x, s, this.pos); QY.setFromAxisAngle(UP, -G.road.frame(s).psi); QB.set(c.qx, c.qy, c.qz, c.qw); mesh.quaternion.copy(QY).multiply(QB);
+    OFF.set(0, -(c.bodyH || 1.3) / 2, 0).applyQuaternion(mesh.quaternion); mesh.position.copy(this.pos); mesh.position.x += OFF.x; mesh.position.y += c.h + OFF.y; mesh.position.z += OFF.z;
+    const cr = c.crush || 0; mesh.scale.set(1, 1 - 0.3 * cr, 1); }
   // cars that exist this frame get a mesh; the rest go back to the pool. c.mesh is render-side only (the hash never reads it).
   update(G, alpha, fx, elapsed) {
     const stamp = ++this.stamp;   // no per-frame allocation: meshes seen this frame carry the stamp
@@ -68,8 +73,13 @@ export class CarSystem {
       // a type with an imported model is placed through a proxy and written into its InstancedMesh; the rest use pooled meshes
       if (!c.alive) continue; const inst = this.inst[c.kind]; let m; if (inst) m = this.proxy; else { m = this.meshOf.get(c); if (!m) { m = this.acquire(c.kind); m.userData.kind = c.kind; this.meshOf.set(c, m); } }
       m.userData.stamp = stamp; const cx = lerp(c.px, c.x, alpha), cy = lerp(c.py, c.y, alpha); const w = c.w * M, l = c.l * M;
-      if (c.wrecked) { m.material = this.mat.wreck; this.place(m, G, cx, cy, c.spin, 0); m.rotation.z = Math.sin(c.flip * Math.PI * 2) * 0.5; m.rotation.x = Math.sin(c.flip * Math.PI) * 0.2; if (inst) this.emit(inst, m, 0.28); if (!c.boomed) { c.boomed = true; if (c.debrisT > 2.3 && Math.abs(c.y - G.dist) < 1800) this.boom.spawn(m.position.x, m.position.y, m.position.z, c.kind, c.id || 0.5); }   // once, at the moment it becomes a wreck (render-side flag, never read by the sim)
-      this.wreckFx(c, m.position, fx, elapsed); fx.shadow(m.position, w, l); continue; }
+      if (c.wrecked) { const civ = c.civCrash && !c.boom; m.material = civ ? this.mat['civ' + Math.max(0, CIV_TINTS.indexOf(c.tint))] : this.mat.wreck;
+        if (c.qw !== undefined && c.bodyH) this.placeBody(m, G, cx, cy, c); else { this.place(m, G, cx, cy, c.spin, 0); m.rotation.z = Math.sin(c.flip * Math.PI * 2) * 0.5; m.rotation.x = Math.sin(c.flip * Math.PI) * 0.2; }
+        // Stop 3 brightness: a wreck is scorched, not black (0.55 and lit up by the fire), a spun-out civilian keeps its paint
+        const lit = 1 + this.boom.boost(m.position.x, m.position.z); if (inst) this.emit(inst, m, (civ ? 0.85 : 0.55) * lit, c.kind === 'civ' ? CIV_BODY[Math.max(0, CIV_TINTS.indexOf(c.tint))] : null);
+        if (!c.boomed) { c.boomed = true; if (c.boom !== false && c.debrisT > 2.3 && Math.abs(c.y - G.dist) < 1800) this.boom.spawn(m.position.x, m.position.y, m.position.z, c.kind, c.id || 0.5); }   // once, at the moment it becomes a wreck (render-side flag, never read by the sim)
+      this.wreckFx(c, m.position, fx, elapsed); fx.shadow(this.pos, w, l, this.pos.y); if (!c.civCrash || c.boom) { const e = clamp((c.debrisT + 1.5) / 4, 0, 1); if (e > 0) fx.glow(m.position.x, m.position.y + 0.7, m.position.z, Math.max(w, l) * 0.55, 1, 0.35, 0.08, 0.35 * e); }   // the hot shell glows: a wreck reads on the night road
+      continue; }
       m.material = c.kind === 'civ' ? this.mat['civ' + Math.max(0, CIV_TINTS.indexOf(c.tint))] : this.mat[c.kind]; m.rotation.z = 0; m.rotation.x = 0;
       this.place(m, G, cx, cy, (c.lean || 0) * Math.PI / 180 + (c.spin || 0), 0); fx.shadow(m.position, w, l); if (inst) this.emit(inst, m, 1 + this.boom.boost(m.position.x, m.position.z), c.kind === 'civ' ? CIV_BODY[Math.max(0, CIV_TINTS.indexOf(c.tint))] : null);
       const p = m.position;
@@ -102,9 +112,10 @@ export class CarSystem {
   // a wreck burns, then smoulders, for as long as it lies there
   wreckFx(c, pos, fx, elapsed) {
     const life = clamp((c.debrisT + 3.5) / 6, 0, 1); if (life <= 0 || this.dmgBudget <= 0) return; this.dmgBudget--; const id = (c.id || 0) * 37; const z = ({ armored: 1.9, gunner: 1.3, bruiser: 1.25, truck: 1.3 })[c.kind] || 1;
+    if (c.civCrash && !c.boom) { for (let i = 0; i < 3; i++) { const k = ((elapsed * 0.8 + i / 3 + id) % 1); fx.puff(pos.x + Math.sin(elapsed * 2 + i + id) * 0.4 * k, pos.y + 1.2 + k * 4, pos.z + Math.cos(elapsed * 1.7 + i) * 0.4 * k, 0.9 + k * 2, 0.45 * life * (1 - k * 0.7), 0.55, 0.55, 0.57, id + i); } return; }   // a spun-out civilian steams and smokes, no fire
     for (let i = 0; i < 4; i++) { const k = ((elapsed * 0.9 + i / 4 + id) % 1); fx.puff(pos.x + Math.sin(elapsed * 3 + i + id) * 0.5 * k, pos.y + 1 + k * 7 * z, pos.z + Math.cos(elapsed * 2.3 + i) * 0.4 * k, (1.1 + k * 2.4) * z, 0.6 * life * (1 - k * 0.7), 0.16, 0.16, 0.17, id + i); }
     if (c.debrisT > -2.2) { const fl = 0.75 + 0.25 * Math.sin(elapsed * 19 + id), f2 = 0.7 + 0.3 * Math.sin(elapsed * 13 + id * 2); const fade = clamp((c.debrisT + 2.2) / 1.6, 0, 1);   // the wreck burns for about five seconds, big ones longer and taller
-      fx.glow(pos.x, pos.y + 1.2, pos.z, 1.8 * fl * z, 1, 0.45, 0.1, 0.75 * fl * fade); fx.glow(pos.x + 0.5, pos.y + 2.2 * z, pos.z, 1.1 * f2 * z, 1, 0.7, 0.2, 0.55 * f2 * fade); fx.glow(pos.x - 0.4, pos.y + 3.2 * z, pos.z + 0.3, 0.8 * fl * z, 1, 0.5, 0.12, 0.4 * fl * fade); }
+      fx.glow(pos.x, pos.y + 1.2, pos.z, 1.8 * fl * z, 1, 0.45, 0.1, 0.75 * fl * fade); fx.poolAt(pos.x, pos.y - (c.h ? c.h - (c.bodyH || 1.3) / 2 : 0), pos.z, 1, 0.5, 0.18, 0.55 * fl * fade, 9 * z, 0, 1); /* Stop 3: the fire lights the road round it */ fx.glow(pos.x + 0.5, pos.y + 2.2 * z, pos.z, 1.1 * f2 * z, 1, 0.7, 0.2, 0.55 * f2 * fade); fx.glow(pos.x - 0.4, pos.y + 3.2 * z, pos.z + 0.3, 0.8 * fl * z, 1, 0.5, 0.12, 0.4 * fl * fade); }
   }
   updatePlayer(G, rx, rdist, fx, st, elapsed) {
     // the imported hero turns its wheels with the road speed and lights its tail bar under braking
@@ -112,6 +123,12 @@ export class CarSystem {
     if (this.heroGlb && this.heroGlb.visible) this.heroGlb.userData.tick(dtE, (st.phase === 'over' ? 0 : G.speed) * M, !!(G.in && G.in.brake) || !!G.braking);
     const m = this.player; const spin = G.gunSpin || 0; const z = G.jumpZ; const lift = z * 3.5; const lean = (st.lean !== undefined ? st.lean : G.lean) * Math.PI / 180;
     this.place(m, G, rx, rdist, lean, lift); m.scale.set((2 - G.sq), G.sq, 1 + z * 0.1);
+    // Stop 3: the body. Roll with the lateral load and squat or dive with the speed change (G.body, stepped in the sim); in a hard turn the
+    // inside wheels lift and the car pivots on its outside wheels (two wheels); a big hit throws it once round its long axis (G.roll)
+    const B = G.body; if (B && st.phase !== 'over') { const D2R = Math.PI / 180; let rz = B.roll * D2R, rxx = -B.pitch * D2R; const R = G.roll;
+      const tilt = B.tilt * D2R; let dx = 0, dy = 0; if (tilt > 0.001) { const th = -B.twoDir * tilt, px = B.twoDir * 34 * M / 2; rz += th; dx = px * (1 - Math.cos(th)); dy = -px * Math.sin(th); }
+      if (R) { rz += R.a; dy += R.lift; }
+      m.rotation.x = rxx; m.rotation.z = rz; const yw = -m.rotation.y; m.position.x += Math.cos(yw) * dx; m.position.z += Math.sin(yw) * dx; m.position.y += dy; }
     // the hood gatling: the barrel cluster spins with G.gunSpin (a full turn takes about 0.3 s at speed), the cyan trim glows brighter
     // with every muzzle flash, brass leaves the ejection port on every round, and a flash blooms at the muzzle
     m.updateMatrixWorld(true);

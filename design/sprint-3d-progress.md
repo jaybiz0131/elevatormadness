@@ -103,4 +103,14 @@ hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mo
 - Stop 2 (looks finished, hits hard, never dies): world to 4,000 pt with a fog floor, spawns out of sight, camera B default and closer, kill feedback v2,
   enemy damage states, combat race (limp and repair, speed costs, kill bursts, time plus score grade), HUD clock, lighter lamp, sign atlas, automatic render scale.
   Sim changed: new baselines in `spycar/shunt/replays/`. Report: design/stop2/stop2-report.md.
-- Next: Stop 3 (sound pack, director v2, one-button change, handbrake 180).
+- Stop 3 (physics and feel, 2026-10-06; plan rewritten in design/roadmap.md, Sprint D = Stops 3 to 5, then E to H). Sim changed (replay rev `D3`):
+  - Crash physics: `src/sim/crash.js`, Rapier deterministic build (`@dimforge/rapier3d-deterministic-compat` 0.21.0). The package's base64 wasm is swapped for a
+    gzipped copy by the `rapierWasm` plugin in `vite.config.js` (+1.8 MB build instead of +4.4 MB); `initCrash()` inflates it with fflate before the first run.
+    Hybrid: live cars and the hero stay arcade (kinematic boxes in Rapier); a wreck is a dynamic body (cap 6, oldest retired). Road space straightened:
+    X across, Y up, Z = -s. Steps at 60 Hz on even ticks, dormant with no wrecks. Hits come back as `G.crashHits` -> `crashHit()` in physics.js (pile-ups,
+    civilian spin-outs, building slams, hits on the hero). `?crash=0` turns it off (old slide) for comparisons; Show FPS has a `physics` line.
+  - Hero: `G.body` (roll, pitch, two wheels) and `G.roll` (rollover) in physics.js (`suspStep`, `rollStep`, `heroRoll`); the renderer pivots the car on its outside wheels.
+  - Controls: no BRAKE, no GAS (CSS hides #pad and #gas); automatic speed `T.drive.auto` with a corner lift; automatic drift (`T.drift.startU` etc.); gatling spinUp 0.
+  - Tools: `tools/simtest.mjs` (sync scripted run, counts and step cost), `tools/capture.mjs` (stills from a replay), `tools/clip.mjs` (mp4 from a replay or seed, `--find=pileup|roll|two|wallslam`).
+  - Report: design/stop3/stop3-report.md. Build v25 https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn. Baselines `replays/feel-s{1,2,3}-{active,idle}.json` and `beauty.json` (rev D3).
+- Next: Stop 4 (camera director, Camera Lab, hills and jumps) after Jack's go-ahead.

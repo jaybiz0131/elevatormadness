@@ -6,6 +6,7 @@ import { S, saveSettings } from './settings.js';
 import { G, newRun, beginRun } from './sim/state.js';
 import { advance, simStep, setInputSource, setSink, decayPresentation, hashState, exportReplay, startRecording, attachReplay, runSteps, STEP_LEN } from './sim/step.js';
 import { slamTarget } from './sim/physics.js';
+import { initCrash, CRASH, crashLine } from './sim/crash.js';
 import { audio, buzz } from './audio/audio.js';
 import { stage, cv, ui, $, view, callout, hideCallout, updateSpecial, pulseSpecial } from './ui/dom.js';
 import { showCard, refreshSettings, screen, setScreen, setSettingsFrom, settingsFrom } from './ui/cards.js';
@@ -21,7 +22,7 @@ let capElapsed = 0, syncRun = false, phase = 'title', now = 0, lastT = 0, elapse
 const Q = new URLSearchParams(location.search);
 let seed = Q.get('seed') !== null ? (Number(Q.get('seed')) >>> 0) : (Math.random() * 4294967296) >>> 0, dailyMode = false, best = 0, bestDaily = 0, cash = 0, hadRun = false;
 try { best = Number(localStorage.getItem('shunt-best') || 0); bestDaily = Number(localStorage.getItem('shunt-best-' + localDate()) || 0); cash = Number(localStorage.getItem('shunt-cash') || 0); } catch (e) {}
-const app = { get G() { return G; }, get dailyMode() { return dailyMode; }, get best() { return best; }, get bestDaily() { return bestDaily; }, get cash() { return cash; }, get diag() { return (renderer.diag ? renderer.diag() : 'canvas renderer') + ' | audio ' + audio.state(); } };
+const app = { get G() { return G; }, get dailyMode() { return dailyMode; }, get best() { return best; }, get bestDaily() { return bestDaily; }, get cash() { return cash; }, get diag() { return (renderer.diag ? renderer.diag() : 'canvas renderer') + ' | ' + crashLine() + ' | audio ' + audio.state(); } };
 // ?concepts=1: the hero-car concept studio instead of the game (tools/concepts.mjs drives it)
 if (Q.get('concepts')) { document.getElementById('ui').hidden = true; const studio = createStudio(cv, { look: Q.get('look') || 'night', hero: Q.get('concepts') === 'hero' }); const fitStudio = () => { view.SW = Math.round(clamp(H * window.innerWidth / window.innerHeight, 390, 1800)); const s = Math.min(window.innerWidth / view.SW, window.innerHeight / H); stage.style.width = view.SW + 'px'; stage.style.transform = `scale(${s})`; studio.resize(view.SW, H); }; fitStudio(); window.addEventListener('resize', fitStudio); let kind = Q.get('view') || 'front'; studio.view(kind); const loop = () => { studio.render(); requestAnimationFrame(loop); }; loop(); window.__studio = { setView(k) { kind = k; studio.view(k); }, focus(i, k) { studio.focus(i, k); }, studio }; throw new Error('studio mode'); }
 // ?r=canvas keeps the Sprint C canvas renderer (the parity fallback); everything else renders in three.js. ?look= picks the look.
@@ -132,7 +133,7 @@ function fit() {
     window.safeTop = Math.max(0, top - gap) / s; view.safeTop = window.safeTop; view.safeBottom = Math.max(0, bot - gap) / s; document.documentElement.style.setProperty('--safe-top', window.safeTop + 'px'); document.documentElement.style.setProperty('--safe-bottom', view.safeBottom + 'px'); } catch (e) { window.safeTop = 0; }
 }
 window.addEventListener('resize', fit);
-async function start() { await Promise.race([fontsReady, new Promise(r => setTimeout(r, 1500))]); fit(); refreshSettings(); freshRun(false); enterTitle(); try { localStorage.setItem('shunt-runs', String(Number(localStorage.getItem('shunt-runs') || 0) + 1)); } catch (e) {} if (renderer.prewarm) await renderer.prewarm(); requestAnimationFrame(frame); perf.start(loadReplay); }
+async function start() { await Promise.race([fontsReady, new Promise(r => setTimeout(r, 1500))]); /* the crash physics (Rapier) must be up before the first run: every run builds its own world */ await initCrash(); fit(); refreshSettings(); freshRun(false); enterTitle(); try { localStorage.setItem('shunt-runs', String(Number(localStorage.getItem('shunt-runs') || 0) + 1)); } catch (e) {} if (renderer.prewarm) await renderer.prewarm(); requestAnimationFrame(frame); perf.start(loadReplay); }
 
 // ---------------- hooks for bots and replays ----------------
 function loadReplay(r) { seed = r.seed >>> 0; dailyMode = false; S.sens = r.cfg.sens; S.autoDrift = r.cfg.autoDrift; newRun(seed, { sens: r.cfg.sens, autoDrift: r.cfg.autoDrift, hairpinWall: !!r.cfg.hairpinWall }); if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.pad.hidden = true; updateSpecial(G); attachReplay(r); startPlaying(); return G; }
@@ -141,7 +142,7 @@ window.__shunt = {
   fireSpecial: () => input.requestSpecial(), trySlam: (d) => input.requestSlam(d),
   startPlaying: () => { freshRun(false); startPlaying(); },
   resume: () => { syncRun = false; lastT = 0; },   // hand the sim back to the frame loop after synchronous stepping (capture tools)
-  audio, record: (bot) => startRecording(bot), exportReplay, loadReplay, runSteps: (n) => { syncRun = true; return runSteps(n, phase === 'playing'); }, hashState, STEP: STEP_LEN,
+  audio, CRASH, crashLine, record: (bot) => startRecording(bot), exportReplay, loadReplay, runSteps: (n) => { syncRun = true; return runSteps(n, phase === 'playing'); }, hashState, STEP: STEP_LEN,
   renderer: () => renderer, perf, get phaseName() { return phase; },
   // for the capture tool: render one frame now (the sim is stepped by runSteps, which stops the frame loop simulating)
   renderFrame: (dt) => { capElapsed += dt; const st = { G, phase, elapsed: capElapsed, best, bestDaily, dailyMode }; renderer.render(dt, st); if (hud) hud.update(st); },
