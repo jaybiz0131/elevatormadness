@@ -97,6 +97,7 @@ for (const [id, key] of [['sSound', 'sound'], ['sMusic', 'music'], ['sHaptics', 
 $('sSens').addEventListener('input', e => { S.sens = parseFloat(e.target.value); saveSettings(); refreshSettings(); });
 $('sBench').addEventListener('click', () => { ui.card.hidden = true; perf.startBench('1', loadReplay); });
 $('sCam').addEventListener('click', () => { S.cam = S.cam === 'B' ? 'A' : 'B'; saveSettings(); if (renderer.setCamera) renderer.setCamera(S.cam); refreshSettings(); });
+$('sGfx').addEventListener('click', () => { const order = ['auto', 'low', 'high']; const next = order[(order.indexOf(S.gfx || 'auto') + 1) % 3]; if (next === 'auto') S.gfxAuto = null; if (renderer.setGfx) renderer.setGfx(next); else { S.gfx = next; saveSettings(); } refreshSettings(); });
 $('sTune').addEventListener('click', () => { if (useCanvas) return; openTune().then(on => $('sTune').classList.toggle('on', !!on)); });
 $('sPerf').addEventListener('click', () => { $('sPerf').classList.toggle('on', perf.togglePerf()); });
 ui.primary.addEventListener('click', () => { audio.init(); audio.resume(); if (screen() === 'title') { freshRun(false); startPlaying(); } else if (screen() === 'pause') resume(); else if (screen() === 'over') restartAndPlay(false); else if (screen() === 'settings') { if (settingsFrom() === 'pause') showCard('pause', app); else if (settingsFrom() === 'over') showCard('over', app); else enterTitle(); } });

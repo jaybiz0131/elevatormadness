@@ -4,7 +4,7 @@
 // context loss. Everything three.js lives under render/three so the backend can change later.
 import { WebGLRenderer, Scene, Color, DirectionalLight, HemisphereLight, Vector3, PCFShadowMap, Mesh, PlaneGeometry, MeshBasicMaterial, CanvasTexture, AdditiveBlending, RepeatWrapping, SRGBColorSpace } from 'three';
 import { REF, H, T, clamp, lerp } from '../../sim/constants.js';
-import { S } from '../../settings.js';
+import { S, saveSettings } from '../../settings.js';
 import { view } from '../../ui/dom.js';
 import { M, toWorld } from './scale.js';
 import { RoadCamera, CAM, setCamPreset } from './camera.js';
@@ -21,10 +21,15 @@ import { loadEnemyModels } from './enemyModels.js';
 import { loadPropModels } from './propModels.js';
 import { MODELS } from './carModel.js';
 import { createShowroom } from './showroom.js';
+import { Q, LEVELS, setLevel, parseOverrides } from '../../quality.js';
 const V = new Vector3(), V2 = new Vector3(), SUN = new Vector3();
 function rainTexture() { const c = document.createElement('canvas'); c.width = 256; c.height = 256; const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 256, 256); let a = 7; const rng = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 1; for (let i = 0; i < 90; i++) { const px = rng() * 256, py = rng() * 256, l = 14 + rng() * 26; x.globalAlpha = 0.3 + rng() * 0.6; x.beginPath(); x.moveTo(px, py); x.lineTo(px + 2, py + l); x.stroke(); } const t = new CanvasTexture(c); t.wrapS = t.wrapT = RepeatWrapping; t.colorSpace = SRGBColorSpace; return t; }
 const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 export function createThreeRenderer(canvas, opts = {}) {
+  // graphics level: ?gfx=low|high, else Settings (S.gfx: auto, low or high); auto starts on high and drops to low for good if the scaler runs out of room
+  const QS = new URLSearchParams(location.search); const Qover = parseOverrides(location.search);
+  const gfxMode = () => QS.get('gfx') || S.gfx || 'auto'; const gfxLevel = () => { const m = gfxMode(); return m === 'low' || m === 'high' ? m : (S.gfxAuto === 'low' ? 'low' : 'high'); };
+  setLevel(gfxLevel(), Qover); if (IS_IOS) Q.shadowMap = Math.min(Q.shadowMap, 1024);
   if (IS_IOS && !opts.shadowMap) opts.shadowMap = 1024;   // iPhone memory is the tight budget; 1024 is the brief's fallback
   const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, alpha: false });
   // ?lite=1: half resolution, no shadows, no post: for headless bots on software GL, where the sim must run at pace
@@ -34,10 +39,10 @@ export function createThreeRenderer(canvas, opts = {}) {
   // ?cam=pitch,dist,fov[,yaw,screenY] overrides the road camera for comparison and close-up shots (e.g. ?cam=47,76,42; a three-quarter
   // close-up ?cam=18,11,40,35,0.5): yaw orbits the camera round the car in degrees; screenY is where the car sits (1/3 = lower third)
   { const c = new URLSearchParams(location.search).get('cam'); if (c) { const [p, d, f, y, t] = c.split(',').map(Number); if (p) CAM.pitch = p; if (d) CAM.dist = d; if (f) CAM.fov = f; if (y) CAM.yaw = y; if (t) CAM.lowerThird = t; if (y || t) CAM.fixed = true; } }
-  renderer.shadowMap.enabled = !LITE; renderer.shadowMap.type = PCFShadowMap; renderer.toneMapping = 0; renderer.autoClear = true; renderer.info.autoReset = false;
+  renderer.shadowMap.enabled = !LITE && Q.shadow; renderer.shadowMap.type = PCFShadowMap; renderer.toneMapping = 0; renderer.autoClear = true; renderer.info.autoReset = false;
   const scene = new Scene();
   const roadCam = new RoadCamera(view.SW / H); const camera = roadCam.cam;
-  const key = new DirectionalLight(0xffffff, 1); key.castShadow = true; key.shadow.mapSize.set(opts.shadowMap || 2048, opts.shadowMap || 2048); key.shadow.camera.near = 1; key.shadow.camera.far = 500; key.shadow.bias = -0.0006; key.shadow.normalBias = 0.25;
+  const key = new DirectionalLight(0xffffff, 1); key.castShadow = Q.shadow; key.shadow.mapSize.set(Q.shadowMap, Q.shadowMap); key.shadow.camera.near = 1; key.shadow.camera.far = 500; key.shadow.bias = -0.0006; key.shadow.normalBias = 0.25;
   const SB = 80; key.shadow.camera.left = -SB; key.shadow.camera.right = SB; key.shadow.camera.top = SB; key.shadow.camera.bottom = -SB; scene.add(key); scene.add(key.target);
   const hemi = new HemisphereLight(0x8899ff, 0x202020, 0.6); scene.add(hemi);
   const sky = new Sky(scene, renderer); if (MODELS.skyline) sky.addSkyline(MODELS.skyline);
@@ -45,7 +50,8 @@ export function createThreeRenderer(canvas, opts = {}) {
   // rain streaks (a ?tune=1 option): a scrolling streak quad in front of the camera
   const rain = new Mesh(new PlaneGeometry(2, 2), new MeshBasicMaterial({ map: rainTexture(), transparent: true, opacity: 0, blending: AdditiveBlending, depthTest: false, depthWrite: false })); rain.renderOrder = 20; rain.frustumCulled = false; camera.add(rain); rain.position.set(0, 0, -1.2); scene.add(camera);
   let look = lookFor(opts.look || 'night'), P = Object.assign({}, LOOKS[look]); if (IS_IOS) P.msaa = 2;
-  let post = createPost(renderer, scene, camera, P);
+  const makePost = () => createPost(renderer, scene, camera, Object.assign({}, P, { msaa: Math.min(P.msaa, Q.msaa), bloomRes: Q.bloom }));
+  let post = makePost();
   const state = { scale: 1, cap: 1, frameMs: 16, lost: false, chroma: 0, fovKick: 0, elapsed: 0, postError: null, glError: null, frames: 0 };
   function applyLook() {
     const az = P.sunAzimuth * Math.PI / 180, el = Math.max(3, P.sunElevation) * Math.PI / 180; SUN.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)); fx.setSun(SUN); fx.setLook(P);
@@ -58,24 +64,35 @@ export function createThreeRenderer(canvas, opts = {}) {
   // dynamic resolution: the backing store is the stage size x scale; the cap is the device pixel ratio after the stage's CSS scale, never above 2
   function setScale(k) { state.scale = k; renderer.setPixelRatio(k); renderer.setSize(view.SW, H, false); post.composer.setSize(view.SW, H); }
   function resize() {
-    const cssScale = Math.min(window.innerWidth / view.SW, window.innerHeight / H); state.cap = LITE ? 0.5 : Math.min(2, (window.devicePixelRatio || 1) * cssScale); setScale(Math.min(state.cap, state.steps ? state.scale : Math.max(state.scale, Math.min(1.25, state.cap))));
+    const cssScale = Math.min(window.innerWidth / view.SW, window.innerHeight / H); state.cap = LITE ? 0.5 : QS.get('scale') ? Number(QS.get('scale')) : Math.min(Q.dpr, (window.devicePixelRatio || 1) * cssScale); setScale(Math.min(state.cap, state.steps ? state.scale : QS.get('scale') ? state.cap : Math.min(1.5, state.cap)));
     camera.aspect = view.SW / H; camera.updateProjectionMatrix(); if (showroom) showroom.resize(view.SW / H); const a = Math.tan(camera.fov / 2 * Math.PI / 180) * 1.2 * 2; rain.scale.set(a * camera.aspect, a, 1);
   }
-  // automatic render scale (Stop 2): under 50 fps for 2 s steps the render scale down by 15% (not below 0.6); with headroom (over 70 fps) for
+  // automatic render scale (Stop 2): under 50 fps for 2 s steps the render scale down by 15% (not below 0.6); with headroom (a steady 55 fps or more) for
   // 6 s it steps back up, and each time a step up has to be undone within 12 s the wait before the next try doubles (to 48 s at most), so it
   // never flaps. Frames over 0.25 s (a hidden tab, a hand-driven tool) are ignored. ?autoscale=0 holds the scale; headless browsers hold it
   // too (the tools draw frames by hand), ?autoscale=1 turns it on there.
   const AUTO_Q = new URLSearchParams(location.search).get('autoscale'); const AUTO = AUTO_Q === '1' || (AUTO_Q !== '0' && !navigator.webdriver);
   const auto = { slow: 0, fast: 0, wait: 6, upAt: -99, t: 0 }; state.auto = AUTO; state.steps = 0;
   function adapt(dt) {
-    state.frameMs = lerp(state.frameMs, dt * 1000, 0.08); if (!AUTO || dt > 0.25) return;
-    const lo = Math.min(0.6, state.cap); auto.t += dt;
-    auto.slow = state.frameMs > 20 ? auto.slow + dt : 0; auto.fast = state.frameMs < 14.3 ? auto.fast + dt : 0;
-    if (auto.slow >= 2 && state.scale > lo + 0.01) { if (auto.t - auto.upAt < 12) auto.wait = Math.min(48, auto.wait * 2); setScale(Math.max(lo, state.scale * 0.85)); state.steps++; auto.slow = 0; auto.fast = 0; state.frameMs = 17; }
-    else if (auto.fast >= auto.wait && state.scale < state.cap - 0.01) { setScale(Math.min(state.cap, state.scale / 0.85)); state.steps++; auto.upAt = auto.t; auto.fast = 0; auto.slow = 0; state.frameMs = 17; }
+    state.frameMs = lerp(state.frameMs, dt * 1000, 0.08); if (!AUTO || dt > 0.25 || QS.get('scale')) return;
+    const lo = Math.min(Q.floor, state.cap); auto.t += dt;
+    auto.slow = state.frameMs > 20 && auto.t > 6 ? auto.slow + dt : 0; auto.fast = state.frameMs < 18 ? auto.fast + dt : 0;   // a phone holds 60 fps at the vsync cap, so 'headroom' is a steady 55+ fps; a step up that does not hold is undone and the next try waits twice as long
+    if (auto.slow >= 2) {
+      // slow on High in auto: drop to Low for good (MSAA and shadows cost more than they show; the Settings row can put High back), then one scale step down at a time
+      if (gfxMode() === 'auto' && Q.level === 'high') { S.gfxAuto = 'low'; saveSettings(); applyGfx('low'); auto.slow = 0; auto.fast = 0; state.frameMs = 17; state.autoSwitched = true; }
+      else if (state.scale > lo + 0.01) { if (auto.t - auto.upAt < 12) auto.wait = Math.min(48, auto.wait * 2); setScale(Math.max(lo, state.scale * 0.85)); state.steps++; auto.slow = 0; auto.fast = 0; state.frameMs = 17; }
+    } else if (auto.fast >= auto.wait && state.scale < state.cap - 0.01) { setScale(Math.min(state.cap, state.scale / 0.85)); state.steps++; auto.upAt = auto.t; auto.fast = 0; auto.slow = 0; state.frameMs = 17; }
   }
+  // switching level at run time: shadows, MSAA (the post chain is rebuilt), the render scale cap, and the shadow flags of the props
+  function applyGfx(name) {
+    const before = { msaa: Math.min(P.msaa, Q.msaa) }; setLevel(name, Qover); if (IS_IOS) Q.shadowMap = Math.min(Q.shadowMap, 1024);
+    key.castShadow = Q.shadow; renderer.shadowMap.enabled = !LITE && Q.shadow; if (key.shadow.mapSize.x !== Q.shadowMap) { key.shadow.mapSize.set(Q.shadowMap, Q.shadowMap); if (key.shadow.map) { key.shadow.map.dispose(); key.shadow.map = null; } }
+    if (before.msaa !== Math.min(P.msaa, Q.msaa)) { post.dispose(); post = makePost(); applyLook(); }
+    resize(); state.steps = 0; state.level = Q.level;
+  }
+  function setGfx(mode) { S.gfx = mode; saveSettings(); const prev = Q.level; applyGfx(gfxLevel()); return Q.level !== prev; }
   canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); state.lost = true; }, false);
-  canvas.addEventListener('webglcontextrestored', () => { post.dispose(); post = createPost(renderer, scene, camera, P); showroomOn = false; applyLook(); road.reset(); city.reset(); state.lost = false; prewarm(); }, false);
+  canvas.addEventListener('webglcontextrestored', () => { post.dispose(); post = makePost(); showroomOn = false; applyLook(); road.reset(); city.reset(); state.lost = false; prewarm(); }, false);
   // the shadow box rides with the player and snaps to shadow-map texels so edges do not swim
   function placeKey(target) { const texel = (2 * SB) / key.shadow.mapSize.x; key.target.position.set(Math.round(target.x / texel) * texel, 0, Math.round(target.z / texel) * texel); key.position.copy(key.target.position).addScaledVector(SUN, 220); key.target.updateMatrixWorld(); }
   let roadRef = null;
@@ -140,5 +157,5 @@ export function createThreeRenderer(canvas, opts = {}) {
   function reset() { roadCam.reset(); road.reset(); city.reset(); cars.reset(); fx.reset(); }
   resize();
   function setCamera(name) { const n = setCamPreset(name); resize(); return n; }
-  return { kind: 'three', render, setCamera, reset, resize, stats, diag, project, visibleAhead, prewarm, setLook, resetLook, get look() { return look; }, get P() { return P; }, applyLook, camera: roadCam, renderer, scene, setRoad(r) { roadRef = r; }, fx, props, cars, city, state, CAM, get post() { return post; }, get showroom() { return showroom; }, simulateContextLoss() { const ext = renderer.getContext().getExtension('WEBGL_lose_context'); if (ext) { ext.loseContext(); setTimeout(() => ext.restoreContext(), 800); return true; } return false; } };
+  return { kind: 'three', setGfx, gfxLevel: () => Q.level, render, setCamera, reset, resize, stats, diag, project, visibleAhead, prewarm, setLook, resetLook, get look() { return look; }, get P() { return P; }, applyLook, camera: roadCam, renderer, scene, setRoad(r) { roadRef = r; }, fx, props, cars, city, state, CAM, get post() { return post; }, get showroom() { return showroom; }, simulateContextLoss() { const ext = renderer.getContext().getExtension('WEBGL_lose_context'); if (ext) { ext.loseContext(); setTimeout(() => ext.restoreContext(), 800); return true; } return false; } };
 }

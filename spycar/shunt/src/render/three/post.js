@@ -11,7 +11,7 @@ export function createPost(renderer, scene, camera, P) {
   for (const t of tries) { const c = new EffectComposer(renderer, { multisampling: t.ms, frameBufferType: t.type }); if (probe(renderer, c)) { composer = c; config = t.name; break; } c.dispose(); }
   if (!composer) { composer = new EffectComposer(renderer, { multisampling: 0, frameBufferType: UnsignedByteType }); config = '8-bit (unprobed)'; }
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new BloomEffect({ luminanceThreshold: P.bloomThreshold, luminanceSmoothing: 0.2, intensity: P.bloomIntensity, mipmapBlur: true, radius: P.bloomRadius, kernelSize: KernelSize.LARGE });
+  const bloom = new BloomEffect({ luminanceThreshold: P.bloomThreshold, luminanceSmoothing: 0.2, intensity: P.bloomIntensity, mipmapBlur: true, radius: P.bloomRadius, kernelSize: KernelSize.LARGE, resolutionScale: P.bloomRes || 0.5 });
   const tone = new ToneMappingEffect({ mode: P.toneMapping === 'aces' ? ToneMappingMode.ACES_FILMIC : ToneMappingMode.AGX });
   const vignette = new VignetteEffect({ offset: P.vignetteOffset, darkness: P.vignetteDarkness });
   const noise = new NoiseEffect({ blendFunction: BlendFunction.SOFT_LIGHT, premultiply: true }); noise.blendMode.opacity.value = P.grain;

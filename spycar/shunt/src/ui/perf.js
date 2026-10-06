@@ -14,7 +14,7 @@ function createDebug(Q, renderer) {
     n++; acc += dt; if (performance.now() - t < 500) return; t = performance.now();
     const fps = n / Math.max(1e-3, acc); n = 0; acc = 0; win[wi] = fps; wi = (wi + 1) % win.length; wn = Math.min(win.length, wn + 1);
     let low = fps; for (let k = 0; k < wn; k++) low = Math.min(low, win[k]);
-    el.textContent = `${fps.toFixed(0)} FPS\nLOW ${low.toFixed(0)} (10 s)`; el.classList.toggle('over', low < 55);
+    const rs = renderer.stats ? renderer.stats() : null; el.textContent = `${fps.toFixed(0)} FPS\nLOW ${low.toFixed(0)} (10 s)` + (rs && renderer.gfxLevel ? `\n${renderer.gfxLevel().toUpperCase()} x${rs.scale.toFixed(2)}` : ''); el.classList.toggle('over', low < 55);
   };
 }
 export function createPerf(Q, renderer, hud) {
@@ -39,7 +39,7 @@ export function createPerf(Q, renderer, hud) {
     const r = { frames: frames.length, avgFps: 1000 / avg, avgMs: avg, low1Fps: 1000 / low1, worstMs: worst1, scale: s.scale, calls: s.calls, triangles: s.triangles, loops, headless: !!navigator.webdriver };
     if (mode === 'soak') { const f = minutes[0], l = minutes[minutes.length - 1]; const mean = (a) => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length); r.first = { avgMs: mean(f.ms), worst: Math.max(...f.ms), memMB: mean(f.mem) / 1048576 }; r.last = { avgMs: mean(l.ms), worst: Math.max(...l.ms), memMB: mean(l.mem) / 1048576 }; r.minutes = minutes.length; }
     window.__shunt.bench = r;
-    results = `BENCH ${mode === 'soak' ? 'SOAK ' + r.minutes + ' min' : ''}\navg ${r.avgFps.toFixed(1)} fps (${r.avgMs.toFixed(2)} ms)\n1% low ${r.low1Fps.toFixed(1)} fps\nworst ${r.worstMs.toFixed(1)} ms\nscale ${r.scale.toFixed(2)}  calls ${r.calls}  tris ${(r.triangles / 1000).toFixed(0)}k` + (r.first ? `\nfirst min ${r.first.avgMs.toFixed(2)} ms / ${r.first.memMB.toFixed(0)} MB\nlast min ${r.last.avgMs.toFixed(2)} ms / ${r.last.memMB.toFixed(0)} MB` : '') + (r.headless ? '\n(headless: not iPhone numbers)' : '');
+    results = `BENCH ${mode === 'soak' ? 'SOAK ' + r.minutes + ' min' : ''}\navg ${r.avgFps.toFixed(1)} fps (${r.avgMs.toFixed(2)} ms)\n1% low ${r.low1Fps.toFixed(1)} fps\nworst ${r.worstMs.toFixed(1)} ms\n${renderer.gfxLevel ? renderer.gfxLevel().toUpperCase() + '  ' : ''}scale ${r.scale.toFixed(2)}  calls ${r.calls}  tris ${(r.triangles / 1000).toFixed(0)}k` + (r.first ? `\nfirst min ${r.first.avgMs.toFixed(2)} ms / ${r.first.memMB.toFixed(0)} MB\nlast min ${r.last.avgMs.toFixed(2)} ms / ${r.last.memMB.toFixed(0)} MB` : '') + (r.headless ? '\n(headless: not iPhone numbers)' : '');
     if (el) el.textContent = results;
     const card = document.createElement('div'); card.id = 'benchCard'; card.style.cssText = 'position:absolute;left:24px;right:24px;top:40%;background:rgba(0,0,0,0.8);color:#fff;font:700 17px/1.5 monospace;padding:16px;border-radius:12px;white-space:pre;z-index:6;pointer-events:none'; card.textContent = results; document.getElementById('ui').appendChild(card);
   }

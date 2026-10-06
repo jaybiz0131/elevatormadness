@@ -9,6 +9,7 @@ import { M, toWorld } from './scale.js';
 import { CHUNK, AHEAD } from './road.js';
 import { KIT, kitMaterial, kitGlow } from './kit.js';
 import { PROP_BLINK } from './propModels.js';
+import { Q } from '../../quality.js';
 const D = new Object3D(), V = new Vector3(), V2 = new Vector3();
 const BRANDS = ['KIRA', 'DRIFT DINER', 'OKAMI TYRES', 'NEON 9', 'ZEN-DO', 'PULSE', 'KUMO HOTEL', 'HOTARU', 'RAMEN 24', 'VOLT', 'SAKURA FM', 'MIDNIGHT GARAGE', 'TORII', 'ASTRA', 'HANABI', 'GHOST NOODLE', 'LUNA BAR', 'NOVA', 'KITSUNE', 'TAXI 7'];
 const NEON = ['#ff2fd0', '#22e6ff', '#ffb02a', '#ff5a5a', '#8cff5a'];
@@ -67,7 +68,7 @@ export class City {
     this.vents = []; this.lamps = []; this.signSpots = [];
     this.warm = true; this.seed = 0; this.neon = 1; this.wet = 1; this.steam = 0.6;
   }
-  inst(geo, mat, n) { const m = new InstancedMesh(geo, mat, n); m.count = 0; m.castShadow = true; m.frustumCulled = false; this.group.add(m); return m; }
+  inst(geo, mat, n) { const m = new InstancedMesh(geo, mat, n); m.count = 0; m.castShadow = Q.castProps; m.frustumCulled = false; this.group.add(m); return m; }
   put(m, road, x, s, yaw, sx = 1, sy = 1, sz = 1, lift = 0) { if (m.count >= m.instanceMatrix.count) return; toWorld(road, x, s, D.position); D.position.y += lift; D.rotation.set(0, -(road.frame(s).psi + yaw), 0); D.scale.set(sx, sy, sz); D.updateMatrix(); m.setMatrixAt(m.count++, D.matrix);
     // the big imported buildings near the car are boxes the camera tests its view against (a raycast cannot see into an InstancedMesh whose bounds were taken when it was empty)
     if (m.userData.occ && Math.abs(s - this.near) < 420 && this.nBoxes < 64) { const b = this.boxes[this.nBoxes] || (this.boxes[this.nBoxes] = new Box3()); this.nBoxes++; b.copy(m.geometry.boundingBox || m.geometry.computeBoundingBox() || m.geometry.boundingBox).applyMatrix4(D.matrix); } }
@@ -111,7 +112,7 @@ export class City {
       }
     }
     const merged = mergeGeometries(parts, false); for (const p of parts) p.dispose(); merged.computeBoundingSphere();
-    const mesh = new Mesh(merged, this.mat); mesh.castShadow = true; mesh.receiveShadow = true; mesh.userData = { tubes, signs, fronts, roofs, s0 }; return mesh;
+    const mesh = new Mesh(merged, this.mat); mesh.castShadow = Q.castCity; mesh.receiveShadow = true; mesh.userData = { tubes, signs, fronts, roofs, s0 }; return mesh;
   }
   update(G, rdist, elapsed, look) {
     const road = G.road; if (this.seed !== road.seed) { this.reset(); this.seed = road.seed; }
@@ -125,8 +126,8 @@ export class City {
     for (const [, m] of this.chunks) {
       if (m.userData.s0 > rdist + 1900) continue;   // far chunks are plain building blocks: tubes, signs and models stop about 140 m ahead
       // the detailed models stop about 90 m ahead (beyond that they are specks in the fog): the triangle budget
-      if (this.glb.storefront) for (const f of m.userData.fronts) if (f.s < rdist + 900) this.put(this.glb.storefront, road, f.x, f.s, f.yaw);
-      if (this.glb.rooftop_ac) for (const r of m.userData.roofs) if (r.s < rdist + 900) this.put(this.glb.rooftop_ac, road, r.x, r.s, r.yaw, 1, 1, 1, r.y);
+      if (this.glb.storefront) for (const f of m.userData.fronts) if (f.s < rdist + Q.detail) this.put(this.glb.storefront, road, f.x, f.s, f.yaw);
+      if (this.glb.rooftop_ac) for (const r of m.userData.roofs) if (r.s < rdist + Q.detail) this.put(this.glb.rooftop_ac, road, r.x, r.s, r.yaw, 1, 1, 1, r.y);
       for (const t of m.userData.tubes) { if (this.tubes.count >= 512) break; toWorld(road, t.x, t.s, D.position); D.position.y = t.y; D.rotation.set(0, -(road.frame(t.s).psi), 0); D.scale.set(0.25, 0.25, t.len); D.updateMatrix(); this.tubes.setMatrixAt(this.tubes.count, D.matrix); this.setTubeColor(this.tubes.count, t.col, neonOn); this.tubes.count++;
         this.fx.reflect(G, t.x, t.s, t.col, 0.7 * neonOn * this.wet, t.len); }
       for (const sg of m.userData.signs) { if (si >= 256) break; const key = sg.text + sg.col, at = this.signAtlas.userData; let cell = at.cells.get(key); if (!cell) { const n = at.cells.size; cell = [n % SIGN_COLS, SIGN_ROWS - 1 - Math.floor(n / SIGN_COLS)]; at.cells.set(key, cell); drawSign(at.ctx, sg.text, sg.col, (n % SIGN_COLS) * SIGN_W, Math.floor(n / SIGN_COLS) * SIGN_H); this.signAtlas.needsUpdate = true; }
@@ -138,7 +139,7 @@ export class City {
     const sA = Math.floor((rdist - 300) / 20) * 20, sB = rdist + 1400;
     for (let s = sA; s <= sB; s += 20) {
       const a = road.at(s); const w = a.width; const h = hash(road.seed, s / 20, 9);
-      if (s % 160 === 80 && !(a.corner && a.corner.hard)) for (const side of [-1, 1]) { const x = REF + side * (w / 2 + 40), hx = REF + side * (w / 2 + 22); this.put(this.glb.street_lamp && s < rdist + 900 ? this.glb.street_lamp : this.lamp, road, x, s, side > 0 ? Math.PI : 0); this.fx.pool(G, hx, s, 1.0, 0.72, 0.38, 0.16 + 0.08 * neonOn, 3.6); this.fx.reflect(G, hx, s, LAMP_COL, 0.55 * this.wet, 6); }   // street lamps with their light pools and wet-road streaks
+      if (s % 160 === 80 && !(a.corner && a.corner.hard)) for (const side of [-1, 1]) { const x = REF + side * (w / 2 + 40), hx = REF + side * (w / 2 + 22); this.put(this.glb.street_lamp && s < rdist + Q.lamps ? this.glb.street_lamp : this.lamp, road, x, s, side > 0 ? Math.PI : 0); this.fx.pool(G, hx, s, 1.0, 0.72, 0.38, 0.16 + 0.08 * neonOn, 3.6); this.fx.reflect(G, hx, s, LAMP_COL, 0.55 * this.wet, 6); }   // street lamps with their light pools and wet-road streaks
       if (s % 20 === 0 && !(a.corner && a.corner.hard)) { const side = h < 0.5 ? -1 : 1; const kind = Math.floor(h * 977) % 5; const x = REF + side * (w / 2 + 44 + (h * 31 % 1) * 20);
         if (kind === 0) this.put(this.bollard, road, x, s, 0); else if (kind === 1 && s % 40 === 0) { if (this.glb.phone_booth && s % 80 === 0) this.put(this.glb.phone_booth, road, x, s, side * Math.PI / 2); else this.put(this.bench, road, x, s, side > 0 ? Math.PI / 2 : -Math.PI / 2); } else if (kind === 2 && s % 60 === 0) { if (this.glb.newsstand) this.put(this.glb.newsstand, road, x + side * 10, s, side * Math.PI / 2); else this.put(this.vending, road, x + side * 20, s, side > 0 ? -Math.PI / 2 : Math.PI / 2); } else if (kind === 3 && s % 40 === 0) this.put(this.hydrant, road, x, s, 0); }
       if (s % 3200 === 1600 && !(a.corner)) { for (const side of [-1, 1]) this.put(this.pillar, road, REF + side * (w / 2 + 26), s, 0); this.put(this.beam, road, REF, s, 0, (w + 90) * M, 1, 1, 7); }   // overpass

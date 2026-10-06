@@ -6,8 +6,9 @@ import { REF, T, hashI, clamp } from '../../sim/constants.js';
 import { M, toWorld, toWorldFlat } from './scale.js';
 import { arrowTexture } from './fx.js';
 import { KIT, kitMaterial } from './kit.js';
+import { Q } from '../../quality.js';
 const D = new Object3D(); const P = { x: 0, y: 0, z: 0 };
-function inst(geo, mat, n, shadow = true) { const m = new InstancedMesh(geo, mat, n); m.count = 0; m.castShadow = shadow; m.receiveShadow = false; m.frustumCulled = false; return m; }
+function inst(geo, mat, n, shadow = true) { const m = new InstancedMesh(geo, mat, n); m.count = 0; m.castShadow = shadow && Q.castProps; m.receiveShadow = false; m.frustumCulled = false; return m; }
 function textTexture(text, w, h, bg, fg, size) { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.fillStyle = bg; x.fillRect(0, 0, w, h); x.fillStyle = fg; x.font = '700 ' + size + 'px Rajdhani, Arial, sans-serif'; { const mw = x.measureText(text).width; if (mw > w * 0.9) x.font = '700 ' + Math.floor(size * w * 0.9 / mw) + 'px Rajdhani, Arial, sans-serif'; } x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, w / 2, h / 2 + 2); const t = new CanvasTexture(c); t.colorSpace = 'srgb'; return t; }
 export class Props {
   constructor(scene) {
