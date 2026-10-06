@@ -24,7 +24,9 @@ export class Props {
     this.spectator = inst(KIT.spectator('#3a6ea8'), kit, 96);
     this.cone = inst(KIT.cone(), kit, 32);
     this.barrel = inst(KIT.barrel(), kit, 32);
-    this.crate = inst(KIT.crate(), kit, 16);
+    this.crate = inst(KIT.crate(), kit, 16);   // ammo: yellow
+    this.crateArmor = inst(KIT.crate('#2a9fc0', '#c8faff'), kit, 8);   // armor: cyan
+    this.crateRepair = inst(KIT.crate('#2fb85a', '#c4ffd6'), kit, 8);   // repair: green
     this.block = inst(KIT.block(), kit, 32);
     this.median = inst(KIT.median(), kit, 96);
     this.ramp = inst(KIT.ramp(), kit, 8);
@@ -34,7 +36,7 @@ export class Props {
     this.stripe = inst(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: new Color('#ff3b3b'), transparent: true, opacity: 0.8, depthWrite: false }), 16, false);
     this.sign = inst(KIT.gantry(), kit, 8);
     this.signPost = inst(KIT.signPost(), kit, 16);
-    this.all = [this.stripe, this.post, this.tree, this.lamp, this.board, this.chevronR, this.chevronRL, this.chevronY, this.chevronYL, this.spectator, this.cone, this.barrel, this.crate, this.block, this.median, this.ramp, this.arrow, this.slick, this.pit, this.sign, this.signPost];
+    this.all = [this.stripe, this.post, this.tree, this.lamp, this.board, this.chevronR, this.chevronRL, this.chevronY, this.chevronYL, this.spectator, this.cone, this.barrel, this.crate, this.crateArmor, this.crateRepair, this.block, this.median, this.ramp, this.arrow, this.slick, this.pit, this.sign, this.signPost];
     for (const m of this.all) this.group.add(m);
     this.labels = new Map(); this.labelGroup = new Group(); this.group.add(this.labelGroup); this.labelPool = [];
   }
@@ -42,7 +44,8 @@ export class Props {
   setPropModels(meshes) { this.glb = {}; for (const n of ['billboard', 'cones']) if (meshes[n]) { this.glb[n] = meshes[n]; this.all.push(meshes[n]); } this.hasLampModel = !!meshes.street_lamp; }
   begin() { for (const m of this.all) m.count = 0; this.labelsUsed = 0; }
   put(m, G, x, s, yaw, sx = 1, sy = 1, sz = 1, lift = 0) { if (m.count >= m.instanceMatrix.count) return; toWorld(G.road, x, s, D.position); D.position.y += lift; D.rotation.set(0, -(G.road.frame(s).psi + yaw), 0); D.scale.set(sx, sy, sz); D.updateMatrix(); m.setMatrixAt(m.count++, D.matrix); }
-  end() { for (const m of this.all) if (m.count) m.instanceMatrix.needsUpdate = true; for (let i = this.labelsUsed; i < this.labelPool.length; i++) this.labelPool[i].visible = false; }
+  // an empty InstancedMesh is still a draw call: hide it
+  end() { for (const m of this.all) { m.visible = m.count > 0; if (m.count) m.instanceMatrix.needsUpdate = true; } for (let i = this.labelsUsed; i < this.labelPool.length; i++) this.labelPool[i].visible = false; }
   // a text board (corner name, district sign): a pooled plane with a canvas texture per distinct text
   label(G, text, x, s, lift, w, h, bg, fg, size, yaw = 0, flat = false) {
     let mesh = this.labelPool[this.labelsUsed]; if (!mesh) { mesh = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({ side: DoubleSide, transparent: true })); this.labelPool.push(mesh); this.labelGroup.add(mesh); }
@@ -72,7 +75,8 @@ export class Props {
     for (const rp of G.ramps) { if (rp.y < scroll - 120 || rp.y > yTop) continue; this.put(this.ramp, G, rp.x, rp.y - 5, 0, rp.w * M, 2.4, 60 * M, 0); if (rp.crate && !rp.crate.taken) this.put(this.crate, G, rp.x, rp.y + 240, elapsed, 1, 1, 1, 70 * M + Math.sin(elapsed * 4) * 0.3); }
     for (const b of G.barrels) if (b.alive && b.y > scroll - 120 && b.y < yTop) this.put(this.barrel, G, b.x, b.y, 0);
     for (const c of G.cones) if (c.alive && c.y > scroll - 120 && c.y < yTop) this.put(this.cone, G, c.x, c.y, 0);
-    for (const cr of G.crates) if (cr.y > scroll - 120 && cr.y < yTop) this.put(this.crate, G, cr.x, cr.y, cr.t * 2, 1, 1, 1, 0.3 + Math.sin(cr.t * 5) * 0.3);
+    for (const cr of G.crates) if (cr.y > scroll - 120 && cr.y < yTop) { const k = clamp((G.dist + 1700 - cr.y) / 400, 0, 1) * (cr.kind === 'repair' ? 1.5 : 1);   // a crate grows into view over its last 400 pt of approach; the repair crate is the big one
+      this.put(cr.kind === 'repair' ? this.crateRepair : cr.kind === 'armor' ? this.crateArmor : this.crate, G, cr.x, cr.y, cr.t * 2, k, k, k, 0.3 + Math.sin(cr.t * 5) * 0.3); }
     for (const b of G.barriers) if (!b.hit && b.y > scroll - 120 && b.y < yTop) { const x0 = road.laneX(b.y, b.lane0) - T.laneW / 2, x1 = road.laneX(b.y, b.lane0 + b.lanes - 1) + T.laneW / 2; for (let x = x0 + 12; x < x1; x += 24) { if (this.glb && this.glb.cones) this.put(this.glb.cones, G, x, b.y, 0); else this.put(this.block, G, x, b.y, 0, 1.7, 1, 1); } }
     for (const m of G.medians) for (let s = Math.max(m.y0, scroll - 100); s < Math.min(m.y1, yTop); s += 40) { const x0 = road.laneX(s, m.lane0) - 6, x1 = road.laneX(s, m.lane0 + m.lanes - 1) + 6; this.put(this.median, G, (x0 + x1) / 2, s + 20, 0, (x1 - x0) * M, 1, 40 * M); }
     for (const s of G.slicks) this.put(this.slick, G, s.x, s.y, 0, s.r * 1.4 * M, 1, s.r * M, 0.02);

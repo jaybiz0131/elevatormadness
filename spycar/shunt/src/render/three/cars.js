@@ -9,6 +9,7 @@ import { buildHero } from './hero.js';
 import { tickEnemyLights } from './enemyModels.js';
 import { HEAD_K } from './heroModel.js';
 import { loadGatling } from './gatling.js';
+const FADE_FAR = 2300, FADE_SPAN = 600;   // enemy lights fade out between 1,700 and 2,300 pt ahead
 const V3 = new Vector3();
 const KIND_COL = { player: '#37e6ff', civ: '#cfe6ff', weak: '#3a3d46', bruiser: '#1a1b1f', gunner: '#1a1b1f', armored: '#20242b', truck: '#2fd36a', wreck: '#3a2a2a' };
 const CIV_TINTS = ['#cfe6ff', '#fff1c9', '#cdebdc', '#e9d9ff'];
@@ -61,12 +62,12 @@ export class CarSystem {
   // cars that exist this frame get a mesh; the rest go back to the pool. c.mesh is render-side only (the hash never reads it).
   update(G, alpha, fx, elapsed) {
     const stamp = ++this.stamp;   // no per-frame allocation: meshes seen this frame carry the stamp
-    for (const k in this.inst) { this.inst[k].count = 0; if (this.inst[k].userData.attach) this.inst[k].userData.attach.mesh.count = 0; } tickEnemyLights(elapsed);
+    this.dmgBudget = 10; for (const k in this.inst) { this.inst[k].count = 0; if (this.inst[k].userData.attach) this.inst[k].userData.attach.mesh.count = 0; } tickEnemyLights(elapsed);
     for (const c of G.cars) {
       // a type with an imported model is placed through a proxy and written into its InstancedMesh; the rest use pooled meshes
       if (!c.alive) continue; const inst = this.inst[c.kind]; let m; if (inst) m = this.proxy; else { m = this.meshOf.get(c); if (!m) { m = this.acquire(c.kind); m.userData.kind = c.kind; this.meshOf.set(c, m); } }
       m.userData.stamp = stamp; const cx = lerp(c.px, c.x, alpha), cy = lerp(c.py, c.y, alpha); const w = c.w * M, l = c.l * M;
-      if (c.wrecked) { m.material = this.mat.wreck; this.place(m, G, cx, cy, c.spin, 0); m.rotation.z = Math.sin(c.flip * Math.PI * 2) * 0.5; m.rotation.x = Math.sin(c.flip * Math.PI) * 0.2; if (inst) this.emit(inst, m, 0.28); if (c.debrisT > 0.5) fx.glow(m.position.x, m.position.y + 1, m.position.z, 2.5, 1, 0.5, 0.15, (c.debrisT - 0.5)); fx.shadow(m.position, w, l); continue; }
+      if (c.wrecked) { m.material = this.mat.wreck; this.place(m, G, cx, cy, c.spin, 0); m.rotation.z = Math.sin(c.flip * Math.PI * 2) * 0.5; m.rotation.x = Math.sin(c.flip * Math.PI) * 0.2; if (inst) this.emit(inst, m, 0.28); if (c.debrisT > 0.5) fx.glow(m.position.x, m.position.y + 1, m.position.z, 2.5, 1, 0.5, 0.15, (c.debrisT - 0.5)); this.wreckFx(c, m.position, fx, elapsed); fx.shadow(m.position, w, l); continue; }
       m.material = c.kind === 'civ' ? this.mat['civ' + Math.max(0, CIV_TINTS.indexOf(c.tint))] : this.mat[c.kind]; m.rotation.z = 0; m.rotation.x = 0;
       this.place(m, G, cx, cy, (c.lean || 0) * Math.PI / 180 + (c.spin || 0), 0); fx.shadow(m.position, w, l); if (inst) this.emit(inst, m, 1, c.kind === 'civ' ? CIV_BODY[Math.max(0, CIV_TINTS.indexOf(c.tint))] : null);
       const p = m.position;
@@ -74,7 +75,9 @@ export class CarSystem {
       if (c.kind === 'truck') { if (!c.loaded) fx.glow(p.x - fx_ * l * 0.5, p.y + 2.6, p.z - fz_ * l * 0.5, 1.2, 0.24, 1, 0.48, 0.4 + 0.4 * Math.sin(elapsed * 6)); continue; }   // friendly green
       if (c.kind === 'civ') { if (c.blink > 0 && Math.floor(c.blink * 8) % 2 === 0) { const sx = c.blinkDir < 0 ? -1 : 1; fx.glow(p.x + rx * sx * w / 2, p.y + 0.9, p.z + rz * sx * w / 2, 0.6, 1, 0.7, 0.28, 0.9); } continue; }
       // enemies: red headlights, brake lights flashing in the tell, a white flash when hit
-      for (const sx of [-1, 1]) { const hx = p.x + fx_ * l * 0.5 + rx * sx * w * 0.35, hz = p.z + fz_ * l * 0.5 + rz * sx * w * 0.35; fx.glow(hx, p.y + 0.7, hz, c.kind === 'armored' ? 1.1 : 0.9, 1, 0.23, 0.23, 0.9); fx.streak(hx + fx_ * 1.6, p.y, hz + fz_ * 1.6, 1, 0.25, 0.25, 0.5, -m.rotation.y); }
+      const df = clamp((FADE_FAR - (c.y - G.dist)) / FADE_SPAN, 0, 1);   // enemies far up the road arrive without their lights, so nothing glows in the distance before it is a car
+      if (df > 0) for (const sx of [-1, 1]) { const hx = p.x + fx_ * l * 0.5 + rx * sx * w * 0.35, hz = p.z + fz_ * l * 0.5 + rz * sx * w * 0.35; fx.glow(hx, p.y + 0.7, hz, c.kind === 'armored' ? 1.1 : 0.9, 1, 0.23, 0.23, 0.9 * df); fx.streak(hx + fx_ * 1.6, p.y, hz + fz_ * 1.6, 1, 0.25, 0.25, 0.5 * df, -m.rotation.y); }
+      this.damageFx(c, p, fx_, fz_, rx, rz, w, l, fx, elapsed);
       const brake = c.state === 'tell' && Math.floor(c.t * 12) % 2 === 0; if (brake) for (const sx of [-1, 1]) fx.glow(p.x - fx_ * l * 0.5 + rx * sx * w * 0.35, p.y + 0.8, p.z - fz_ * l * 0.5 + rz * sx * w * 0.35, 0.8, 1, 0.42, 0.42, 1);
       if (c.hitFlash > 0) fx.glow(p.x, p.y + 1, p.z, w * 1.2, 1, 1, 1, 0.8);
       if (c.state === 'tell' || c.state === 'swerve' || c.state === 'sight') { const pulse = 0.55 + 0.45 * Math.sin(elapsed * 18); fx.ring(p.x, p.y + 0.04, p.z, Math.max(w, l) * 0.6, 0xff3b3b, pulse, 1); fx.glow(p.x, p.y + 0.8, p.z, l * 0.8, 1, 0.23, 0.23, 0.35 * pulse); }
@@ -82,7 +85,22 @@ export class CarSystem {
       if (c.kind === 'gunner' && c.state === 'sight') fx.sightLine(G, c.sightX, c.y, c.sightX, c.y + 700, 0.5 + 0.5 * Math.sin(elapsed * 30));
     }
     for (const [c, m] of this.meshOf) if (m.userData.stamp !== stamp) { this.release(m); this.meshOf.delete(c); }
-    for (const k in this.inst) { const im = this.inst[k]; for (const m of im.userData.attach ? [im, im.userData.attach.mesh] : [im]) if (m.count) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; if (m.userData.aTint) m.userData.aTint.needsUpdate = true; } }
+    for (const k in this.inst) { const im = this.inst[k]; for (const m of im.userData.attach ? [im, im.userData.attach.mesh] : [im]) { m.visible = m.count > 0; if (m.count) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; if (m.userData.aTint) m.userData.aTint.needsUpdate = true; } } }
+  }
+  // damage you can read at a glance (hp as a fraction of the car's own): light smoke under 2/3, sparks and dark smoke under 1/3, fire under 1/6
+  damageFx(c, p, fx_, fz_, rx, rz, w, l, fx, elapsed) {
+    const f = c.maxHp ? c.hp / c.maxHp : 1; if (f > 0.67 || this.dmgBudget <= 0) return; const id = (c.id || 0) * 41;
+    const lvl = f > 0.34 ? 1 : f > 0.17 ? 2 : 3; this.dmgBudget--;
+    const n = lvl === 1 ? 2 : 3; const grey = lvl === 1 ? 0.62 : 0.2;
+    for (let i = 0; i < n; i++) { const k = i / n; fx.puff(p.x - fx_ * (l * 0.35 + i * 1.1) + Math.sin(elapsed * 7 + id + i) * 0.35, p.y + 1.1 + i * 0.7 + (elapsed * 1.7 + k + id) % 1, p.z - fz_ * (l * 0.35 + i * 1.1), 0.7 + i * 0.35, lvl === 1 ? 0.4 : 0.55, grey, grey, grey + 0.02, id + i); }
+    if (lvl >= 2 && Math.sin(elapsed * 31 + id * 5) > 0.15) { const sx = Math.sin(elapsed * 13 + id) > 0 ? 1 : -1; const bx = p.x + rx * sx * w * 0.3 - fx_ * l * 0.1, bz = p.z + rz * sx * w * 0.3 - fz_ * l * 0.1; fx.spark(bx, p.y + 0.7, bz, 1, 0.78, 0.3); fx.spark(bx + 0.2, p.y + 0.9, bz - 0.1, 1, 0.5, 0.15); }
+    if (lvl === 3) { const fl = 0.7 + 0.3 * Math.sin(elapsed * 23 + id) * Math.sin(elapsed * 11); fx.glow(p.x + fx_ * l * 0.2, p.y + 1.1, p.z + fz_ * l * 0.2, 1.7 * fl, 1, 0.5, 0.12, 0.85 * fl); fx.glow(p.x + fx_ * l * 0.2, p.y + 1.6 + 0.3 * fl, p.z + fz_ * l * 0.2, 0.9, 1, 0.8, 0.3, 0.6 * fl); }
+  }
+  // a wreck burns, then smoulders, for as long as it lies there
+  wreckFx(c, pos, fx, elapsed) {
+    const life = clamp((c.debrisT + 3.5) / 6, 0, 1); if (life <= 0 || this.dmgBudget <= 0) return; this.dmgBudget--; const id = (c.id || 0) * 37;
+    for (let i = 0; i < 4; i++) { const k = ((elapsed * 0.9 + i / 4 + id) % 1); fx.puff(pos.x + Math.sin(elapsed * 3 + i + id) * 0.5 * k, pos.y + 1 + k * 7, pos.z + Math.cos(elapsed * 2.3 + i) * 0.4 * k, 1.1 + k * 2.4, 0.6 * life * (1 - k * 0.7), 0.16, 0.16, 0.17, id + i); }
+    if (c.debrisT > -1.5) { const fl = 0.75 + 0.25 * Math.sin(elapsed * 19 + id); fx.glow(pos.x, pos.y + 1.2, pos.z, 1.8 * fl, 1, 0.45, 0.1, 0.7 * fl * clamp((c.debrisT + 1.5) / 1.5, 0, 1)); }
   }
   updatePlayer(G, rx, rdist, fx, st, elapsed) {
     // the imported hero turns its wheels with the road speed and lights its tail bar under braking
@@ -123,7 +141,7 @@ export class CarSystem {
     if (G.drifting && st.phase === 'playing') fx.ring(p.x, p.y - lift + 0.03, p.z, 36 * M, G.driftTier >= 3 ? 0xff7a2a : G.driftTier === 2 ? 0xffd23f : 0xffffff, 0.8, Math.min(1, G.driftCharge / T.drift.tiers[2]));
     if (G.slamCd > 0) fx.ring(p.x, p.y - lift + 0.03, p.z, 30 * M, 0xffffff, 0.5, 1 - G.slamCd / T.slam.cooldown);
     if (G.air > 0 && G.air < 0.4) fx.ring(p.x, p.y - lift + 0.03, p.z, 26 * M, 0xffffff, 0.8, 1);
-    if (G.smoke > 0 || G.armor === 1) { const a = G.armor === 1 ? 0.45 : Math.min(0.5, G.smoke * 0.3); for (let i = 0; i < 4; i++) fx.puff(p.x - fx_ * (0.5 + i * 0.9) + Math.sin(elapsed * 9 + i) * 0.3, p.y + 1 + i * 0.4, p.z - fz_ * (0.5 + i * 0.9), 0.5 + i * 0.25, a * 0.6); }
+    if (G.smoke > 0 || G.armor === 1 || G.limp) { const a = G.limp ? 0.7 : G.armor === 1 ? 0.45 : Math.min(0.5, G.smoke * 0.3); if (G.limp) { const dk = 0.25 + 0.1 * Math.sin(elapsed * 6); for (let i = 0; i < 3; i++) fx.puff(p.x - fx_ * (1.2 + i * 1.1), p.y + 1.6 + i * 0.7 + (elapsed * 1.4 + i / 3) % 1, p.z - fz_ * (1.2 + i * 1.1), 0.7 + i * 0.4, 0.5, dk, dk, dk + 0.02, i + 1); if (Math.sin(elapsed * 27) > 0.3) fx.spark(p.x - fx_ * 1.5, p.y + 0.8, p.z - fz_ * 1.5, 1, 0.7, 0.25); } for (let i = 0; i < 4; i++) fx.puff(p.x - fx_ * (0.5 + i * 0.9) + Math.sin(elapsed * 9 + i) * 0.3, p.y + 1 + i * 0.4, p.z - fz_ * (0.5 + i * 0.9), 0.5 + i * 0.25, a * 0.6); }
   }
   reset() { for (const [, m] of this.meshOf) this.release(m); this.meshOf.clear(); }
 }

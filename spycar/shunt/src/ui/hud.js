@@ -13,6 +13,10 @@ const CSS = `
 #hud .goal i { display: block; height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, #37e6ff, #ffd23f); box-shadow: 0 0 8px rgba(55,230,255,0.5); }
 #hud .goal b { position: absolute; top: -3px; width: 2px; height: 11px; background: rgba(255,255,255,0.55); } #hud .goal b.city { right: -1px; width: 3px; background: #ffd23f; }
 #hud .goal.finale i { background: linear-gradient(90deg, #ffd23f, #ff5a3c); }
+#hud .time { position: absolute; left: 0; right: 0; top: calc(17px + var(--safe-top, 0px)); text-align: center; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.08em; text-shadow: 0 2px 6px rgba(0,0,0,0.85); }
+#hud .limp { margin-top: 6px; font-size: 14px; font-weight: 700; letter-spacing: 0.14em; color: #ff5a3c; text-shadow: 0 1px 6px rgba(0,0,0,0.9); }
+#hud .limp[hidden] { display: none; }
+#hud .limp.on { animation: limp 0.7s steps(2) infinite; } @keyframes limp { 0% { opacity: 1; } 100% { opacity: 0.45; } }
 #hud .flash { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 60%, rgba(255,240,200,0.9) 0%, rgba(255,170,80,0.5) 40%, rgba(255,120,40,0) 75%); opacity: 0; mix-blend-mode: screen; }
 #hud .combo { color: #ffd23f; font-size: 40px; font-weight: 700; line-height: 36px; display: flex; flex-direction: column; align-items: flex-start; text-shadow: 0 2px 10px rgba(0,0,0,0.85), 0 0 18px rgba(255,210,63,0.45); }
 #hud .combo.bump { animation: bump 0.22s ease-out; } @keyframes bump { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }
@@ -44,15 +48,17 @@ const CSS = `
 #hud .look button.on { background: rgba(55,230,255,0.3); }
 #hud .look[hidden] { display: none; }
 `;
+// pops stay out of the bottom band (gas, fire and the special pad) and below the HUD at the top
+const POP_TOP = 96, POP_BOTTOM = 590;   // stage coordinates (390 by 844): the button band starts near y 620
 export function createHud(container, renderer) {
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
-  const el = document.createElement('div'); el.id = 'hud'; el.innerHTML = `<div class="flash"></div><div class="goal" role="progressbar" aria-label="Distance to the city"><i></i><b style="left:90%"></b><b class="city"></b></div><div class="vig"></div><div class="lines"></div><div class="tl"><div class="score"><span class="n">0</span><span class="combo" hidden><span class="c">×2</span><div class="combobar"><i></i></div></span></div><div class="best">BEST 0</div><div class="armor"><b>ARMOR</b></div><div class="speed"><span class="v">0</span><small>PT/S</small></div></div><div class="replay" hidden>● REPLAY</div><div class="ghost"><i></i>SLIDE TO STEER</div><div class="look"></div>`;
+  const el = document.createElement('div'); el.id = 'hud'; el.innerHTML = `<div class="flash"></div><div class="goal" role="progressbar" aria-label="Distance to the city"><i></i><b style="left:90%"></b><b class="city"></b></div><div class="time">0:00</div><div class="vig"></div><div class="lines"></div><div class="tl"><div class="score"><span class="n">0</span><span class="combo" hidden><span class="c">×2</span><div class="combobar"><i></i></div></span></div><div class="best">BEST 0</div><div class="armor"><b>ARMOR</b></div><div class="limp on" hidden>LIMP · GRAB THE REPAIR</div><div class="speed"><span class="v">0</span><small>PT/S</small></div></div><div class="replay" hidden>● REPLAY</div><div class="ghost"><i></i>SLIDE TO STEER</div><div class="look"></div>`;
   container.appendChild(el);
-  const q = (s) => el.querySelector(s); const nScore = q('.score .n'), combo = q('.combo'), comboN = q('.combo .c'), comboBar = q('.combobar i'), bestEl = q('.best'), armor = q('.armor'), speedEl = q('.speed'), speedV = q('.speed .v'), speedTag = q('.speed small'), replay = q('.replay'), vig = q('.vig'), flash = q('.flash'), goal = q('.goal'), goalFill = q('.goal i'), lines = q('.lines'), ghost = q('.ghost');
+  const q = (s) => el.querySelector(s); const nScore = q('.score .n'), combo = q('.combo'), comboN = q('.combo .c'), comboBar = q('.combobar i'), bestEl = q('.best'), armor = q('.armor'), limpEl = q('.limp'), timeEl = q('.time'), speedEl = q('.speed'), speedV = q('.speed .v'), speedTag = q('.speed small'), replay = q('.replay'), vig = q('.vig'), flash = q('.flash'), goal = q('.goal'), goalFill = q('.goal i'), lines = q('.lines'), ghost = q('.ghost');
   for (let i = 0; i < T.armor; i++) armor.appendChild(document.createElement('i')); const armorBars = armor.querySelectorAll('i');
   const chevs = []; for (let i = 0; i < 8; i++) { const c = document.createElement('div'); c.className = 'chev down'; c.hidden = true; el.appendChild(c); chevs.push(c); }
   const pops = []; for (let i = 0; i < 16; i++) { const p = document.createElement('div'); p.className = 'pop'; p.hidden = true; el.appendChild(p); pops.push(p); }
-  const last = { score: null, best: null, armor: null, low: null, speed: null, tag: null, combo: null, comboK: null, fast: null, replay: null, vig: null, lines: null, ghost: null };
+  const last = { limp: null, time: null, score: null, best: null, armor: null, low: null, speed: null, tag: null, combo: null, comboK: null, fast: null, replay: null, vig: null, lines: null, ghost: null };
   const set = (k, v, f) => { if (last[k] !== v) { last[k] = v; f(v); } };
   const pt = { x: 0, y: 0, visible: false };
   function update(st) {
@@ -60,6 +66,7 @@ export function createHud(container, renderer) {
     set('score', G.score, v => nScore.textContent = fmt(v));
     set('best', Math.max(G.score, st.best), v => bestEl.textContent = 'BEST ' + fmt(v));
     set('armor', G.armor, v => { for (let i = 0; i < armorBars.length; i++) armorBars[i].classList.toggle('on', i < v); });
+    set('limp', !!G.limp && phase === 'playing', v => limpEl.hidden = !v); set('time', Math.floor(G.t || 0), v => timeEl.textContent = Math.floor(v / 60) + ':' + String(v % 60).padStart(2, '0'));
     set('low', G.armor === 1 && Math.sin(st.elapsed * 8) > 0, v => armor.classList.toggle('low', v));
     const showSpeed = phase !== 'over'; set('speedShow', showSpeed, v => speedEl.hidden = !v);
     if (showSpeed) { set('speed', Math.round(G.speed), v => speedV.textContent = String(v)); set('fast', G.speed > 850, v => speedEl.classList.toggle('fast', v)); set('tag', 'PT/S' + (G.turboT > 0 ? '  TURBO' : G.slipBoostT > 0 ? '  DRAFT' : G.nitro > 0 ? '  NITRO' : ''), v => speedTag.textContent = v); }
@@ -74,7 +81,11 @@ export function createHud(container, renderer) {
     // off-screen threats: red chevrons at the bottom for enemies behind, white at the top for the supply truck, placed by projection
     let ci = 0; for (const c of G.cars) { if (!c.alive || c.wrecked || ci >= chevs.length) continue; const enemy = (c.kind === 'bruiser' || c.kind === 'gunner') && c.y < G.dist - 300; const truck = c.kind === 'truck' && !c.loaded; if (!enemy && !truck) continue; renderer.project(c.x, c.y, pt); if (truck && pt.visible) continue; if (truck && pt.y > 0) continue; const e = chevs[ci++]; e.hidden = false; e.className = 'chev ' + (enemy ? 'down' : 'up'); e.style.left = (clamp(pt.x, 24, view.SW - 24) - 12) + 'px'; e.style.opacity = enemy ? 0.5 + 0.5 * Math.sin(st.elapsed * 12) : 1; }
     for (; ci < chevs.length; ci++) chevs[ci].hidden = true;
-    let pi = 0; for (const p of G.pops) { if (pi >= pops.length) break; renderer.project(p.x, p.y, pt, 1.2); const e = pops[pi++]; e.hidden = false; e.textContent = p.text; e.className = 'pop' + (p.bad ? ' bad' : '') + (p.small ? ' small' : '') + (p.big ? ' big' : ''); e.style.left = pt.x + 'px'; e.style.top = (pt.y - 24 - p.t * 40) + 'px'; e.style.opacity = 1 - p.t * p.t; }
+    let pi = 0; const placed = []; for (const p of G.pops) { if (pi >= pops.length) break; renderer.project(p.x, p.y, pt, 1.2); const e = pops[pi++]; e.hidden = false; const cls = 'pop' + (p.bad ? ' bad' : '') + (p.small ? ' small' : '') + (p.big ? ' big' : '');
+      if (e.textContent !== p.text || e.className !== cls) { e.textContent = p.text; e.className = cls; e._w = 0; } if (!e._w) e._w = e.offsetWidth || 120;   // the width is measured once per text
+      let top = clamp(pt.y - 24 - p.t * 40, POP_TOP, POP_BOTTOM); const left = clamp(pt.x, e._w / 2 + 8, view.SW - e._w / 2 - 8);
+      for (let k = 0; k < 5 && placed.some(o => Math.abs(o.top - top) < 24 && Math.abs(o.left - left) < (o.w + e._w) / 2); k++) top = Math.max(POP_TOP, top - 24);   // two pops never sit on each other
+      placed.push({ top, left, w: e._w }); e.style.left = left + 'px'; e.style.top = top + 'px'; e.style.opacity = 1 - p.t * p.t; }
     for (; pi < pops.length; pi++) pops[pi].hidden = true;
   }
   function lookToggle(names, current, onPick) { const box = q('.look'); box.innerHTML = ''; for (const n of names) { const b = document.createElement('button'); b.textContent = n.label; b.classList.toggle('on', n.key === current); b.addEventListener('click', () => { onPick(n.key); for (const o of box.children) o.classList.toggle('on', o === b); }); box.appendChild(b); } }

@@ -97,3 +97,10 @@ hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mo
 - Recorded in design/roadmap.md: Sprint F segment 5 "The Refit" (the Mule dock cinematic, mount points on the hero); carried into
   Sprint D: swap silver traffic for a mid gunmetal grey (silver and white both read as cream at dusk).
 - Next: Jack's playtest notes on v18, then Sprint D (first item: the hood gatling and the handbrake 180).
+
+## Sprint D
+- Stop 1 (fun first): pacing director, gatling, the 3 minute run with combo and finale. Report: design/fun/stop1-report.md.
+- Stop 2 (looks finished, hits hard, never dies): world to 4,000 pt with a fog floor, spawns out of sight, camera B default and closer, kill feedback v2,
+  enemy damage states, combat race (limp and repair, speed costs, kill bursts, time plus score grade), HUD clock, lighter lamp, sign atlas, automatic render scale.
+  Sim changed: new baselines in `spycar/shunt/replays/`. Report: design/stop2/stop2-report.md.
+- Next: Stop 3 (sound pack, director v2, one-button change, handbrake 180).

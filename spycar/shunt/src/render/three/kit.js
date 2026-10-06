@@ -42,7 +42,7 @@ export const KIT = {
   // launch ramp: a true wedge (1 m cube scaled by the caller) with chevron stripes up the deck
   ramp() { const w = extrude([[-0.5, 0], [0.5, 0], [0.5, 1]], 1).rotateY(Math.PI / 2); return assemble([part(w, '#c9ced6'), part(box(1.01, 0.05, 0.05, 0, 0.98, -0.5), '#ffd23f', 2.2), part(box(1.01, 0.02, 0.06, 0, 0.01, 0.48), '#ffd23f', 1.2), part(box(0.04, 0.5, 1.0, -0.5, 0.25, 0).translate(0, 0, 0), '#ff3b3b', 0.4), part(box(0.04, 0.5, 1.0, 0.5, 0.25, 0), '#ff3b3b', 0.4)]); },   // high lip forward (-z)
   // supply crate: framed box with a glowing band (pickups must read brightest)
-  crate() { const parts = [part(box(1.3, 1.3, 1.3, 0, 0.75, 0), '#d8a92a', 0.35)]; for (const x of [-0.68, 0.68]) for (const z of [-0.68, 0.68]) parts.push(part(box(0.14, 1.5, 0.14, x, 0.75, z), '#3a3020')); parts.push(part(box(1.42, 0.16, 1.42, 0, 0.75, 0), '#fff1a0', 1.6)); return assemble(parts); },
+  crate(body = '#d8a92a', band = '#fff1a0') { const parts = [part(box(1.3, 1.3, 1.3, 0, 0.75, 0), body, 0.35)]; for (const x of [-0.68, 0.68]) for (const z of [-0.68, 0.68]) parts.push(part(box(0.14, 1.5, 0.14, x, 0.75, z), '#3a3020')); parts.push(part(box(1.42, 0.16, 1.42, 0, 0.75, 0), band, 1.6)); return assemble(parts); },
   // oil drum: ribbed barrel with two hazard bands
   barrel() { return assemble([part(cyl(0.52, 0.52, 1.5, 12, 0, 0.8, 0), '#ff7a1c'), part(cyl(0.55, 0.55, 0.08, 12, 0, 0.3, 0), '#2a2a2a'), part(cyl(0.55, 0.55, 0.08, 12, 0, 1.3, 0), '#2a2a2a'), part(cyl(0.53, 0.53, 0.18, 12, 0, 0.8, 0), '#f2f2f2', 0.4), part(cyl(0.45, 0.45, 0.04, 12, 0, 1.56, 0), '#3a3a3a')]); },
   // traffic cone: square base, cone, a reflective collar

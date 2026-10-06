@@ -67,7 +67,8 @@
   #card .logo { font-size: 54px; font-weight: 700; letter-spacing: 0.3em; color: var(--player); text-shadow: 0 0 24px rgba(55,230,255,0.5); }
   #card .title { font-size: 15px; letter-spacing: 0.2em; color: var(--fg-dim); text-transform: uppercase; text-align: center; }
   #card .score { font-size: 52px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
-  #card .stars { display: flex; gap: 10px; margin: 2px 0 4px; } #card .stars svg { width: 44px; height: 44px; overflow: visible; } #card .stars svg path { fill: rgba(255,255,255,0.14); } #card .stars svg.on path { fill: #ffd23f; filter: drop-shadow(0 0 8px rgba(255,210,63,0.7)); }
+  #card .stars .grade { font-size: 64px; font-weight: 700; line-height: 44px; margin-right: 10px; color: #ffd23f; text-shadow: 0 0 14px rgba(255,210,63,0.6), 0 3px 0 rgba(0,0,0,0.5); align-self: center; font-style: italic; } #card .stars .grade.gS { color: #fff3a8; text-shadow: 0 0 18px rgba(255,160,40,0.9), 0 3px 0 rgba(0,0,0,0.5); } #card .stars .grade.gD, #card .stars .grade.gC { color: #b8bcc6; text-shadow: 0 3px 0 rgba(0,0,0,0.5); }
+  #card .stars { align-items: center; display: flex; gap: 10px; margin: 2px 0 4px; } #card .stars svg { width: 44px; height: 44px; overflow: visible; } #card .stars svg path { fill: rgba(255,255,255,0.14); } #card .stars svg.on path { fill: #ffd23f; filter: drop-shadow(0 0 8px rgba(255,210,63,0.7)); }
   #card .newbest { font-size: 18px; letter-spacing: 0.2em; color: var(--pickup); font-weight: 700; }
   #card .lines { font-size: 13px; color: var(--fg-dim); letter-spacing: 0.06em; text-align: center; line-height: 1.6; }
   #card .btn { width: 100%; max-width: 310px; height: 56px; border-radius: 28px; border: 0; background: rgba(255,255,255,0.92); color: #07101c; font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: 0.12em; }

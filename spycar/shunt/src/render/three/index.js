@@ -30,7 +30,7 @@ export function createThreeRenderer(canvas, opts = {}) {
   // ?lite=1: half resolution, no shadows, no post: for headless bots on software GL, where the sim must run at pace
   const LITE = new URLSearchParams(location.search).get('lite') === '1';
   // the chase-cam preset (A or B): ?camera=B, or Settings > Camera (S.cam); ?cam below still overrides for shots
-  setCamPreset(new URLSearchParams(location.search).get('camera') || S.cam || 'A');
+  setCamPreset(new URLSearchParams(location.search).get('camera') || S.cam || 'B');
   // ?cam=pitch,dist,fov[,yaw,screenY] overrides the road camera for comparison and close-up shots (e.g. ?cam=47,76,42; a three-quarter
   // close-up ?cam=18,11,40,35,0.5): yaw orbits the camera round the car in degrees; screenY is where the car sits (1/3 = lower third)
   { const c = new URLSearchParams(location.search).get('cam'); if (c) { const [p, d, f, y, t] = c.split(',').map(Number); if (p) CAM.pitch = p; if (d) CAM.dist = d; if (f) CAM.fov = f; if (y) CAM.yaw = y; if (t) CAM.lowerThird = t; if (y || t) CAM.fixed = true; } }
@@ -41,7 +41,7 @@ export function createThreeRenderer(canvas, opts = {}) {
   const SB = 80; key.shadow.camera.left = -SB; key.shadow.camera.right = SB; key.shadow.camera.top = SB; key.shadow.camera.bottom = -SB; scene.add(key); scene.add(key.target);
   const hemi = new HemisphereLight(0x8899ff, 0x202020, 0.6); scene.add(hemi);
   const sky = new Sky(scene, renderer); if (MODELS.skyline) sky.addSkyline(MODELS.skyline);
-  const road = new RoadMesh(scene), cars = new CarSystem(scene), props = new Props(scene), fx = new FX(scene), city = new City(scene, fx); roadCam.setOccluders(city.group); cars.camPos = camera.position;
+  const road = new RoadMesh(scene), cars = new CarSystem(scene), props = new Props(scene), fx = new FX(scene), city = new City(scene, fx); roadCam.setOccluders(city.group, city); cars.camPos = camera.position;
   // rain streaks (a ?tune=1 option): a scrolling streak quad in front of the camera
   const rain = new Mesh(new PlaneGeometry(2, 2), new MeshBasicMaterial({ map: rainTexture(), transparent: true, opacity: 0, blending: AdditiveBlending, depthTest: false, depthWrite: false })); rain.renderOrder = 20; rain.frustumCulled = false; camera.add(rain); rain.position.set(0, 0, -1.2); scene.add(camera);
   let look = lookFor(opts.look || 'night'), P = Object.assign({}, LOOKS[look]); if (IS_IOS) P.msaa = 2;
@@ -58,14 +58,21 @@ export function createThreeRenderer(canvas, opts = {}) {
   // dynamic resolution: the backing store is the stage size x scale; the cap is the device pixel ratio after the stage's CSS scale, never above 2
   function setScale(k) { state.scale = k; renderer.setPixelRatio(k); renderer.setSize(view.SW, H, false); post.composer.setSize(view.SW, H); }
   function resize() {
-    const cssScale = Math.min(window.innerWidth / view.SW, window.innerHeight / H); state.cap = LITE ? 0.5 : Math.min(2, (window.devicePixelRatio || 1) * cssScale); setScale(Math.min(state.cap, Math.max(state.scale, Math.min(1.25, state.cap))));
+    const cssScale = Math.min(window.innerWidth / view.SW, window.innerHeight / H); state.cap = LITE ? 0.5 : Math.min(2, (window.devicePixelRatio || 1) * cssScale); setScale(Math.min(state.cap, state.steps ? state.scale : Math.max(state.scale, Math.min(1.25, state.cap))));
     camera.aspect = view.SW / H; camera.updateProjectionMatrix(); if (showroom) showroom.resize(view.SW / H); const a = Math.tan(camera.fov / 2 * Math.PI / 180) * 1.2 * 2; rain.scale.set(a * camera.aspect, a, 1);
   }
+  // automatic render scale (Stop 2): under 50 fps for 2 s steps the render scale down by 15% (not below 0.6); with headroom (over 70 fps) for
+  // 6 s it steps back up, and each time a step up has to be undone within 12 s the wait before the next try doubles (to 48 s at most), so it
+  // never flaps. Frames over 0.25 s (a hidden tab, a hand-driven tool) are ignored. ?autoscale=0 holds the scale; headless browsers hold it
+  // too (the tools draw frames by hand), ?autoscale=1 turns it on there.
+  const AUTO_Q = new URLSearchParams(location.search).get('autoscale'); const AUTO = AUTO_Q === '1' || (AUTO_Q !== '0' && !navigator.webdriver);
+  const auto = { slow: 0, fast: 0, wait: 6, upAt: -99, t: 0 }; state.auto = AUTO; state.steps = 0;
   function adapt(dt) {
-    // frames over 15 ms for a while lower the scale, frames under 10 ms raise it, within [1.25, cap]; headless and desktop DPR 1 sit at their cap
-    state.frameMs = lerp(state.frameMs, dt * 1000, 0.08); const lo = Math.min(1.25, state.cap);
-    if (state.frameMs > 15 && state.scale > lo) { setScale(Math.max(lo, state.scale - 0.125)); state.frameMs = 14; }
-    else if (state.frameMs < 10 && state.scale < state.cap) { setScale(Math.min(state.cap, state.scale + 0.125)); state.frameMs = 12; }
+    state.frameMs = lerp(state.frameMs, dt * 1000, 0.08); if (!AUTO || dt > 0.25) return;
+    const lo = Math.min(0.6, state.cap); auto.t += dt;
+    auto.slow = state.frameMs > 20 ? auto.slow + dt : 0; auto.fast = state.frameMs < 14.3 ? auto.fast + dt : 0;
+    if (auto.slow >= 2 && state.scale > lo + 0.01) { if (auto.t - auto.upAt < 12) auto.wait = Math.min(48, auto.wait * 2); setScale(Math.max(lo, state.scale * 0.85)); state.steps++; auto.slow = 0; auto.fast = 0; state.frameMs = 17; }
+    else if (auto.fast >= auto.wait && state.scale < state.cap - 0.01) { setScale(Math.min(state.cap, state.scale / 0.85)); state.steps++; auto.upAt = auto.t; auto.fast = 0; auto.slow = 0; state.frameMs = 17; }
   }
   canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); state.lost = true; }, false);
   canvas.addEventListener('webglcontextrestored', () => { post.dispose(); post = createPost(renderer, scene, camera, P); showroomOn = false; applyLook(); road.reset(); city.reset(); state.lost = false; prewarm(); }, false);
@@ -93,6 +100,7 @@ export function createThreeRenderer(canvas, opts = {}) {
     road.update(G, rdist, roadCam.pos); placeKey(roadCam.anchor);
     const scroll = rdist - 270, yTop = rdist + 1500;
     fx.begin(); props.update(G, scroll, yTop, st.elapsed); city.update(G, rdist, st.elapsed, P);
+    if (!frame) for (const cr of G.crates) { const ahead = cr.y - G.dist; if (ahead < -100 || ahead > 1700) continue; const rep = cr.kind === 'repair', arm = cr.kind === 'armor'; toWorld(G.road, cr.x, cr.y, V); const k = Math.min(1, (1700 - ahead) / 400) * (0.75 + 0.25 * Math.sin(st.elapsed * 6)); fx.glow(V.x, V.y + 1.2, V.z, rep ? 4.5 : 3, rep ? 0.3 : arm ? 0.3 : 1, rep ? 1 : arm ? 0.85 : 0.75, rep ? 0.5 : arm ? 1 : 0.2, 0.7 * k); if (rep || arm) fx.glow(V.x, V.y + 6, V.z, 1.2, rep ? 0.5 : 0.5, 1, rep ? 0.7 : 1, 0.6 * k); }   // a beacon on every crate (the repair one has a second, higher light)
     if (frame) { cars.update({ road: G.road, cars: frame.cars.slice(0, frame.n).map(c => Object.assign(c, { alive: true, px: c.x, py: c.y })), x: G.x }, 1, fx, st.elapsed); cars.updatePlayer(G, rx, rdist, fx, { phase: 'over', lean: frame.lean }, st.elapsed); }
     else { cars.update(G, alpha, fx, st.elapsed); cars.updatePlayer(G, rx, rdist, fx, st, st.elapsed); }
     fx.update(G, alpha, st.elapsed, roadCam.pos); fx.end();

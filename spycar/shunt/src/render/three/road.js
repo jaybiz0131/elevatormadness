@@ -6,7 +6,7 @@ import { BufferGeometry, BufferAttribute, Mesh, MeshStandardMaterial, Color, Gro
 import { REF, T, hashI } from '../../sim/constants.js';
 import { DISTRICTS } from '../../sim/road.js';
 import { M, toWorld } from './scale.js';
-export const CHUNK = 400, SAMPLE = 10;
+export const CHUNK = 400, SAMPLE = 10, AHEAD = 4000;
 const col = (hex) => new Color(hex);
 const PAL = DISTRICTS.map(d => ({ road: col(d.road), dark: col(d.dark), shoulder: col(d.shoulder), rail: col(d.rail) }));
 export const ROAD_COL = { walk: col('#2c2f38'), lane: col('#c4c9d2'), tyre: col('#2b2d31'), rumbleR: col('#d93a3a'), rumbleW: col('#f2f2f2'), railPost: col('#5d6675') };
@@ -55,7 +55,7 @@ export function buildChunk(G, k, material) {
 }
 export class RoadMesh {
   constructor(scene) {
-    this.group = new Group(); scene.add(this.group); this.chunks = new Map();
+    this.group = new Group(); scene.add(this.group); this.chunks = new Map(); this.warm = true;
     this.material = new MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0.0, side: DoubleSide });
     // wet asphalt, all in the shader: world-space value noise gives the aggregate grain (albedo and roughness break-up at 0.4 m and
     // 3 m), the wet attribute marks puddles (near-mirror, darker), and the rest of the asphalt keeps a damp sheen scaled by the look's
@@ -79,11 +79,13 @@ float rn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
     this.ground = new Mesh(new PlaneGeometry(2400, 2400), new MeshStandardMaterial({ color: PAL[0].shoulder.clone().multiplyScalar(0.6), roughness: 1 })); this.ground.rotation.x = -Math.PI / 2; this.ground.position.y = -0.02; this.ground.receiveShadow = true; scene.add(this.ground);
   }
   update(G, rdist, camPos) {
-    const k0 = Math.floor((rdist - 500) / CHUNK), k1 = Math.floor((rdist + 1700) / CHUNK);
-    for (let k = k0; k <= k1; k++) if (!this.chunks.has(k)) { const m = buildChunk(G, k, this.material); this.chunks.set(k, m); this.group.add(m); }
+    // the road is built 4,000 pt (300 m) ahead, inside the fog floor; at most 3 new chunks a frame (all of them on the first frame after a reset), nearest first
+    const k0 = Math.floor((rdist - 500) / CHUNK), k1 = Math.floor((rdist + AHEAD) / CHUNK); let built = 0;
+    for (let k = k0; k <= k1; k++) if (!this.chunks.has(k) && (this.warm || built < 3)) { const m = buildChunk(G, k, this.material); this.chunks.set(k, m); this.group.add(m); built++; }
+    this.warm = false;
     for (const [k, m] of this.chunks) if (k < k0 - 1 || k > k1 + 1) { this.group.remove(m); m.geometry.dispose(); this.chunks.delete(k); }
     this.ground.position.x = camPos.x; this.ground.position.z = camPos.z; this.ground.material.color.copy(PAL[G.district].shoulder).multiplyScalar(0.6);
   }
   setLook(P) { this.material.roughness = 0.92 - 0.2 * P.wet; this.material.metalness = 0.1 * P.wet; this.material.envMapIntensity = 0.4 + 1.4 * P.wet; this.wetUniform.value = P.wet; }
-  reset() { for (const [, m] of this.chunks) { this.group.remove(m); m.geometry.dispose(); } this.chunks.clear(); }
+  reset() { for (const [, m] of this.chunks) { this.group.remove(m); m.geometry.dispose(); } this.chunks.clear(); this.warm = true; }
 }

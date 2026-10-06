@@ -1,6 +1,9 @@
 import { STEP, T, clamp, lerp } from './constants.js';
 import { say } from './events.js';
 import { G, makeCar } from './state.js';
+// everything that arrives on the road arrives from beyond what the camera shows: ahead of the car by max(T.spawn.min, 1.4 x speed + 900) pt
+// (inside the fog), behind it by T.spawn.behind pt (off the bottom of the screen). Nothing appears mid-road.
+export const farAhead = () => Math.max(T.spawn.min, T.spawn.speedK * G.speed + T.spawn.speedAdd);
 export function spawnCar(kind, lane, yAhead, opts = {}) {
   const y = G.dist + yAhead; lane = clamp(lane, 0, G.road.laneCount(y) - 1);
   const c = makeCar(kind, G.road.laneX(y, lane), y, { lane });
@@ -31,7 +34,7 @@ export function spawnRamp(yAhead, lane, setup) {
 export function spawnBarrels(yAhead, lane) { const y = G.dist + yAhead; for (let i = 0; i < 3; i++) G.barrels.push({ x: G.road.laneX(y, lane) + (i - 1) * 16, y: y + (i % 2) * 18, alive: true }); event(); }
 export function spawnClosure(yAhead) { const y = G.dist + yAhead; const n = G.road.laneCount(y); const edge = G.rng() < 0.5 ? 0 : n - 1; for (let i = 0; i < 6; i++) G.cones.push({ x: G.road.laneX(y + i * 70, edge) + (edge === 0 ? -14 + i * 5 : 14 - i * 5), y: y + i * 70, alive: true }); G.signs.push({ y: y - 150, text: edge === 0 ? '→ MERGE' : 'MERGE ←' }); }
 export function spawnFork(yAhead) { const y = G.dist + yAhead; const n = G.road.laneCount(y + 300); if (n < 4) return; G.medians.push({ y0: y, y1: y + 520, lane0: Math.floor(n / 2) - 1, lanes: 1 }); const right = n - 1; if (G.rng() < 0.5) spawnCar('truck', right, yAhead + 260); else spawnRamp(yAhead + 260, right, 'crate'); G.signs.push({ y: y - 200, text: 'FORK · REWARD RIGHT' }); }
-export function spawnOnramp() { const side = G.rng() < 0.5 ? -1 : 1; const y = G.dist + 300; const a = G.road.at(y), ac = a.center, aw = a.width; const kind = progress() > 0.3 && G.rng() < 0.4 ? 'gunner' : 'bruiser'; const c = spawnCar(kind, side < 0 ? 0 : G.road.laneCount(y) - 1, 300); c.x = c.px = ac + side * (aw / 2 + 40); c.vx = -side * 160; c.sideWarn = side; }
+export function spawnOnramp() { const side = G.rng() < 0.5 ? -1 : 1; const ya = farAhead(); const y = G.dist + ya; const a = G.road.at(y), ac = a.center, aw = a.width; const kind = progress() > 0.3 && G.rng() < 0.4 ? 'gunner' : 'bruiser'; const c = spawnCar(kind, side < 0 ? 0 : G.road.laneCount(y) - 1, ya); c.x = c.px = ac + side * (aw / 2 + 40); c.vx = -side * 160; c.sideWarn = side; }
 
 // ---------------- the pacing director (Sprint D) ----------------
 // Runs every sixth tick (20 Hz). The run is a push toward the city: progress is distance over T.goal.city. Waves of enemies arrive every
@@ -47,8 +50,10 @@ function attackers(lo, hi) { let n = 0; for (const c of G.cars) if (c.alive && !
 export function spawnAttacker(kind, behind, soft) {
   // the road eases off a hurt car: on one armor pip the heavy hitters become Darts; on two, at most one Ram or Gunner at a time
   if ((kind === 'bruiser' || kind === 'gunner') && (G.armor <= 1 || (G.armor === 2 && G.cars.some(c => c.alive && !c.wrecked && (c.kind === 'bruiser' || c.kind === 'gunner'))))) kind = 'weak';
-  const y = behind ? -(400 + G.rng() * 40) : 650 + G.rng() * 220;
+  if (kind === 'gunner') behind = true; else if (!behind && kind === 'weak' && G.rng() < 0.85) behind = true; else if (!behind && kind === 'bruiser' && G.rng() < 0.4) behind = true;   // Gunners and most Darts come up from behind; the slow heavies come from ahead
+  const y = behind ? -(T.spawn.behind + G.rng() * 60) : farAhead() + G.rng() * 300;
   const c = spawnCar(kind, freeLane(G.dist + y, []), y);
+  c.speed = behind ? G.speed + 200 : Math.max(G.cruise * 0.5, G.speed - 200);   // arrive already moving with the traffic: a chaser spawned at the player's cruise speed would be left behind and culled
   if (kind === 'armored') c.factor = 0.62;
   if (soft) c.soft = true;
   if (!G.shown[kind]) { G.shown[kind] = 1; say(NAMES[kind][0], NAMES[kind][1], 1500); }
@@ -67,7 +72,7 @@ function waveList(p) {
 function startWave(p, cap) {
   let list = waveList(p);
   if (p > 0.5 && G.waveIdx % 4 === 3 && !G.cars.some(c => c.alive && c.kind === 'armored')) list = [['armored', 0], ['weak', 1]].concat(list.slice(0, 1));
-  const have = attackers(T.pace.window[0], 1400); const room = Math.max(0, cap - have);
+  const have = attackers(T.pace.window[0], T.pace.window[1]); const room = Math.max(0, cap - have);
   if (room === 0) { G.waveT = 2; return; }   // the road is full: try again shortly
   list = list.slice(0, G.armor <= 1 ? Math.min(room, 2) : room);
   list.forEach((m, i) => { const f = () => spawnAttacker(m[0], !!m[1], false); if (i === 0) f(); else G.queue.push({ t: i * 0.7, fn: f }); });
@@ -81,12 +86,13 @@ function startFiller(p, finale) {
 // a weave line: rows of slow traffic with one gap that wanders a lane at a time
 function spawnWeave(p) {
   const n = G.road.laneCount(G.dist + 900); if (n < 3) return; let gap = Math.floor(G.rng() * n); const rows = 3, spacing = 330 - 50 * p;
-  for (let r = 0; r < rows; r++) { for (let l = 0; l < n; l++) { if (l === gap) continue; if (G.rng() < 0.15 && n >= 5) continue; spawnCar('civ', l, 760 + r * spacing, { factor: 0.55 + G.rng() * 0.08, laneTimer: 999 }); } const d = Math.floor(G.rng() * 3) - 1; gap = clamp(gap + d, 0, n - 1); }
+  for (let r = 0; r < rows; r++) { for (let l = 0; l < n; l++) { if (l === gap) continue; if (G.rng() < 0.15 && n >= 5) continue; spawnCar('civ', l, farAhead() + 100 + r * spacing, { factor: 0.55 + G.rng() * 0.08, laneTimer: 999 }); } const d = Math.floor(G.rng() * 3) - 1; gap = clamp(gap + d, 0, n - 1); }
 }
-export function spawnCrate(kind) { const lane = nearLane(G.dist + 800); G.crates.push({ x: G.road.laneX(G.dist + 800, lane), y: G.dist + 800, vy: 0, t: 0, kind, speed: G.speed * 0.6 }); }
+export function spawnCrate(kind, ahead = T.spawn.crate) { const lane = nearLane(G.dist + ahead); G.crates.push({ x: G.road.laneX(G.dist + ahead, lane), y: G.dist + ahead, vy: 0, t: 0, kind, speed: 0 }); }   // pickups sit on the road: the car closes on them at its own speed
 function pickups() {
   const needArmor = G.armor < T.armor, needAmmo = !G.special || G.special.ammo < 2;
   const crateOut = (k) => G.crates.some(c => c.kind === k && !c.dead);
+  if (G.limp) return;
   if (G.armor <= 1 && !crateOut('armor') && G.t - G.lastAidT > 12) G.pickT = Math.min(G.pickT, G.t + 1.5);   // low on armor: help is on the way
   if (G.t < G.pickT) return;
   G.pickT = G.t + T.pace.pickupEvery[0] + G.rng() * (T.pace.pickupEvery[1] - T.pace.pickupEvery[0]);
@@ -105,8 +111,11 @@ export function director() {
   teaching();
   if (G.ticks % 6 !== 0) return;
   const dt = 6 * STEP, p = progress(); G.prog = p;
-  if (!G.opened && G.t >= 0.2) { G.opened = true; spawnRamp(170, playerLane(), 'none'); }   // the jump off the garage ramp
+  if (!G.opened && G.t >= 0.2) { G.opened = true; spawnRamp(170, playerLane(), 'none');   // the jump off the garage ramp
+    for (let i = 0; i < 7; i++) spawnCar('civ', freeLane(G.dist + 600, [playerLane()]), 420 + i * 300 + G.rng() * 120); }   // the street is already full of traffic when the run starts
   const technical = G.road.at(G.dist).sector.kind === 'technical';
+  // limp mode: the enemies hold off, nothing new is thrown at the car, and a repair crate is sent a few seconds in
+  if (G.limp) { G.mercyT = Math.max(G.mercyT, 1); if (G.limpT >= T.limp.repairAfter && !G.crates.some(c => c.kind === 'repair' && !c.dead)) spawnCrate('repair', T.limp.repairAt); }
   const cap = Math.min(T.pace.caps[tierOf(p)], technical ? 2 : 9);
   const winding = G.finale === 1 || p >= 0.97;
   // finale: at 90% of the way a heavy wave and a Bulwark; the enemies are soft (longer tells, slower guns) and an armor crate leads in
@@ -114,27 +123,28 @@ export function director() {
   if (p >= T.goal.finale && !G.finale) {
     G.finale = 1; say('City gate ahead', 'hold on', 1800, false);
     // heavy, but soft and forgiving: a Ram, a Gunner and Darts, fewer of them if the car is hurt or the road is already busy, and a Bulwark
-    const room = Math.max(2, 6 - attackers(T.pace.window[0], 1400)); const crew = [['bruiser', 0, 0], ['weak', 0, 0.6], ['weak', 1, 1.2], ['gunner', 1, 1.8], ['weak', 0, 2.4]].slice(0, G.armor <= 1 ? 2 : room - 1);
+    const room = Math.max(2, 6 - attackers(T.pace.window[0], T.pace.window[1])); const crew = [['bruiser', 0, 0], ['weak', 0, 0.6], ['weak', 1, 1.2], ['gunner', 1, 1.8], ['weak', 0, 2.4]].slice(0, G.armor <= 1 ? 2 : room - 1);
     for (const [k, b, d] of crew) G.queue.push({ t: d, fn: () => spawnAttacker(k, !!b, true) });
-    const bw = spawnAttacker('armored', false, true); bw.y = G.dist + 1500; bw.px = bw.x; bw.py = bw.y; bw.factor = 0.55; G.signs.push({ y: T.goal.city - 140, text: 'CITY GATE', big: true });
+    const bw = spawnAttacker('armored', false, true); bw.y = G.dist + farAhead() + 300; bw.px = bw.x; bw.py = bw.y; bw.factor = 0.55; G.signs.push({ y: T.goal.city - 140, text: 'CITY GATE', big: true });
   }
   // the 5 s rule: no attacker anywhere near the screen for `floor` s (or fewer than the tier's minimum for `floorMore` s) spawns a filler
-  const have = attackers(T.pace.window[0], T.pace.window[1]), need = G.finale || p < 0.1 || G.armor <= 1 ? 1 : p < 0.5 || G.armor < 3 ? 2 : 3;   // on one armor pip the road eases off
-  if (have < need) { G.fillT += dt; if (G.fillT >= (have === 0 ? T.pace.floor : T.pace.floorMore) && !(p >= 0.985)) { G.fillT = 0; startFiller(p, G.finale === 1); } } else G.fillT = 0;
-  G.wave = have > 0 ? 'pressure' : 'breather';
+  const have = attackers(T.pace.visible[0], T.pace.visible[1]), incoming = attackers(T.pace.window[0], T.pace.window[1]), need = G.finale || p < 0.1 || G.armor <= 1 ? 1 : p < 0.5 || G.armor < 3 ? 2 : 3;   // on one armor pip the road eases off
+  if (G.fillCool > 0) G.fillCool -= dt;
+  if (have < need) { G.fillT += dt; if (G.fillT >= (have === 0 ? T.pace.floor : T.pace.floorMore) && G.fillCool <= 0 && !(p >= 0.985) && !G.limp) { G.fillT = 0; G.fillCool = T.pace.fillCool; startFiller(p, G.finale === 1); } } else G.fillT = 0;
+  G.wave = have + incoming > 0 ? 'pressure' : 'breather';
   // waves
-  if (!G.finale) { G.waveT -= dt; if (G.waveT <= 0) startWave(p, cap); }
+  if (!G.finale && !G.limp) { G.waveT -= dt; if (G.waveT <= 0) startWave(p, cap); }
   // civilian traffic: a few cars always about, more room to weave when the road is open
-  { let civs = 0; for (const c of G.cars) if (c.alive && !c.wrecked && c.kind === 'civ' && c.y > G.dist - 300 && c.y < G.dist + 1200) civs++;
-    const want = technical ? 2 : p < 0.2 ? 3 : 4; if (civs < want && G.t >= G.nextSpawn && !winding) { G.nextSpawn = G.t + 0.8 + G.rng() * 0.8; spawnCar('civ', freeLane(G.dist + 900, [playerLane()]), 850 + G.rng() * 300); } }
+  { let civs = 0; for (const c of G.cars) if (c.alive && !c.wrecked && c.kind === 'civ' && c.y > G.dist - 300 && c.y < G.dist + farAhead() + 400) civs++;
+    const want = technical ? 2 : p < 0.2 ? 3 : 4; if (civs < want && G.t >= G.nextSpawn && !winding) { G.nextSpawn = G.t + 0.8 + G.rng() * 0.8; spawnCar('civ', freeLane(G.dist + 900, [playerLane()]), farAhead() + G.rng() * 300); } }
   if (technical || winding) return;   // inside a technical sector and in the finale: the corners and the wave are the content
   if (G.t >= G.weaveT) { G.weaveT = G.t + T.pace.weaveEvery[0] + G.rng() * (T.pace.weaveEvery[1] - T.pace.weaveEvery[0]); spawnWeave(p); }
   pickups();
-  if (G.t >= G.nextRamp) { G.nextRamp = G.t + T.ramp.every[0] + G.rng() * (T.ramp.every[1] - T.ramp.every[0]); const setups = ['jam', 'gap', 'block', 'crate']; spawnRamp(900, nearLane(G.dist + 900), setups[G.rampIndex++ % 4]); }
-  if (G.t >= G.nextTruck) { G.nextTruck = G.t + T.truckEvery; spawnCar('truck', nearLane(G.dist + 900), 900); say('Supply truck', '', 900); }
-  if (G.t >= G.nextBarrel) { G.nextBarrel = G.t + T.barrelEvery; spawnBarrels(900, freeLane(G.dist + 900, [])); }
-  if (G.t >= G.nextClosure) { G.nextClosure = G.t + T.closureEvery; spawnClosure(1000); }
-  if (G.t >= G.nextFork) { G.nextFork = G.t + T.forkEvery[0] + G.rng() * (T.forkEvery[1] - T.forkEvery[0]); spawnFork(1000); }
+  if (G.t >= G.nextRamp) { G.nextRamp = G.t + T.ramp.every[0] + G.rng() * (T.ramp.every[1] - T.ramp.every[0]); const setups = ['jam', 'gap', 'block', 'crate']; spawnRamp(farAhead(), nearLane(G.dist + 900), setups[G.rampIndex++ % 4]); }
+  if (G.t >= G.nextTruck) { G.nextTruck = G.t + T.truckEvery; spawnCar('truck', nearLane(G.dist + 900), farAhead()); say('Supply truck', '', 900); }
+  if (G.t >= G.nextBarrel) { G.nextBarrel = G.t + T.barrelEvery; spawnBarrels(farAhead(), freeLane(G.dist + 900, [])); }
+  if (G.t >= G.nextClosure) { G.nextClosure = G.t + T.closureEvery; spawnClosure(farAhead() + 100); }
+  if (G.t >= G.nextFork) { G.nextFork = G.t + T.forkEvery[0] + G.rng() * (T.forkEvery[1] - T.forkEvery[0]); spawnFork(farAhead() + 100); }
   if (G.t >= G.nextOnramp) { G.nextOnramp = G.t + T.onrampEvery; spawnOnramp(); }
 }
 export function event() { G.lastEvent = G.t; }

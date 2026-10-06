@@ -1,0 +1,413 @@
+{
+ "when": "2026-10-06T03:51:18.377Z",
+ "rows": [
+  {
+   "file": "fun-s1-active.json",
+   "bot": "active",
+   "seed": 1,
+   "seconds": 159.5,
+   "steps": 19152,
+   "dead": false,
+   "cause": "",
+   "score": 51978,
+   "kills": 36,
+   "noEnemyPct": 29.905956112852664,
+   "noAttackerPct": 29.905956112852664,
+   "longestNoEnemy": 6.199999999999994,
+   "longestNoAttacker": 6.199999999999994,
+   "avgEnemies": 1.2557993730407524,
+   "maxEnemies": 4,
+   "secPerKill": 4.430555555555555,
+   "meanKillGap": 3.8407142857142853,
+   "longestKillGap": 20.416666666666657,
+   "killsPerMin": 13.542319749216302,
+   "won": true,
+   "gaps": [
+    [
+     0.1,
+     3.2
+    ],
+    [
+     12.4,
+     6
+    ],
+    [
+     20.9,
+     1.9
+    ],
+    [
+     28.1,
+     1.1
+    ],
+    [
+     32.8,
+     2.4
+    ],
+    [
+     40.9,
+     1.4
+    ],
+    [
+     48.7,
+     3.7
+    ],
+    [
+     53.1,
+     1.4
+    ],
+    [
+     56.3,
+     2
+    ],
+    [
+     61.6,
+     2.8
+    ],
+    [
+     69.2,
+     4.1
+    ],
+    [
+     86.3,
+     2.6
+    ],
+    [
+     115.7,
+     6.2
+    ],
+    [
+     123.6,
+     1.7
+    ],
+    [
+     145.2,
+     3.2
+    ]
+   ],
+   "dist": 120063.42267614578,
+   "armorLost": 4
+  },
+  {
+   "file": "fun-s2-active.json",
+   "bot": "active",
+   "seed": 2,
+   "seconds": 153.4,
+   "steps": 18420,
+   "dead": false,
+   "cause": "",
+   "score": 58883,
+   "kills": 41,
+   "noEnemyPct": 29.009126466753585,
+   "noAttackerPct": 29.009126466753585,
+   "longestNoEnemy": 4.999999999999998,
+   "longestNoAttacker": 4.999999999999998,
+   "avgEnemies": 1.0997392438070404,
+   "maxEnemies": 4,
+   "secPerKill": 3.7414634146341466,
+   "meanKillGap": 3.4204166666666667,
+   "longestKillGap": 17.65,
+   "killsPerMin": 16.03650586701434,
+   "won": true,
+   "gaps": [
+    [
+     0.1,
+     2.9
+    ],
+    [
+     11.5,
+     3
+    ],
+    [
+     26.9,
+     2.2
+    ],
+    [
+     34.1,
+     2.5
+    ],
+    [
+     37.7,
+     4.3
+    ],
+    [
+     42.2,
+     2.7
+    ],
+    [
+     56.5,
+     1.5
+    ],
+    [
+     58.5,
+     3.6
+    ],
+    [
+     66.7,
+     5
+    ],
+    [
+     82.4,
+     2
+    ],
+    [
+     91.3,
+     4.7
+    ],
+    [
+     104.6,
+     1.3
+    ],
+    [
+     118.6,
+     1.8
+    ],
+    [
+     138,
+     3.3
+    ]
+   ],
+   "dist": 120029.3851514819,
+   "armorLost": 3
+  },
+  {
+   "file": "fun-s3-active.json",
+   "bot": "active",
+   "seed": 3,
+   "seconds": 162,
+   "steps": 19452,
+   "dead": false,
+   "cause": "",
+   "score": 53563,
+   "kills": 34,
+   "noEnemyPct": 30,
+   "noAttackerPct": 30,
+   "longestNoEnemy": 6.699999999999992,
+   "longestNoAttacker": 6.699999999999992,
+   "avgEnemies": 1.1524691358024692,
+   "maxEnemies": 6,
+   "secPerKill": 4.764705882352941,
+   "meanKillGap": 4.317929292929293,
+   "longestKillGap": 15.75,
+   "killsPerMin": 12.592592592592592,
+   "won": true,
+   "gaps": [
+    [
+     0.1,
+     2.6
+    ],
+    [
+     4.6,
+     3.4
+    ],
+    [
+     11.9,
+     3.9
+    ],
+    [
+     16.8,
+     2.9
+    ],
+    [
+     21.5,
+     2.1
+    ],
+    [
+     26.6,
+     1.3
+    ],
+    [
+     48.9,
+     2.1
+    ],
+    [
+     57.8,
+     2.7
+    ],
+    [
+     68.2,
+     2.5
+    ],
+    [
+     82.6,
+     6.7
+    ],
+    [
+     90.4,
+     3.1
+    ],
+    [
+     100.1,
+     4.5
+    ],
+    [
+     118.1,
+     1.1
+    ],
+    [
+     130.5,
+     3.8
+    ],
+    [
+     145.1,
+     1.1
+    ],
+    [
+     146.2,
+     1.7
+    ]
+   ],
+   "dist": 120084.87242393313,
+   "armorLost": 3
+  },
+  {
+   "file": "fun-s1-idle.json",
+   "bot": "idle",
+   "seed": 1,
+   "seconds": 219.3,
+   "steps": 26328,
+   "dead": false,
+   "cause": "",
+   "score": 1951,
+   "kills": 3,
+   "noEnemyPct": 10.214318285453716,
+   "noAttackerPct": 10.214318285453716,
+   "longestNoEnemy": 6.399999999999993,
+   "longestNoAttacker": 6.399999999999993,
+   "avgEnemies": 2.1947104423164614,
+   "maxEnemies": 5,
+   "secPerKill": 73.10000000000001,
+   "meanKillGap": 21.866666666666667,
+   "longestKillGap": 157.04166666666669,
+   "killsPerMin": 0.8207934336525308,
+   "won": true,
+   "gaps": [
+    [
+     0.1,
+     3.4
+    ],
+    [
+     25.1,
+     5.4
+    ],
+    [
+     82.4,
+     6.4
+    ],
+    [
+     132.3,
+     2.1
+    ],
+    [
+     158.3,
+     3.9
+    ]
+   ],
+   "dist": 120063.22275330643,
+   "armorLost": 14
+  },
+  {
+   "file": "fun-s2-idle.json",
+   "bot": "idle",
+   "seed": 2,
+   "seconds": 228.7,
+   "steps": 27456,
+   "dead": false,
+   "cause": "",
+   "score": 6723,
+   "kills": 7,
+   "noEnemyPct": 12.89899431569742,
+   "noAttackerPct": 12.89899431569742,
+   "longestNoEnemy": 6.8999999999999915,
+   "longestNoAttacker": 6.8999999999999915,
+   "avgEnemies": 2.4875382597289026,
+   "maxEnemies": 8,
+   "secPerKill": 32.67142857142857,
+   "meanKillGap": 20.76111111111111,
+   "longestKillGap": 96.475,
+   "killsPerMin": 1.8364669873196329,
+   "won": true,
+   "gaps": [
+    [
+     0.1,
+     2.3
+    ],
+    [
+     47.9,
+     4
+    ],
+    [
+     65.5,
+     2.7
+    ],
+    [
+     88.9,
+     6.9
+    ],
+    [
+     147.8,
+     5.3
+    ],
+    [
+     170.6,
+     3.8
+    ],
+    [
+     179.5,
+     4.5
+    ]
+   ],
+   "dist": 120032.27084971144,
+   "armorLost": 20
+  },
+  {
+   "file": "fun-s3-idle.json",
+   "bot": "idle",
+   "seed": 3,
+   "seconds": 221.2,
+   "steps": 26556,
+   "dead": false,
+   "cause": "",
+   "score": 5356,
+   "kills": 8,
+   "noEnemyPct": 10.30741410488246,
+   "noAttackerPct": 10.30741410488246,
+   "longestNoEnemy": 6.099999999999994,
+   "longestNoAttacker": 6.099999999999994,
+   "avgEnemies": 2.5764014466546112,
+   "maxEnemies": 6,
+   "secPerKill": 27.65,
+   "meanKillGap": 24.067857142857143,
+   "longestKillGap": 90.30833333333332,
+   "killsPerMin": 2.1699819168173597,
+   "won": true,
+   "gaps": [
+    [
+     0.1,
+     2.3
+    ],
+    [
+     40.6,
+     5.7
+    ],
+    [
+     138.6,
+     2.4
+    ],
+    [
+     147.8,
+     3.7
+    ],
+    [
+     186.6,
+     6.1
+    ],
+    [
+     215,
+     1.7
+    ]
+   ],
+   "dist": 120036.63390657096,
+   "armorLost": 16
+  }
+ ]
+}

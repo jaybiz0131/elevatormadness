@@ -3,11 +3,15 @@
 // the same gradient, gives the cars and the wet road their reflections; a 16^3 LUT per look does the grade.
 import { Mesh, SphereGeometry, ShaderMaterial, BackSide, Color, Vector3, ShaderChunk, PMREMGenerator, Scene, FogExp2, CylinderGeometry, TextureLoader, SRGBColorSpace, MirroredRepeatWrapping } from 'three';
 import { LookupTexture } from 'postprocessing';
+// --- distance fog floor (Stop 2): whatever the exp2 fog and the height term say, everything 200 m to 290 m from the camera fades to the fog colour,
+// so the end of the generated world (4,000 pt ahead, 300 m) is always inside full fog and the ground, the road and the skyline foot meet there.
+export const FOG_FLOOR = { near: 200, far: 290 };
+ShaderChunk.fog_pars_fragment_floor = '';
 // --- height fog: distance fog that thins with height above the road, so the horizon and the far street soak in it while towers rise out
 ShaderChunk.fog_pars_vertex = `#ifdef USE_FOG\n varying float vFogDepth; varying float vFogY;\n#endif`;
 ShaderChunk.fog_vertex = `#ifdef USE_FOG\n vFogDepth = - mvPosition.z; vFogY = (modelMatrix * vec4(transformed, 1.0)).y;\n#endif`;
-ShaderChunk.fog_pars_fragment = `#ifdef USE_FOG\n uniform vec3 fogColor; varying float vFogDepth; varying float vFogY;\n #ifdef FOG_EXP2\n uniform float fogDensity;\n #else\n uniform float fogNear; uniform float fogFar;\n #endif\n#endif`;
-ShaderChunk.fog_fragment = `#ifdef USE_FOG\n #ifdef FOG_EXP2\n float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );\n #else\n float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );\n #endif\n fogFactor *= exp( - max( 0.0, vFogY ) * 0.045 );\n gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );\n#endif`;
+ShaderChunk.fog_pars_fragment = `#ifdef USE_FOG\n #define FOG_FLOOR_NEAR 200.0\n #define FOG_FLOOR_FAR 290.0\n uniform vec3 fogColor; varying float vFogDepth; varying float vFogY;\n #ifdef FOG_EXP2\n uniform float fogDensity;\n #else\n uniform float fogNear; uniform float fogFar;\n #endif\n#endif`;
+ShaderChunk.fog_fragment = `#ifdef USE_FOG\n #ifdef FOG_EXP2\n float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );\n #else\n float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );\n #endif\n fogFactor *= exp( - max( 0.0, vFogY ) * 0.045 );\n fogFactor = max( fogFactor, smoothstep( FOG_FLOOR_NEAR, FOG_FLOOR_FAR, vFogDepth ) );\n gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );\n#endif`;
 const SKY_VERT = `varying vec3 vDir; void main() { vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }`;
 const SKY_FRAG = `uniform vec3 zenith; uniform vec3 horizon; uniform vec3 sunDir; uniform vec3 sunCol; uniform float sunSize; varying vec3 vDir;
 void main() { float h = clamp(vDir.y, -0.05, 1.0); float t = pow(1.0 - h, 2.2); vec3 c = mix(zenith, horizon, t); float sd = max(0.0, dot(normalize(vDir), sunDir)); c += sunCol * (pow(sd, 48.0) * 0.6 + pow(sd, 400.0) * sunSize); gl_FragColor = vec4(c, 1.0); }`;
@@ -32,10 +36,10 @@ export class Sky {
   // without a seam; tinted toward each look's horizon colour; its foot (the lower 40%, where it meets the fogged far ground) dissolves into the fog colour and its top fades into the sky dome
   addSkyline(url) {
     const tex = new TextureLoader().load(url); tex.colorSpace = SRGBColorSpace; tex.wrapS = MirroredRepeatWrapping; tex.repeat.set(8, 1);
-    const R = 1150, H = 560; const g = new CylinderGeometry(R, R, H, 64, 1, true).translate(0, H / 2 - 110, 0);
+    const R = 1150, H = 560; const g = new CylinderGeometry(R, R, H, 64, 1, true).translate(0, H / 2 - 190, 0);
     this.skyMat = new ShaderMaterial({ uniforms: { map: { value: tex }, tint: { value: new Color(1, 1, 1) }, fogCol: { value: new Color() } }, side: BackSide, transparent: true, depthWrite: false, fog: false,
       vertexShader: 'varying vec2 vUv; void main() { vUv = uv * vec2(8.0, 1.0); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'uniform sampler2D map; uniform vec3 tint; uniform vec3 fogCol; varying vec2 vUv; void main() { vec2 u = vec2(abs(mod(vUv.x, 2.0) - 1.0), vUv.y); vec3 c = texture2D(map, u).rgb * tint; c = mix(fogCol, c, smoothstep(0.2, 0.42, vUv.y)); gl_FragColor = vec4(c, 1.0 - smoothstep(0.72, 0.98, vUv.y)); }' });
+      fragmentShader: 'uniform sampler2D map; uniform vec3 tint; uniform vec3 fogCol; varying vec2 vUv; void main() { vec2 u = vec2(abs(mod(vUv.x, 2.0) - 1.0), vUv.y); vec3 c = texture2D(map, u).rgb * tint; c = mix(fogCol, c, smoothstep(0.3, 0.54, vUv.y)); gl_FragColor = vec4(c, 1.0 - smoothstep(0.72, 0.98, vUv.y)); }' });
     this.skyline = new Mesh(g, this.skyMat); this.skyline.frustumCulled = false; this.skyline.renderOrder = -9; this.scene.add(this.skyline);
   }
 }
