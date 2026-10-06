@@ -1,10 +1,10 @@
 # Sprint D, Stop 2: looks finished, hits hard, never dies (report)
 
-Branch `shunt-3d`. Build link: see the end of this file (filled in when published).
+Branch `shunt-3d`. Build: https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn (version 22).
 
 **The sim changed in this stop** (replay rev `D1`, same tag, new behaviour). The seven Stop 1 baselines are replaced by seven new ones
 (`replays/fun-s{1,2,3}-{active,idle}.json` and `beauty.json`). All seven match on two sync passes, and `beauty.json` also matches through the live 3D frame loop
-on the final build.
+on the final build (90 of 90 hashes, 1,688 s of software GL).
 
 ## What the player gets
 
