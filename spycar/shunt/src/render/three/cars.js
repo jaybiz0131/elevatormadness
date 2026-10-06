@@ -9,6 +9,7 @@ import { buildHero } from './hero.js';
 import { tickEnemyLights } from './enemyModels.js';
 import { HEAD_K } from './heroModel.js';
 import { loadGatling } from './gatling.js';
+import { Explosions } from './explosions.js';
 const FADE_FAR = 2300, FADE_SPAN = 600;   // enemy lights fade out between 1,700 and 2,300 pt ahead
 const V3 = new Vector3();
 const KIND_COL = { player: '#37e6ff', civ: '#cfe6ff', weak: '#3a3d46', bruiser: '#1a1b1f', gunner: '#1a1b1f', armored: '#20242b', truck: '#2fd36a', wreck: '#3a2a2a' };
@@ -33,7 +34,7 @@ function carGeometry(kind) {
 }
 export class CarSystem {
   constructor(scene) {
-    this.scene = scene; this.inst = {}; this.proxy = new Object3D(); this.attachM = new Matrix4(); this.geo = {}; this.mat = {}; this.free = {}; this.live = []; this.pos = new Vector3(); this.meshOf = new Map(); this.stamp = 0;
+    this.scene = scene; this.inst = {}; this.proxy = new Object3D(); this.attachM = new Matrix4(); this.geo = {}; this.mat = {}; this.free = {}; this.live = []; this.pos = new Vector3(); this.meshOf = new Map(); this.stamp = 0; this.boom = new Explosions(); this.lastBoomE = null;
     for (const k of ['player', 'civ', 'weak', 'bruiser', 'gunner', 'armored', 'truck']) { this.geo[k] = carGeometry(k); this.free[k] = []; }
     for (const [k, c] of Object.entries(KIND_COL)) this.mat[k] = new MeshStandardMaterial({ color: new Color(c), vertexColors: true, roughness: 0.55, metalness: 0.25 });
     for (let i = 0; i < CIV_TINTS.length; i++) this.mat['civ' + i] = new MeshStandardMaterial({ color: new Color(CIV_TINTS[i]), vertexColors: true, roughness: 0.6, metalness: 0.2 });
@@ -67,9 +68,10 @@ export class CarSystem {
       // a type with an imported model is placed through a proxy and written into its InstancedMesh; the rest use pooled meshes
       if (!c.alive) continue; const inst = this.inst[c.kind]; let m; if (inst) m = this.proxy; else { m = this.meshOf.get(c); if (!m) { m = this.acquire(c.kind); m.userData.kind = c.kind; this.meshOf.set(c, m); } }
       m.userData.stamp = stamp; const cx = lerp(c.px, c.x, alpha), cy = lerp(c.py, c.y, alpha); const w = c.w * M, l = c.l * M;
-      if (c.wrecked) { m.material = this.mat.wreck; this.place(m, G, cx, cy, c.spin, 0); m.rotation.z = Math.sin(c.flip * Math.PI * 2) * 0.5; m.rotation.x = Math.sin(c.flip * Math.PI) * 0.2; if (inst) this.emit(inst, m, 0.28); if (c.debrisT > 0.5) fx.glow(m.position.x, m.position.y + 1, m.position.z, 2.5, 1, 0.5, 0.15, (c.debrisT - 0.5)); this.wreckFx(c, m.position, fx, elapsed); fx.shadow(m.position, w, l); continue; }
+      if (c.wrecked) { m.material = this.mat.wreck; this.place(m, G, cx, cy, c.spin, 0); m.rotation.z = Math.sin(c.flip * Math.PI * 2) * 0.5; m.rotation.x = Math.sin(c.flip * Math.PI) * 0.2; if (inst) this.emit(inst, m, 0.28); if (!c.boomed) { c.boomed = true; if (c.debrisT > 2.3 && Math.abs(c.y - G.dist) < 1800) this.boom.spawn(m.position.x, m.position.y, m.position.z, c.kind, c.id || 0.5); }   // once, at the moment it becomes a wreck (render-side flag, never read by the sim)
+      this.wreckFx(c, m.position, fx, elapsed); fx.shadow(m.position, w, l); continue; }
       m.material = c.kind === 'civ' ? this.mat['civ' + Math.max(0, CIV_TINTS.indexOf(c.tint))] : this.mat[c.kind]; m.rotation.z = 0; m.rotation.x = 0;
-      this.place(m, G, cx, cy, (c.lean || 0) * Math.PI / 180 + (c.spin || 0), 0); fx.shadow(m.position, w, l); if (inst) this.emit(inst, m, 1, c.kind === 'civ' ? CIV_BODY[Math.max(0, CIV_TINTS.indexOf(c.tint))] : null);
+      this.place(m, G, cx, cy, (c.lean || 0) * Math.PI / 180 + (c.spin || 0), 0); fx.shadow(m.position, w, l); if (inst) this.emit(inst, m, 1 + this.boom.boost(m.position.x, m.position.z), c.kind === 'civ' ? CIV_BODY[Math.max(0, CIV_TINTS.indexOf(c.tint))] : null);
       const p = m.position;
       const fx_ = Math.sin(-m.rotation.y), fz_ = -Math.cos(-m.rotation.y); const rx = Math.cos(-m.rotation.y), rz = Math.sin(-m.rotation.y);
       if (c.kind === 'truck') { if (!c.loaded) fx.glow(p.x - fx_ * l * 0.5, p.y + 2.6, p.z - fz_ * l * 0.5, 1.2, 0.24, 1, 0.48, 0.4 + 0.4 * Math.sin(elapsed * 6)); continue; }   // friendly green
@@ -84,6 +86,7 @@ export class CarSystem {
       if (c.state === 'tell') { const dir = G.x < c.x ? -1 : 1; fx.marker(G, cx + dir * 36, cy, 'arrow', dir, 0.5 + 0.5 * Math.sin(elapsed * 20)); }
       if (c.kind === 'gunner' && c.state === 'sight') fx.sightLine(G, c.sightX, c.y, c.sightX, c.y + 700, 0.5 + 0.5 * Math.sin(elapsed * 30));
     }
+    { const dtB = this.lastBoomE === null ? 0 : Math.min(0.1, Math.max(0, elapsed - this.lastBoomE)); this.lastBoomE = elapsed; this.boom.update(fx, dtB); }
     for (const [c, m] of this.meshOf) if (m.userData.stamp !== stamp) { this.release(m); this.meshOf.delete(c); }
     for (const k in this.inst) { const im = this.inst[k]; for (const m of im.userData.attach ? [im, im.userData.attach.mesh] : [im]) { m.visible = m.count > 0; if (m.count) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; if (m.userData.aTint) m.userData.aTint.needsUpdate = true; } } }
   }
@@ -98,9 +101,10 @@ export class CarSystem {
   }
   // a wreck burns, then smoulders, for as long as it lies there
   wreckFx(c, pos, fx, elapsed) {
-    const life = clamp((c.debrisT + 3.5) / 6, 0, 1); if (life <= 0 || this.dmgBudget <= 0) return; this.dmgBudget--; const id = (c.id || 0) * 37;
-    for (let i = 0; i < 4; i++) { const k = ((elapsed * 0.9 + i / 4 + id) % 1); fx.puff(pos.x + Math.sin(elapsed * 3 + i + id) * 0.5 * k, pos.y + 1 + k * 7, pos.z + Math.cos(elapsed * 2.3 + i) * 0.4 * k, 1.1 + k * 2.4, 0.6 * life * (1 - k * 0.7), 0.16, 0.16, 0.17, id + i); }
-    if (c.debrisT > -1.5) { const fl = 0.75 + 0.25 * Math.sin(elapsed * 19 + id); fx.glow(pos.x, pos.y + 1.2, pos.z, 1.8 * fl, 1, 0.45, 0.1, 0.7 * fl * clamp((c.debrisT + 1.5) / 1.5, 0, 1)); }
+    const life = clamp((c.debrisT + 3.5) / 6, 0, 1); if (life <= 0 || this.dmgBudget <= 0) return; this.dmgBudget--; const id = (c.id || 0) * 37; const z = ({ armored: 1.9, gunner: 1.3, bruiser: 1.25, truck: 1.3 })[c.kind] || 1;
+    for (let i = 0; i < 4; i++) { const k = ((elapsed * 0.9 + i / 4 + id) % 1); fx.puff(pos.x + Math.sin(elapsed * 3 + i + id) * 0.5 * k, pos.y + 1 + k * 7 * z, pos.z + Math.cos(elapsed * 2.3 + i) * 0.4 * k, (1.1 + k * 2.4) * z, 0.6 * life * (1 - k * 0.7), 0.16, 0.16, 0.17, id + i); }
+    if (c.debrisT > -2.2) { const fl = 0.75 + 0.25 * Math.sin(elapsed * 19 + id), f2 = 0.7 + 0.3 * Math.sin(elapsed * 13 + id * 2); const fade = clamp((c.debrisT + 2.2) / 1.6, 0, 1);   // the wreck burns for about five seconds, big ones longer and taller
+      fx.glow(pos.x, pos.y + 1.2, pos.z, 1.8 * fl * z, 1, 0.45, 0.1, 0.75 * fl * fade); fx.glow(pos.x + 0.5, pos.y + 2.2 * z, pos.z, 1.1 * f2 * z, 1, 0.7, 0.2, 0.55 * f2 * fade); fx.glow(pos.x - 0.4, pos.y + 3.2 * z, pos.z + 0.3, 0.8 * fl * z, 1, 0.5, 0.12, 0.4 * fl * fade); }
   }
   updatePlayer(G, rx, rdist, fx, st, elapsed) {
     // the imported hero turns its wheels with the road speed and lights its tail bar under braking

@@ -29,6 +29,12 @@ function facadeTexture() {
 const SIGN_COLS = 8, SIGN_ROWS = 13, SIGN_W = 256, SIGN_H = 64;
 function drawSign(x, text, col, ox, oy) { x.save(); x.beginPath(); x.rect(ox, oy, SIGN_W, SIGN_H); x.clip(); x.fillStyle = '#000'; x.fillRect(ox, oy, SIGN_W, SIGN_H); x.font = '700 ' + (text.length > 10 ? 27 : 36) + 'px Rajdhani, "Avenir Next Condensed", Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.shadowColor = col; x.shadowBlur = 9; x.fillStyle = col; x.fillText(text, ox + SIGN_W / 2, oy + SIGN_H / 2 + 2); x.shadowBlur = 0; x.fillStyle = '#fff'; x.globalAlpha = 0.55; x.fillText(text, ox + SIGN_W / 2, oy + SIGN_H / 2 + 2); x.restore(); }
 function signAtlas() { const c = document.createElement('canvas'); c.width = SIGN_COLS * SIGN_W; c.height = SIGN_ROWS * SIGN_H; const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, c.width, c.height); const t = new CanvasTexture(c); t.colorSpace = SRGBColorSpace; t.generateMipmaps = false; t.minFilter = LinearFilter; t.userData = { ctx: x, cells: new Map() }; return t; }
+// the centre of a corner's arc in world metres: of the two points R either side of the apex, the one that is R from the road a little way along it
+function cornerCenter(road, c) {
+  if (c._rcenter) return c._rcenter; const a = c.apex, A = new Vector3(), B = new Vector3(), Q = new Vector3();
+  toWorld(road, REF - c.R, a, A); toWorld(road, REF + c.R, a, B); toWorld(road, REF, a + c.R * 0.5, Q);
+  const inside = Math.abs(A.distanceTo(Q) - c.R * M) < Math.abs(B.distanceTo(Q) - c.R * M) ? A : B; return (c._rcenter = { x: inside.x, z: inside.z });
+}
 // a building box with per-face UVs sized so a window is 2.5 m wide and 3 m tall; colour tint per building
 function building(w, h, d, x, y, z, tint, uOff) {
   const g = new BoxGeometry(w, h, d); g.translate(x, y + h / 2, z); const uv = g.attributes.uv; const pos = g.attributes.position; const n = pos.count; const col = new Float32Array(n * 3);
@@ -91,7 +97,8 @@ export class City {
         // used to end up inside a 40 m block; here every building is 7 m or less, well under the camera's height
         const tight = road.corners.some(c => c.hard && s + len / 2 > c.s0 - 1300 && s + len / 2 < c.s1 + 700);
         // round a tight bend a building on the inside lands on the road's other arc (the offset is wider than the radius): leave that plot empty
-        if (tight) { toWorld(road, REF + side * (w / 2 + 66 + 8 / M), s + len / 2, V); let clash = false; for (let s2 = s - 500; s2 <= s + 500 && !clash; s2 += 25) { if (Math.abs(s2 - (s + len / 2)) < 90) continue; toWorld(road, REF, s2, V2); if (Math.hypot(V.x - V2.x, V.z - V2.z) < (road.at(s2).width / 2 + 60) * M) clash = true; } if (clash) { s += len + 20 + h2 * 40; i++; continue; } }
+        if (tight) { toWorld(road, REF + side * (w / 2 + 66 + 8 / M), s + len / 2, V); let clash = false; for (let s2 = Math.max(0, s - 1400); s2 <= s + 1400 && !clash; s2 += 40) { if (s2 > road.end - 3100) break; if (Math.abs(s2 - (s + len / 2)) < 250) continue; const w2 = road.at(s2).width; toWorld(road, REF, s2, V2); if (Math.hypot(V.x - V2.x, V.z - V2.z) < (w2 / 2 + 230) * M) clash = true; }   // another stretch of road within 230 pt of the plot (a block is up to 200 pt deep): it sits in the nook of a bend if (!clash) for (const c of road.corners) { if (!c.hard || s + len / 2 < c.s0 - 300 || s + len / 2 > c.s1 + 300) continue; const ctr = cornerCenter(road, c); if (Math.hypot(V.x - ctr.x, V.z - ctr.z) < (c.R + 150) * M) { clash = true; break; } }   // and nothing stands inside the bend itself: the camera looks across it, and a rooftop in the middle of a hairpin hid the road
+          if (clash) { s += len + 20 + h2 * 40; i++; continue; } }
         const tower = h3 > 0.72 && !tight; const depth = tower ? 16 + h2 * 12 : 8 + h2 * 6; const height = tower ? 24 + (h3 - 0.72) * 70 : tight ? Math.min(7, 3 + h3 * 5) : 5 + h3 * 12; const x = REF + side * (w / 2 + (tower ? 330 + 120 * h2 : 66) + depth / 2 / M);
         toWorld(road, x, s + len / 2, V); const yaw = -(road.frame(s + len / 2).psi);
         tint.setHSL(0.6 + h2 * 0.15, 0.25, 0.09 + h1 * 0.06);
@@ -111,6 +118,7 @@ export class City {
         s += len + 20 + h2 * 40; i++;
       }
     }
+    if (!parts.length) parts.push(new BoxGeometry(0.01, 0.01, 0.01));   // a chunk round a bend can have no building at all
     const merged = mergeGeometries(parts, false); for (const p of parts) p.dispose(); merged.computeBoundingSphere();
     const mesh = new Mesh(merged, this.mat); mesh.castShadow = Q.castCity; mesh.receiveShadow = true; mesh.userData = { tubes, signs, fronts, roofs, s0 }; return mesh;
   }

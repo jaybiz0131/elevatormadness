@@ -15,7 +15,7 @@ export function showCard(kind, app) {
   if (kind === 'title') { ui.title.textContent = dailyMode ? 'Daily run · ' + localDate() : 'Spy car brawler'; ui.score.textContent = 'BEST ' + fmt(dailyMode ? bestDaily : best); ui.lines.innerHTML = ''; ui.primary.textContent = 'PLAY'; ui.a.textContent = dailyMode ? 'RANDOM ROAD' : 'DAILY RUN'; ui.b.textContent = 'SETTINGS'; ui.c.hidden = true; }
   if (kind === 'pause') { ui.title.textContent = 'Paused'; ui.score.textContent = fmt(G.score); ui.lines.textContent = ''; ui.primary.textContent = 'RESUME'; ui.a.textContent = 'RESTART'; ui.b.textContent = 'SETTINGS'; ui.c.hidden = false; ui.c.textContent = 'QUIT TO TITLE'; }
   if (kind === 'over') { const won = G.won; const isBest = G.score > (dailyMode ? bestDaily : best); ui.title.textContent = won ? 'City reached' : (G.cause || 'Wrecked'); ui.score.textContent = fmt(G.score); ui.newBest.hidden = !isBest; const earned = Math.round(G.score * 0.1);
-    if (won) { ui.stars.hidden = false; ui.stars.innerHTML = '<span class="grade g' + (G.grade || 'D') + '">' + (G.grade || 'D') + '</span>' + [1, 2, 3].map(i => STAR.replace('CLS', i <= G.stars ? 'on' : 'off')).join(''); }
+    if (won) { ui.stars.hidden = false; ui.stars.innerHTML = '<span class="grade g' + (G.grade || 'C') + '">' + (G.grade || 'C') + '</span>' + [1, 2, 3].map(i => STAR.replace('CLS', i <= G.stars ? 'on' : 'off')).join(''); }
     const city = Math.min(100, Math.floor(100 * G.dist / T.goal.city));
     // no "next car at 5,000" promise: the garage does not exist yet (audit, UI section)
     const bestTxt = fmt(Math.max(G.score, dailyMode ? bestDaily : best));

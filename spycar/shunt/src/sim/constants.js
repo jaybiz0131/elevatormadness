@@ -44,7 +44,7 @@ export const T = {
   // pt/s per armor pip, as a one-off speed loss), no armor means limp mode (slower, no gas, smoking) until a repair crate is collected, and
   // every kill gives a short speed burst. The finish card grades time plus score: each is turned into 0..1 (time between `fast` and `slow`
   // seconds, score up to `scoreRef`), averaged, and the average gives the letter and the stars.
-  goal: { city: 120000, finale: 0.9, bonus: 1000, bonusArmor: 300, time: { fast: 120, slow: 240 }, scoreRef: 40000, letters: [[0.88, 'S'], [0.72, 'A'], [0.55, 'B'], [0.38, 'C'], [0, 'D']], stars: [0.45, 0.75] },
+  goal: { city: 120000, finale: 0.9, bonus: 1000, bonusArmor: 300, time: { fast: 120, slow: 240 }, scoreRef: 40000, letters: [[0.88, 'S'], [0.72, 'A'], [0.55, 'B'], [0, 'C']], stars: [0.45, 0.75] },
   hurt: { perPip: 380, wall: 0, min: 120 },
   kill: { burst: 240, perCombo: 60, burstFor: 1.1, carStop: 0.15, carSlow: 0.3, carSlowRate: 0.5 },
   limp: { speedK: 0.55, repairAfter: 2.5, repairAt: 1600, armorBack: 2 },
