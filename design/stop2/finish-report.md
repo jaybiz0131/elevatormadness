@@ -1,7 +1,7 @@
 # Stop 2 finish report
 
-Build: https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn (see the published version at the end). Branch `shunt-3d`. Stop 3 is not started.
-Replays: all seven baselines match twice (sync) and `beauty.json` matches through the live 3D frame loop on this build (see the end). The sim did not change in this pass except one grade constant
+Build: https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn (version 24). Branch `shunt-3d`. Stop 3 is not started.
+Replays: all seven baselines match twice (sync) and `beauty.json` matches through the live 3D frame loop on this build (90 of 90 hashes). The sim did not change in this pass except one grade constant
 (`T.goal.letters`), so the baselines from the first Stop 2 report still stand.
 
 ## 1. Models showing as boxes on the iPhone: found a reproducible cause, fixed, and the phone can now tell us if it still happens
@@ -37,7 +37,7 @@ Screenshots: `design/stop2/models/enemies-topdown.png` (hero in the middle with 
   a detuned saw growl through a waveshaper, chopped at the firing rate (so it is audible on a phone speaker); a 29 to 52 Hz sub with a soft second harmonic; exhaust pops and burbles when the throttle lifts at speed
   (and now and then in limp); a deep bark on every kill speed burst (rev surge, 96 to 34 Hz bang, throaty saw burst). It ducks to 38% while the gatling fires and comes back in about a third of a second.
 - **Measured** on the offline render (energy by band, share of total): idle 59% under 80 Hz and 32% from 80 to 200 Hz, peak 31 Hz; top speed 31% under 80 Hz, 45% 80 to 200, 15% 200 to 500, 0.3% above 2 kHz, peak 77 Hz (so no thin whine at top speed);
-  while firing the engine drops by about 4 dB and returns after.
+  while firing, the share under 80 Hz falls from 31% to 6% (the engine is ducked under the guns) and it is back at 7% to 55% in the next half second as the duck releases.
 - **Clip:** `design/stop2/audio/drive-and-kill.mp3` (10 s: idle, pull away, full speed, gatling, a kill with the bark, lift off the gas with crackle).
 - I cannot hear it. The numbers say the shape is right; whether it is "huge" is for your ears.
 
@@ -59,7 +59,7 @@ Checked on three hairpins (`design/stop2/hairpin/hairpin-sheet.png`) and on the 
 A chunk with no buildings at all (all plots skipped) no longer crashes the chunk builder.
 
 ## Checks
-- Replays: 7 of 7 match on two sync passes; `beauty.json` live: see below.
+- Replays: 7 of 7 match on two sync passes; `beauty.json` matches through the live 3D loop on the published build (90 of 90 hashes, 2,170 s of software GL).
 - Budgets (worst frames over three full runs): at most 98 draw calls (busy moment 97), at most 284k triangles (busy moment 266k), build 11.0 MB (limits 150, 400k, 15 MB).
 - Frame cost: the perf-gate numbers stand (High at scale 1.5 and Low at 1.25, see `perf-gate.md`); the explosions add about 3% in the frame they are in; the model loader adds nothing per frame.
 - No em dashes in player-facing text.
