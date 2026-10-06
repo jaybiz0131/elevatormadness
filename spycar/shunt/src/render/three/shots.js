@@ -32,14 +32,15 @@ export class ShotDirector {
   danger(G) {
     if (G.limp || G.roll || G.wallT > 0 || G.armor <= 1) return true;
     for (const c of G.cars) { if (!c.alive || c.wrecked) continue; const dy = c.y - G.dist;
-      if (ENEMY.has(c.kind)) { if (dy > -160 && dy < 260) return true; if (dy > -600 && dy < 700 && (c.state === 'tell' || c.state === 'swerve' || c.state === 'sight')) return true; } }
+      if (ENEMY.has(c.kind)) { if (dy > -110 && dy < 200) return true; if (dy > -600 && dy < 700 && (c.state === 'tell' || c.state === 'swerve' || c.state === 'sight')) return true; } }
     if (G.barrels && G.barrels.some(b => b.alive && b.y - G.dist > 0 && b.y - G.dist < 380 && Math.abs(b.x - G.x) < 90)) return true;
     const cn = G.road.cornerAhead(G.dist, 420); if (cn && cn.hard) return true;
     return false;
   }
   autoWant(G) {
     const cn = G.road.cornerAhead(G.dist, 300); const inCorner = cn && cn.hard && G.speed > 380 && G.dist > cn.s0 - 260;
-    if ((G.drifting && G.driftT > 0.3) || inCorner) return 'corner';
+    const bend = Math.abs(G.road.at(G.dist).k) > 1 / 1500;   // a drift on a straight (a lane change that slid) is not a corner: no corner cam
+    if ((G.drifting && G.driftT > 0.3 && bend) || inCorner) return 'corner';
     const a = ((G.dist % 3200) + 3200) % 3200; if (Math.abs(a - 1600) < 230 && Math.floor(G.dist / 3200) % 4 === 1 && !G.road.at(G.dist).corner) return 'tunnel';   // one overpass in four
     return 'base';
   }
@@ -56,8 +57,8 @@ export class ShotDirector {
     // an earned shot in progress
     if (this.heroName) { this.heroT += dt; if (this.heroT >= this.heroDur || this.danger(G)) { this.endHero(t); } else { this.name = this.heroName; return this.name; } }
     // start one: an event is pending (fresh), a quarter second has passed (the hit lands first), the gap is kept, the budget is not spent, no danger
-    if (this.pending && t - this.pending.t > 1.6) this.pending = null;
-    if (this.pending && t - this.pending.t >= 0.25 && t - this.lastEnd >= this.gap && this.count < this.budget && G.playing && !this.danger(G) && !G.drifting && G.air <= 0) {
+    if (this.pending && t - this.pending.t > 3.5) this.pending = null;
+    if (this.pending && t - this.pending.t >= 0.25 && t - this.lastEnd >= this.gap && this.count < this.budget && G.playing && !this.danger(G) && G.air <= 0) {
       const opts = HERO_BY_EVENT[this.pending.kind].filter(n => n !== this.last); const name = opts[Math.floor((G.t * 7.31 + this.count * 3.7) % opts.length)] || opts[0];
       const spec = SHOTS[name]; this.heroName = name; this.heroT = 0; this.heroDur = Math.min(3, Math.max(1, (spec.hold || 2) * (S.fewShots ? 0.8 : 1))); this.last = name; this.count++; this.pending = null; this.side = -this.side; this.log.push([+t.toFixed(1), name]);
       this.name = name; return name;
