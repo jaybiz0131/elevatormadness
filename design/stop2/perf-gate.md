@@ -10,7 +10,7 @@ v21's automatic scale had a floor of 1.25 (390 x 1.25 by 844 x 1.25 pixels) and 
 At 36 fps it was already at the floor, so the only thing left to give was nothing. The new scaler goes down to 0.6 and drops MSAA and shadows first.
 
 ## What changed, and what each change saves
-Measured on the busy moment, all at render scale 1.5 unless stated. "Stop 2 as published" = 124 calls, 363k triangles, cost index 100 at scale 2.0 = 143.
+Measured on the busy moment, all at render scale 1.5 unless stated. "Stop 2 as published" = 124 calls and 363k triangles.
 
 | Change | Draw calls | Triangles | Frame cost (software GL) |
 |---|---|---|---|
