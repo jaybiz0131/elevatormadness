@@ -52,6 +52,16 @@ export class City {
   constructor(scene, fx) {
     this.scene = scene; this.fx = fx; this.group = new Group(); scene.add(this.group); this.chunks = new Map(); this.signTex = new Map();
     const tex = facadeTexture(); this.mat = new MeshStandardMaterial({ map: tex.map, emissiveMap: tex.emissive, emissive: new Color('#ffffff'), emissiveIntensity: 1.6, vertexColors: true, roughness: 0.85, metalness: 0.05 });
+    // Stop 4: buildings between the camera and the car fade see-through: pixels near the camera-to-car line (a 6.5 m tube, not within the first or last few
+    // percent of it) are dithered away, so a block that gets in the way of the chase becomes a screen door instead of hiding the car
+    this.see = { car: { value: new Vector3() }, cam: { value: new Vector3() }, r: { value: 6.5 }, on: { value: 1 } };
+    this.mat.onBeforeCompile = (sh) => { sh.uniforms.uSeeCar = this.see.car; sh.uniforms.uSeeCam = this.see.cam; sh.uniforms.uSeeR = this.see.r; sh.uniforms.uSeeOn = this.see.on;
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSeeW;').replace('#include <project_vertex>', '#include <project_vertex>\nvSeeW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vSeeW; uniform vec3 uSeeCar; uniform vec3 uSeeCam; uniform float uSeeR; uniform float uSeeOn;').replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+      { vec3 ab = uSeeCar - uSeeCam; float L2 = max(dot(ab, ab), 1.0); float t = clamp(dot(vSeeW - uSeeCam, ab) / L2, 0.0, 1.0); float d = length(vSeeW - (uSeeCam + ab * t));
+        float k = (1.0 - smoothstep(uSeeR * 0.5, uSeeR, d)) * smoothstep(0.04, 0.14, t) * (1.0 - smoothstep(0.88, 0.97, t)) * smoothstep(1.5, 3.5, vSeeW.y) * uSeeOn;   // only above head height: the pavement and building feet stay solid
+        float dith = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); if (k > dith) discard; }`); };
+    this.mat.customProgramCacheKey = () => 'city-see';
     this.tubeMat = new MeshBasicMaterial({ color: new Color(1, 1, 1) });
     this.tubes = new InstancedMesh(new BoxGeometry(1, 1, 1), this.tubeMat, 512); this.tubes.count = 0; this.tubes.frustumCulled = false; this.tubes.instanceColor = null; this.group.add(this.tubes);
     this.signMats = []; this.signs = []; this.signAtlas = signAtlas();
@@ -162,6 +172,7 @@ export class City {
     for (const p of this.props) { p.visible = p.count > 0; if (p.count) p.instanceMatrix.needsUpdate = true; } this.tubes.visible = this.tubes.count > 0;
   }
   setTubeColor(i, col, k) { if (!this.tubes.instanceColor) { this.tubes.instanceColor = new (Object.getPrototypeOf(this.tubes.instanceMatrix).constructor)(new Float32Array(512 * 3), 3); } const b = 0.4 + 2.6 * k; this.tubes.instanceColor.setXYZ(i, col.r * b, col.g * b, col.b * b); }
+  seeThrough(camPos, carPos, on) { this.see.cam.value.copy(camPos); this.see.car.value.copy(carPos); this.see.on.value = on; }
   setLook(P) { this.neon = P.neon; this.wet = P.wet; this.steam = P.steam; this.mat.emissiveIntensity = 0.8 + 1.0 * P.neon; kitGlow.value = 0.7 + 0.6 * P.neon; }
   reset() { for (const [, m] of this.chunks) { this.group.remove(m); m.geometry.dispose(); } this.chunks.clear(); this.warm = true; }
 }

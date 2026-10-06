@@ -27,7 +27,7 @@ export function spawnRamp(yAhead, lane, setup) {
   const rp = { y, lane, x: G.road.laneX(y, lane), w: T.laneW * 1.6, used: false, setup, crate: setup === 'crate' ? { taken: false } : null };
   G.ramps.push(rp); event();
   const pl = lane;
-  if (setup === 'jam') { const n = G.road.laneCount(y + 420); let placed = 0; for (let i = 0; i < n && placed < 6; i++) { if (G.rng() < 0.85) { spawnCar(i === pl ? 'weak' : 'civ', i, yAhead + 400 + (G.rng() * 2 - 1) * 30, { factor: 0.6 }); placed++; } } }
+  if (setup === 'jam') { const n = G.road.laneCount(y + 420); let placed = 0; for (let i = 0; i < n && placed < 4; i++) { if (G.rng() < 0.85) { spawnCar(i === pl ? 'weak' : 'civ', i, yAhead + 400 + (G.rng() * 2 - 1) * 30, { factor: 0.6 }); placed++; } } }
   if (setup === 'gap') { G.gaps.push({ y0: y + 120, y1: y + 420 }); }
   if (setup === 'block') { G.barriers.push({ y: y + 380, lanes: Math.min(3, G.road.laneCount(y + 380)), lane0: Math.max(0, pl - 1) }); }
 }
@@ -104,7 +104,7 @@ function pickups() {
 function teaching() {
   if (!G.teachSet && G.t >= 8) { G.teachSet = true; G.teach = 'drift'; }
   if (G.teachT > 0) { G.teachT -= STEP; if (G.teachT <= 0) { G.teach = null; G.slowmo = 0; } }
-  if (G.teach === 'drift' && G.teachT <= 0) { const ca = G.road.cornerAhead(G.dist, 500); if (ca && ca.type === 'hairpin' && G.dist >= ca.s0 - 420) { G.teachT = 3; G.slowmo = 3; G.slowmoRate = 0.3; say('Steer hard to drift', ['drag your thumb far into the turn', 'hold left or right into the turn'], 2500); } }
+  if (G.teach === 'drift' && G.teachT <= 0) { const ca = G.road.cornerAhead(G.dist, 500); if (ca && ca.type === 'hairpin' && G.dist >= ca.s0 - 420) { G.teachT = 3; G.slowmo = 3; G.slowmoRate = 0.3; say('Tap BRAKE and steer', ['to drift through the turn', 'steer into the turn to drift'], 2500); } }
   if (G.teachT > 0 && G.teach === 'drift' && G.drifting) { G.teach = null; G.teachT = 0; G.slowmo = 0; say(null); }
 }
 export function director() {
@@ -112,7 +112,7 @@ export function director() {
   if (G.ticks % 6 !== 0) return;
   const dt = 6 * STEP, p = progress(); G.prog = p;
   if (!G.opened && G.t >= 0.2) { G.opened = true; spawnRamp(170, playerLane(), 'none');   // the jump off the garage ramp
-    for (let i = 0; i < 7; i++) spawnCar('civ', freeLane(G.dist + 600, [playerLane()]), 420 + i * 300 + G.rng() * 120); }   // the street is already full of traffic when the run starts
+    for (let i = 0; i < 4; i++) spawnCar('civ', freeLane(G.dist + 600, [playerLane()]), 480 + i * 480 + G.rng() * 160); }   // the street is already full of traffic when the run starts
   const technical = G.road.at(G.dist).sector.kind === 'technical';
   // limp mode: the enemies hold off, nothing new is thrown at the car, and a repair crate is sent a few seconds in
   if (G.limp) { G.mercyT = Math.max(G.mercyT, 1); if (G.limpT >= T.limp.repairAfter && !G.crates.some(c => c.kind === 'repair' && !c.dead)) spawnCrate('repair', T.limp.repairAt); }
@@ -134,9 +134,9 @@ export function director() {
   G.wave = have + incoming > 0 ? 'pressure' : 'breather';
   // waves
   if (!G.finale && !G.limp) { G.waveT -= dt; if (G.waveT <= 0) startWave(p, cap); }
-  // civilian traffic: a few cars always about, more room to weave when the road is open
+  // civilian traffic: a few cars always about (Stop 4: fewer commuters, because every one is now a loaded gun)
   { let civs = 0; for (const c of G.cars) if (c.alive && !c.wrecked && c.kind === 'civ' && c.y > G.dist - 300 && c.y < G.dist + farAhead() + 400) civs++;
-    const want = technical ? 2 : p < 0.2 ? 3 : 4; if (civs < want && G.t >= G.nextSpawn && !winding) { G.nextSpawn = G.t + 0.8 + G.rng() * 0.8; spawnCar('civ', freeLane(G.dist + 900, [playerLane()]), farAhead() + G.rng() * 300); } }
+    const want = technical ? 1 : 2; if (civs < want && G.t >= G.nextSpawn && !winding) { G.nextSpawn = G.t + 0.8 + G.rng() * 0.8; spawnCar('civ', freeLane(G.dist + 900, [playerLane()]), farAhead() + G.rng() * 300); } }
   if (technical || winding) return;   // inside a technical sector and in the finale: the corners and the wave are the content
   if (G.t >= G.weaveT) { G.weaveT = G.t + T.pace.weaveEvery[0] + G.rng() * (T.pace.weaveEvery[1] - T.pace.weaveEvery[0]); spawnWeave(p); }
   pickups();

@@ -24,7 +24,7 @@ export let G = null;
 export function newRun(seed, cfg) {
   const road = new Road(seed);
   G = { road, rng: mulberry32(seed ^ 0x5bd1e995), seed, cfg: { sens: cfg.sens, autoDrift: cfg.autoDrift, hairpinWall: !!cfg.hairpinWall }, ticks: 0, steps: 0, ev: [], hashes: [], rec: null, rep: null, in: { off: 0, brake: false, gas: false, fire: false, special: false, slam: 0, flicks: 0, p: 0 }, playing: false, dead: false, t: 0, acc: 0, dist: 0, pdist: 0, speed: 0, cruise: T.drive.cruise, fwd: 0, x: REF, px: REF, vx: 0, targetX: REF, rawTargetX: REF, lean: 0, sq: 1,
-        heading: 0, phi: 0, slip: 0, slipping: false, drifting: false, driftDir: 0, driftT: 0, driftTier: 0, driftCharge: 0, driftBank: 0, driftDirty: false, driftExitT: 0, wobble: 0,
+        heading: 0, phi: 0, slip: 0, slipping: false, drifting: false, easyDrift: false, brakeOn: false, driftDir: 0, driftT: 0, driftTier: 0, driftCharge: 0, driftBank: 0, driftDirty: false, driftExitT: 0, wobble: 0,
         turbo: 0, turboT: 0, slipT: 0, slipBoostT: 0, braking: false, burnout: 0, popT: 0, puffAcc: 0, sparkAcc: 0, puffs: [], ribbons: [], ribL: null, ribR: null, slideVx: 0, rumbleT: 0, cornerCalls: 0, hairpins: 0, cornerLog: [], teach: null, teachT: 0, pulsed: false,
         wallHits: 0, wideT: 0, wallT: 0, drifts: 0, driftSlams: 0, turbos: 0, driftPoints: 0, driftTierMax: 0, topSpeed: 0, speedSum: 0, speedN: 0, districtsPassed: 0,
         armor: T.armor, invuln: 0, mercyT: 0, damageAcc: 0, armorLost: 0, score: 0, combo: 0, comboT: 0, comboPeak: 1, kills: 0, passiveWrecks: 0, gunKills: 0, carKills: 0, civHits: 0, slams: 0, flicks: 0, flickMisses: 0, stomps: 0, distScore: 0,

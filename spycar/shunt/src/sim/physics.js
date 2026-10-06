@@ -33,7 +33,7 @@ export function physics(dt, playing) {
     if (over) G.wideT += dt; else G.wideT = 0;
     if (over && G.wideT >= T.wall.wideFor) {
     cnw.wallHit = true; G.wallHits++; G.wideT = 0; G.wallT = T.wall.stun; const o = -cnw.dir; G.speed = Math.max(T.drive.minSpeed, G.speed * T.wall.keep); G.boost = 0; G.slideVx = -o * 260; G.vx = -o * 260; G.x = (o < 0 ? left : right) - o * 22; G.heading = G.phi = 0; const dTarget = G.x - G.targetX; G.targetX = G.x; emit({ k: 'rebase', d: dTarget });
-    damage(T.wall.damage, null, 'Hit the barrier'); spark(G.x + o * 17, G.dist, 18); sfx.crunch(true); hap([40, 30, 60]); kickShake(o * 10, 0, 0.8); G.hitStop = Math.max(G.hitStop, 0.08); G.sq = 0.88; say('Too fast', 'steer hard to drift', 900); event();
+    damage(T.wall.damage, null, 'Hit the barrier'); spark(G.x + o * 17, G.dist, 18); sfx.crunch(true); hap([40, 30, 60]); kickShake(o * 10, 0, 0.8); G.hitStop = Math.max(G.hitStop, 0.08); G.sq = 0.88; say('Too fast', 'tap BRAKE and steer to drift', 900); event();
     const row = cornerRow(cnw); if (row) row.wall = true; } }
   else G.wideT = 0;
   if (scraping && G.air <= 0 && playing) { G.grazeT += dt; spark(G.x + (G.x <= left + 0.5 ? -17 : 17), G.dist, 1); G.boost = Math.max(G.boost - 40 * dt, -40); if (G.grazeT > 0.25 && G.grazePaid < T.score.grazeCap) { G.grazeT = 0; G.grazePaid++; addScore(T.score.graze, G.x, G.dist, true); } } else { G.grazeT = 0; if (!scraping) G.grazePaid = 0; }
@@ -147,22 +147,26 @@ export function driveSpeed(dt, playing) {
   if (G.burnout > 0) { G.burnout -= dt; G.speed = 0; G.braking = false; if (G.burnout <= 0) { G.speed = 320; say('Go', '', 600, true); sfx.launch(); hap([10, 30]); } return; }
   // Stop 3: no pedals. The car pulls to the auto speed by itself (the old gas speed); a held drift builds speed on top of it
   const gas = G.wallT <= 0 && !G.limp; let target = gas ? D.auto : G.cruise;
-  if (G.drifting) G.driftBuild = Math.min(T.drift.buildMax, G.driftBuild + T.drift.build * dt); else G.driftBuild *= Math.exp(-dt * 2.5);
+  // Stop 4: BRAKE is back. Held, it slows the car toward `brakeSpeed` (a drift holds a little more), so enemies pass and the road gets easy to read
+  const braking = !!G.in.brake && G.air <= 0 && G.wallT <= 0 && G.burnout <= 0; if (braking && !G.brakeOn) sfx.brake(); G.brakeOn = braking;
+  if (G.drifting && !braking) G.driftBuild = Math.min(T.drift.buildMax, G.driftBuild + T.drift.build * dt); else G.driftBuild *= Math.exp(-dt * 2.5);
   target += G.driftBuild;
   if (G.turboT > 0) { G.turboT -= dt; target += G.turbo; if (G.turboT <= 0) G.popT = 0.35; }
   if (G.slipBoostT > 0) { G.slipBoostT -= dt; target += D.slipBoost; }
   if (G.nitro > 0) { G.nitro -= dt; target = D.nitro; if (G.nitro <= 0) G.popT = 0.5; }
   if (G.detour > 0) { G.detour -= dt; target *= 0.8; }
   target = Math.min(target, G.nitro > 0 ? D.nitro : D.auto + G.driftBuild + (G.turboT > 0 ? G.turbo : 0));   // a boost (a kill, a drift, a repair) lifts the cap, so fighting is the fast way through
-  if (G.limp) { G.limpT += dt; target = Math.min(target, G.cruise * T.limp.speedK); }   // limp mode: no armor, a smoking crawl until a repair crate is collected
+  if (G.limp) { G.limpT += dt; target = Math.min(target, G.cruise * T.limp.speedK); }
+  if (braking) target = Math.min(target, D.brakeSpeed * (G.drifting ? 1.25 : 1));   // limp mode: no armor, a smoking crawl until a repair crate is collected
   if (G.wallT > 0) { G.wallT -= dt; target = D.minSpeed; G.turboT = 0; G.slipBoostT = 0; }   // grinding the rail after a barrier hit: no throttle until the stun ends
   // the corner lift: a hard corner ahead that the car would not hold in grip; it lifts in time to reach `liftK` x the grip speed at the turn-in.
   // A drift skips it (the drift holds 30% more and builds speed), so drifting is the fast way round and a weak driver never hits the wall
   let lift = false;
   if (!G.drifting && G.air <= 0 && G.nitro <= 0) { const ca = G.road.cornerAhead(G.dist, Math.max(700, G.speed * 1.3)); if (ca && ca.hard) { const vmax = Math.sqrt(D.grip * ca.R) * D.liftK; const inIt = G.dist >= ca.s0 - 40;
     const need = (G.speed * G.speed - vmax * vmax) / (2 * D.liftRate); if (inIt || need > ca.s0 - G.dist - G.speed * 0.06) { target = Math.min(target, vmax); lift = G.speed > vmax + 4; } } }
-  if (lift && !G.autoLift) sfx.brake(); G.autoLift = lift; G.braking = lift;
+  if (lift && !G.autoLift) sfx.brake(); G.autoLift = lift; G.braking = lift || braking;
   if (lift) G.speed = Math.max(target, G.speed - D.liftRate * dt);
+  else if (braking && G.speed > target) G.speed = Math.max(target, G.speed - D.brakeRate * dt);
   else { const accel = gas ? D.accel : D.accel * 0.6;
     if (G.speed < target) G.speed = Math.min(target, G.speed + accel * dt);
     else G.speed += (target - G.speed) * Math.min(1, dt * (gas ? 1.5 : D.coast)); }
@@ -182,15 +186,20 @@ export function driveSteer(dt, playing) {
   if (G.burnout > 0) { G.heading = G.phi = 0; G.vx = 0; return; }
   const u = clamp((G.targetX - G.x) / (T.laneW * 1.1), -1, 1);   // steering demand from the thumb
   const padHeld = false;   // Stop 3: no BRAKE button (the 360 and the pad drift below never arm)
+  // Stop 4: the brake-tap drift. BRAKE held while steering (or while a corner the tyres cannot hold is coming and the thumb is neutral) throws the
+  // car into an easy drift at once: a smaller slip angle, a held drift that forgives a thumb drifting back toward centre
+  if (G.in.brake && playing && !G.drifting && G.driftExitT <= 0 && G.air <= 0 && G.speed > 350 && !G.roll && G.burnout <= 0) {
+    const kk = G.road.at(G.dist).k; const want = Math.abs(u) > dr.brakeU ? Math.sign(u) : (G.speed * G.speed * Math.abs(kk) > D.grip * 0.5 ? Math.sign(kk) : 0);
+    if (want) { startDrift(want); G.easyDrift = true; } }
   // Stop 3: drift is automatic. A hard steer held for a moment at speed starts it, and so does steering into a corner the tyres cannot hold
   { const kk = G.road.at(G.dist).k; const overGrip = G.speed * G.speed * Math.abs(kk) > D.grip; const inward = u * Math.sign(kk);
     if (!G.drifting && G.driftExitT <= 0 && G.air <= 0 && G.speed > 350 && playing && !G.roll && G.burnout <= 0) {
       const hard = Math.abs(u) > dr.startU, corner = overGrip && inward > dr.cornerU; G.steerT = hard || corner ? G.steerT + dt : 0;
-      if (G.steerT >= dr.startFor) { G.steerT = 0; startDrift(hard ? Math.sign(u) : Math.sign(kk)); }
+      if (G.steerT >= dr.startFor) { G.steerT = 0; startDrift(hard ? Math.sign(u) : Math.sign(kk)); G.easyDrift = !hard; }   // a corner on its own gives the easy drift
     } else G.steerT = 0; }
   if (G.drifting) {
     G.driftT += dt; const counter = u * G.driftDir < dr.counterU;   // thumb swung the other way: the player is straightening up
-    const hold = u * G.driftDir > dr.holdU || (G.driftT < 0.25 && !counter);
+    const hold = u * G.driftDir > (G.easyDrift ? dr.brakeHoldU : dr.holdU) || (G.driftT < (G.easyDrift ? 0.4 : 0.25) && !counter);
     // the 360: thumb held hard out in the drift direction, at speed, for `arm` seconds: the drift becomes a spin
     // "turned too much": the thumb dragged past where the road lets the car go (the raw target beyond the clamped one by a lane)
     if (G.air > 0 && !G.crestAir) endDrift(false); else if (!G.spinning && (!hold || counter)) endDrift(true);   // a hill crest no longer drops the drift (Sprint 4: crests come fast at 1,300 pt/s)
@@ -206,7 +215,7 @@ export function driveSteer(dt, playing) {
     // thumb centred, up to 55° with it held out; the player holds the angle with small counter-steering movements
     const phiTarget = u * D.maxHeading * 0.7 * Math.PI / 180; const rate = D.turnRate * 0.7 * Math.PI / 180 * dt;
     G.phi += clamp(phiTarget - G.phi, -rate, rate);
-    const slipTarget = G.driftDir * (dr.slip[0] + (dr.slip[1] - dr.slip[0]) * clamp((u * G.driftDir - dr.holdU) / (1 - dr.holdU), 0, 1)) * Math.PI / 180; /* the harder the steer, the wider the drift */ const srate = dr.turnRate * Math.PI / 180 * dt;
+    const slipRange = G.easyDrift ? dr.easySlip : dr.slip; const slipTarget = G.driftDir * (slipRange[0] + (slipRange[1] - slipRange[0]) * clamp((u * G.driftDir - dr.holdU) / (1 - dr.holdU), 0, 1)) * Math.PI / 180; /* the harder the steer, the wider the drift */ const srate = dr.turnRate * Math.PI / 180 * dt;
     G.slip += clamp(slipTarget - G.slip, -srate, srate); G.heading = G.phi + G.slip; G.slipping = true;
   } else {
     let headingTarget = u * D.maxHeading * Math.PI / 180; const tau = G.driftExitT > 0 ? dr.exitTau : D.tau;
@@ -239,7 +248,7 @@ export function driftStep(dt) {
       spark(G.x + s * 17, G.dist - 20, 14); sfx.crunch(true); hap(60); kickShake(-s * 8, 0, 0.5); G.hitStop = Math.max(G.hitStop, 0.06); say('Drift Slam', '', 500); event(); } } }
 }
 export function endDrift(clean) {
-  const dr = T.drift; const tier = G.driftTier; G.drifting = false; G.driftExitT = dr.exit; G.wobble = -G.driftDir;
+  const dr = T.drift; const tier = G.driftTier; G.drifting = false; G.easyDrift = false; G.driftExitT = dr.exit; G.wobble = -G.driftDir;
   if (tier > 0) { G.turbo = dr.turbo[tier - 1]; G.turboT = dr.turboFor[tier - 1]; G.turbos++; sfx.turbo(tier); G.punch = 0.1; G.speedLines = G.turboT; hap([10, 20, 40]); for (let i = 0; i < 10 + tier * 6; i++) driftSpark(tier, (G.rng() * 2 - 1) * 400); }
   if (clean && !G.driftDirty && G.driftBank >= 10) { const pts = Math.round(G.driftBank); G.driftPoints += pts; addScore(pts, G.x, G.dist + 20, false, tier ? 'DRIFT T' + tier : 'DRIFT'); }
   else if (G.driftDirty && G.driftBank >= 10) G.pops.push({ x: G.x, y: G.dist + 20, text: 'DRIFT LOST', t: 0, bad: true });
@@ -331,7 +340,7 @@ export function contactPlayer(c) {
   const side = (hw - Math.abs(dx)) < (hl - Math.abs(dy));
   const s = Math.sign(dx || 1);
   if (c.kind === 'truck') { if (!side && dy > 0) { G.x -= s * 2; G.speed *= 0.98; G.boost = -40; } else { c.x += s * (hw - Math.abs(dx)); G.x -= s * 2; } return; }
-  if (c.kind === 'civ') { if (side) { c.vx = s * 180; c.honk = 0.6; G.x -= s * (hw - Math.abs(dx)); G.vx = -s * 100; } else { c.y += (hl - Math.abs(dy)); c.honk = 0.6; G.boost = -60; } if (!c.penalised) { c.penalised = true; G.civHits++; G.driftDirty = true; addScore(T.score.civilian, c.x, c.y, true, 'CIVILIAN'); G.combo = 0; G.comboT = 0; sfx.horn(); hap([15, 40, 15]); } return; }
+  if (c.kind === 'civ') { civLaunch(c, s, side); return; }   // Stop 4: every hit on a civilian is catastrophic
   if (c.kind === 'armored') { if (!side && dy > 0) { if (c.hitCd <= 0) { c.hitCd = T.rearCd; damage(0.5, c, 'Rammed a Bulwark'); G.boost = -150; G.speed = Math.min(G.speed, Math.max(T.drive.minSpeed, c.speed * 0.85)); G.x -= s * 4; /* one hit, then the car falls in behind it: no riding the truck down to zero armor */ } } else { G.x -= s * (hw - Math.abs(dx)); G.vx = -s * 150; if (G.slamT > 0) { G.slamT = 0; damage(0, null); spark(G.x, G.dist, 6); sfx.crunch(true); } } return; }
   if (side) {
     const slamming = G.slamT > 0;
@@ -432,12 +441,12 @@ export function wreck(c, how, credit) {
   const base = c.kind === 'bruiser' ? T.score.bruiser : c.kind === 'gunner' ? T.score.gunner : c.kind === 'armored' ? T.score.armored : T.score.weak;
   const mul = T.score.cause[how] || 1;
   // Stop 3: the crash is the show. The score is a small number riding on the wreck; only a pile-up names itself
-  const label = how === 'pileup' ? 'PILE-UP' : '';
+  const label = how === 'pileup' ? (c.viaCiv ? 'CIVILIAN PILE-UP' : 'PILE-UP') : '';
   G.kills++; if (how === 'gun' || how === 'missile') G.gunKills++; else G.carKills++; if (G.wreckLog) G.wreckLog.push(G.t.toFixed(1) + ' ' + c.kind + ' ' + how + ' ' + (c.state || ''));
   // combo: a kill within `window` s of the last raises the multiplier (x2 up to x5); a kill in the last second of the hold keeps it without raising it
   if (G.combo === 0) G.combo = 1; else if (G.comboT > T.combo.hold - T.combo.window) G.combo = Math.min(T.combo.max, G.combo + 1);
   G.comboT = T.combo.hold; G.comboPeak = Math.max(G.comboPeak, G.combo); G.lastKillT = G.t;
-  addScore(base * mul + (how === 'pileup' ? T.score.pileUp : 0), c.x, c.y, false, label, c);
+  addScore(base * mul + (how === 'pileup' ? T.score.pileUp + (c.viaCiv ? T.score.civPile : 0) : 0), c.x, c.y, false, label, c);
   // every kill: 100 ms of hit stop (150 ms and a short slow motion when the car was the weapon), a bigger shake, a flash, a speed burst, an
   // explosion (the renderer reads the fx), a punchy sound
   // Stop 3: hit stop and slow motion kept short so the crash itself plays out (a pile-up gets no extra stop: it is already a chain of them)
@@ -543,9 +552,23 @@ export function crashHit(c, o) {
     if (d.kind === 'truck') return;
     if (d.kind === 'civ') { if (v > C.civCrash) civCrash(d, w, v); else { d.vx += s * Math.min(220, v * 20); d.honk = 0.5; } return; }
     if (d.kind === 'armored') { if (v > C.pileUp * 2.2) { d.hp -= 6; d.hitFlash = 0.1; } return; }   // a Bulwark shrugs off most of it
-    if (v > C.pileUp) { d.vx = w.vx * 0.6 + s * 120; d.speed = Math.max(d.speed * 0.6, w.vs * 0.7); G.pileups++; wreck(d, 'pileup', c.credit); }
+    if (v > C.pileUp) { d.vx = w.vx * 0.6 + s * 120; d.speed = Math.max(d.speed * 0.6, w.vs * 0.7); G.pileups++; d.viaCiv = c.kind === 'civ'; wreck(d, 'pileup', c.credit); }
     else { d.vx += s * Math.min(260, v * 26); d.hitFlash = 0.08; }
   }
+}
+// Stop 4: the hero hits a civilian and it is catastrophic: the car is launched up and ahead, tumbling, and flies into whatever is in front. The wreck
+// carries the player's credit, so a civilian thrown into an enemy is a takedown (a pile-up with a bonus). The hit still costs the civilian penalty
+// (and a little speed) but no longer drops the combo: the carnage is the point.
+export function civLaunch(c, s, side) {
+  if (!c.penalised) { c.penalised = true; G.civHits++; G.driftDirty = true; addScore(T.score.civilian, c.x, c.y, true, 'CIVILIAN'); sfx.horn(); hap([15, 40, 15]); }
+  if (c.wrecked || !c.alive) return; const C = T.crash;
+  const rel = Math.max(8, (G.speed - c.speed) * CM + (side ? 6 : 0));   // m/s the hero closes at (a side swipe counts a little extra)
+  c.wrecked = true; c.civCrash = true; c.debrisT = 2.5; c.honk = 0.8; c.boom = rel > 20; creditCar(c, 'launch');
+  c.vx = (side ? s * 220 : s * 60); c.speed = Math.max(c.speed, G.speed * 0.9);
+  const k = { vy: 8 + G.rng() * 4 + Math.min(4, rel * 0.08), vx: s * (side ? 9 + G.rng() * 6 : 3 + G.rng() * 6), vz: -Math.max(0, G.speed * 1.08 - c.speed) * CM };
+  if (!crashLaunch(c, 'launch', k)) { c.spinV = 8; c.flip = 0; }
+  G.civCrashes++; G.launches = (G.launches || 0) + 1; addMark(c.x, c.y, 3, true); G.boost = Math.min(G.boost, -60); G.sq = Math.min(G.sq, 0.9); kickShake(-s * 6, 3, 0.6); G.hitStop = Math.max(G.hitStop, 0.04); event();
+  if (c.boom) { G.fx.push({ x: c.x, y: c.y, t: 0, life: 0.6, big: true }); sfx.wreck(); }
 }
 // a civilian knocked hard: it spins out and skids, sometimes rolls, smokes; only a heavy hit makes it explode
 export function civCrash(d, w, v) {

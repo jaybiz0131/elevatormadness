@@ -43,7 +43,7 @@ function freshRun(reseed) {
   if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; updateSpecial(G);
 }
 function enterTitle() { phase = 'title'; showCard('title', app); }
-function startPlaying() { phase = 'playing'; hideCallout(); hadRun = true; ui.card.hidden = true; ui.pause.hidden = false; ui.pad.hidden = false; ui.gas.hidden = false; ui.fire.hidden = false; ui.special.hidden = false; updateSpecial(G); ui.special.classList.toggle('armed', !!(G.special && G.special.ammo > 0)); lookBar(false); beginRun(); }
+function startPlaying() { phase = 'playing'; hideCallout(); hadRun = true; ui.card.hidden = true; ui.pause.hidden = false; ui.camBtn.hidden = false; ui.pad.hidden = false; ui.gas.hidden = false; ui.fire.hidden = false; ui.special.hidden = false; updateSpecial(G); ui.special.classList.toggle('armed', !!(G.special && G.special.ammo > 0)); lookBar(false); beginRun(); }
 // iOS counts touchend and click as gestures for audio, not pointerdown: unlock on those, window-wide, until it sticks
 for (const ev of ['touchend', 'click', 'keydown']) window.addEventListener(ev, () => audio.unlock(), { passive: true });
 function lookBar(show) { const b = document.querySelector('#hud .look'); if (b) { if (show) b.removeAttribute('hidden'); else b.setAttribute('hidden', ''); } }
@@ -71,7 +71,7 @@ setSink((ev) => {
     else if (e.k === 'buzz') buzz(e.p);
     else if (e.k === 'say') { if (e.text === null) hideCallout(); else callout(e.text, e.sub, e.ms, e.big); }
     else if (e.k === 'rebase') input.carAnchor += e.d;
-    else if (e.k === 'won') { phase = 'won'; ui.special.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; input.reset(); callout('City reached', '', 2400, true); }
+    else if (e.k === 'won') { phase = 'won'; ui.special.hidden = true; ui.camBtn.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; input.reset(); callout('City reached', '', 2400, true); }
     else if (e.k === 'died') { phase = 'dying'; ui.special.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; input.reset(); }
     else if (e.k === 'special') { if (e.show) { const first = ui.special.hidden; ui.special.hidden = false; if (first) pulseSpecial(); } updateSpecial(G); ui.special.classList.toggle('armed', !!e.armed && !!(G.special && G.special.ammo > 0)); }
     else if (e.k === 'pulse') pulseSpecial();
@@ -87,17 +87,19 @@ function simulate(dt, playing) {
 
 // ---------------- input and UI wiring ----------------
 bindInput({
-  onTouch() { audio.init(); audio.resume(); },
+  onTouch() { audio.init(); audio.resume(); if (renderer.skipShot) renderer.skipShot(); },   // a tap skips a hero shot
   canTouch() { return !(phase === 'over' || phase === 'victory' || phase === 'paused' || phase === 'countdown'); },
   onStart() { if (phase === 'title') { freshRun(false); startPlaying(); } },
   onRestartKey() { if (phase === 'over' || phase === 'victory') { restartAndPlay(false); return true; } return false; },
   onPause() { togglePause(); },
   onHide() { if (phase === 'playing' || phase === 'countdown') pause(); },
 });
-for (const [id, key] of [['sSound', 'sound'], ['sMusic', 'music'], ['sHaptics', 'haptics'], ['sShake', 'shake'], ['sMotion', 'motion'], ['sHand', 'left'], ['sTapSlam', 'tapSlam'], ['sAutoDrift', 'autoDrift'], ['sDebug', 'debug']]) $(id).addEventListener('click', () => { S[key] = !S[key]; saveSettings(); audio.apply(); refreshSettings(); });
+for (const [id, key] of [['sSound', 'sound'], ['sMusic', 'music'], ['sHaptics', 'haptics'], ['sShake', 'shake'], ['sMotion', 'motion'], ['sHand', 'left'], ['sTapSlam', 'tapSlam'], ['sAutoDrift', 'autoDrift'], ['sDebug', 'debug'], ['sFewShots', 'fewShots']]) $(id).addEventListener('click', () => { S[key] = !S[key]; saveSettings(); audio.apply(); refreshSettings(); });
 $('sSens').addEventListener('input', e => { S.sens = parseFloat(e.target.value); saveSettings(); refreshSettings(); });
 $('sBench').addEventListener('click', () => { ui.card.hidden = true; perf.startBench('1', loadReplay); });
-$('sCam').addEventListener('click', () => { S.cam = S.cam === 'B' ? 'A' : 'B'; saveSettings(); if (renderer.setCamera) renderer.setCamera(S.cam); refreshSettings(); });
+const nextCam = () => { S.cam = S.cam === 'A' ? 'B' : S.cam === 'B' ? 'C' : 'A'; saveSettings(); if (renderer.setCamera) renderer.setCamera(S.cam); refreshSettings(); };
+$('sCam3').addEventListener('click', nextCam); ui.camBtn.addEventListener('click', nextCam);
+for (const b of ui.camSel.querySelectorAll('button')) b.addEventListener('click', () => { S.cam = b.dataset.c; saveSettings(); if (renderer.setCamera) renderer.setCamera(S.cam); refreshSettings(); });
 $('sGfx').addEventListener('click', () => { const order = ['auto', 'low', 'high']; const next = order[(order.indexOf(S.gfx || 'auto') + 1) % 3]; if (next === 'auto') S.gfxAuto = null; if (renderer.setGfx) renderer.setGfx(next); else { S.gfx = next; saveSettings(); } refreshSettings(); });
 $('sTune').addEventListener('click', () => { if (useCanvas) return; openTune().then(on => $('sTune').classList.toggle('on', !!on)); });
 $('sPerf').addEventListener('click', () => { $('sPerf').classList.toggle('on', perf.togglePerf()); });

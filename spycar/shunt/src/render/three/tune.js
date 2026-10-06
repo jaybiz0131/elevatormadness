@@ -3,12 +3,14 @@
 // longer drops the edits or leaves the panel editing a stale copy); the panel rebuilds on a look change. "Copy look JSON" puts the
 // current values on the clipboard (and in the console) for looks.js and design/style-guide.md. Rows are 13 px and touch height.
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+import { CAM_PRESETS, setCamPreset, camBase, labSave, labReset } from './camera.js';
+import { SHOTS, SHOT_NAMES } from './shots.js';
 const CSS = `.lil-gui.tune { --font-size: 13px; --input-font-size: 13px; --widget-height: 30px; --title-height: 36px; --name-width: 44%; --font-family: var(--font-body);
   position: fixed; right: 8px; top: calc(8px + env(safe-area-inset-top, 0px)); z-index: 50; width: min(300px, 86vw); max-height: 80vh; overflow: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }`;
 function copy(text) { console.log(text); try { if (navigator.clipboard) return navigator.clipboard.writeText(text); } catch (e) {} const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch (e) {} t.remove(); }
 export function createTune(renderer) {
   if (!document.getElementById('tuneCss')) { const s = document.createElement('style'); s.id = 'tuneCss'; s.textContent = CSS; document.head.appendChild(s); }
-  let gui = null, open = { 'Sky and fog': false, Light: false, Post: false, Grade: false, 'City and road': false };
+  let gui = null, open = { 'Camera Lab': false, 'Sky and fog': false, Light: false, Post: false, Grade: false, 'City and road': false };
   function build(startOpen) {
     if (gui) { for (const f of gui.folders) open[f._title] = !f._closed; gui.destroy(); }
     const P = renderer.P; const re = () => renderer.applyLook();
@@ -19,6 +21,18 @@ export function createTune(renderer) {
     const f3 = folder('Post'); f3.add(P, 'bloomThreshold', 0, 1.5, 0.01).onChange(re); f3.add(P, 'bloomIntensity', 0, 4, 0.05).onChange(re); f3.add(P, 'bloomRadius', 0, 1, 0.01).onChange(re); f3.add(P, 'vignetteOffset', 0, 1, 0.01).onChange(re); f3.add(P, 'vignetteDarkness', 0, 1, 0.01).onChange(re); f3.add(P, 'grain', 0, 0.5, 0.01).onChange(re); f3.add(P, 'toneMapping', ['agx', 'aces']).onChange(re); f3.add(P, 'lutStrength', 0, 1, 0.05).onChange(re);
     const f4 = folder('Grade'); f4.add(P, 'gradeSat', 0, 2, 0.05).onChange(re); f4.add(P, 'gradeContrast', 0.5, 1.6, 0.01).onChange(re); f4.add(P, 'gradeWarm', -0.2, 0.2, 0.01).onChange(re); f4.add(P, 'gradeLift', -0.1, 0.2, 0.005).onChange(re);
     const f5 = folder('City and road'); f5.add(P, 'neon', 0, 1, 0.05).onChange(re); f5.add(P, 'wet', 0, 1, 0.05).onChange(re); f5.add(P, 'steam', 0, 1.5, 0.05).onChange(re); f5.add(P, 'rain', 0, 1, 0.05).onChange(re);
+    // Camera Lab: A, B and C and every named shot, live. height, distance and angle are three views of one number pair (height = distance x sin angle):
+    // changing one keeps the right one of the others. Edits are kept in this browser; "Copy camera values" puts the JSON on the clipboard.
+    const f6 = folder('Camera Lab'); const refreshAll = () => { for (const c of gui.controllersRecursive()) c.updateDisplay(); };
+    const sync = () => { if (CAM_PRESETS[camBase()]) setCamPreset(camBase()); labSave(); refreshAll(); };
+    const rig = (o, parent, keys) => { const v = { get height() { return o.dist * Math.sin(o.pitch * Math.PI / 180); }, set height(h) { o.dist = h / Math.max(0.05, Math.sin(o.pitch * Math.PI / 180)); }, get distance() { return o.dist; }, set distance(d) { o.dist = d; }, get angle() { return o.pitch; }, set angle(a) { o.pitch = a; } };
+      parent.add(v, 'height', 0.5, 90, 0.1).name('height (m)').onChange(sync); parent.add(v, 'distance', 5, 120, 0.5).name('distance (m)').onChange(sync); parent.add(v, 'angle', 0, 80, 0.5).name('angle (deg)').onChange(sync);
+      parent.add(o, 'fov', 20, 90, 0.5).name('lens width (fov)').onChange(sync); if ('lowerThird' in o) parent.add(o, 'lowerThird', 0.15, 0.6, 0.01).name('car on screen').onChange(sync); if ('lower' in o) parent.add(o, 'lower', 0.15, 0.6, 0.01).name('car on screen').onChange(sync);
+      parent.add(o, 'lean', 0, 14, 0.5).name('lean into turns').onChange(sync); parent.add(o, 'blend', 0.15, 2.5, 0.05).name('blend (s)').onChange(sync); for (const k of keys || []) parent.add(o, k, k === 'yaw' ? -120 : 0, k === 'yaw' ? 120 : 40, 1).onChange(sync); };
+    const hold = { shot: '(director)' }; f6.add(hold, 'shot', ['(director)', ...Object.keys(SHOTS)]).name('hold a shot').onChange(v => { if (renderer.director) renderer.director.force = v === '(director)' ? null : v; });
+    for (const k of Object.keys(CAM_PRESETS)) { const g = f6.addFolder('Camera ' + k + (k === 'A' ? ' (high)' : k === 'B' ? ' (chase)' : ' (close)')); g.close(); rig(CAM_PRESETS[k], g, []); g.add(CAM_PRESETS[k], 'pitchHi', 0, 80, 0.5).name('lift angle').onChange(sync); g.add(CAM_PRESETS[k], 'distHi', 5, 140, 0.5).name('lift distance').onChange(sync); }
+    for (const k of Object.keys(SHOTS)) { const g = f6.addFolder(SHOT_NAMES[k] || k); g.close(); rig(SHOTS[k], g, ['yaw']); if ('aim' in SHOTS[k]) g.add(SHOTS[k], 'aim', 0, 40, 1).name('aim at exit (deg)').onChange(sync); if ('hold' in SHOTS[k]) g.add(SHOTS[k], 'hold', 1, 3, 0.1).name('length (s)').onChange(sync); }
+    f6.add({ copy() { copy(JSON.stringify({ presets: CAM_PRESETS, shots: SHOTS })); } }, 'copy').name('Copy camera values'); f6.add({ reset() { labReset(); refreshAll(); } }, 'reset').name('Reset cameras');
     gui.add({ copy() { copy(JSON.stringify(renderer.P)); } }, 'copy').name('Copy look JSON');
     gui.add({ reset() { renderer.resetLook(); build(true); } }, 'reset').name('Reset this look');
     if (!startOpen) gui.close();

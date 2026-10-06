@@ -114,6 +114,7 @@ export function crashLaunch(c, how, kick) {
     ly += 3 + r() * 2.5; lx += side * 4; az = -side * (6 + r() * 4) * heavy; ax = -(r() * 2);
   } else if (how === 'ram') { ly += 4 + r() * 2; ax = -(5 + r() * 3) * heavy; lz -= 6; }   // punted from behind: the tail comes up and it goes end over end
   else if (how === 'stomp') { ly += 1.2; ay = (r() < 0.5 ? -1 : 1) * (5 + r() * 3); lz += 4; }   // crushed from above: flattened, it spins away under the car
+  else if (how === 'launch') { ay = (r() * 2 - 1) * 3; az = -side * (5 + r() * 6); ax = -(3 + r() * 5); }   // a civilian the hero ran into: thrown up and ahead, end over end and rolling
   else if (how === 'spin') { ly += 0.4; ay = side * (4 + r() * 4); if (k.roll) { ly += 2.5; az = -side * (5 + r() * 3); } }   // a civilian spun out: a skid, sometimes a roll
   else { ly += 2.5 + r() * 3; az = (r() < 0.5 ? -1 : 1) * (2 + r() * 5); ax = -(r() * 4); }   // pile-up and chain: knocked about by what hit it
   b.setLinvel({ x: lx, y: ly, z: lz }, true); b.setAngvel({ x: ax, y: ay, z: az }, true);

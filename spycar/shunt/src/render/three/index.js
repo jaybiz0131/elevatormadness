@@ -116,7 +116,7 @@ export function createThreeRenderer(canvas, opts = {}) {
     else { rx = lerp(G.px, G.x, alpha); rdist = lerp(G.pdist, G.dist, alpha); }   // rx is road-space x (centre 195)
     const shakeOn = S.shake && !S.motion && st.phase !== 'over';
     state.fovKick += (((G.turboT > 0 || G.nitro > 0) ? (G.nitro > 0 ? 10 : 6) : 0) - state.fovKick) * Math.min(1, dt * 6);
-    roadCam.update(G, rdist, 0, dt, st.elapsed, shakeOn, state.fovKick, rx); sky.update(roadCam.pos);
+    roadCam.update(G, rdist, 0, dt, st.elapsed, shakeOn, state.fovKick, rx); city.seeThrough(roadCam.pos, roadCam.carPos, 1); sky.update(roadCam.pos);
     road.update(G, rdist, roadCam.pos); placeKey(roadCam.anchor);
     const scroll = rdist - 270, yTop = rdist + 1500;
     fx.begin(); props.update(G, scroll, yTop, st.elapsed); city.update(G, rdist, st.elapsed, P);
@@ -160,5 +160,5 @@ export function createThreeRenderer(canvas, opts = {}) {
   function reset() { roadCam.reset(); road.reset(); city.reset(); cars.reset(); fx.reset(); }
   resize();
   function setCamera(name) { const n = setCamPreset(name); resize(); return n; }
-  return { kind: 'three', setGfx, gfxLevel: () => Q.level, render, setCamera, reset, resize, stats, diag, project, visibleAhead, prewarm, setLook, resetLook, get look() { return look; }, get P() { return P; }, applyLook, camera: roadCam, renderer, scene, setRoad(r) { roadRef = r; }, fx, props, cars, city, state, CAM, get post() { return post; }, get showroom() { return showroom; }, simulateContextLoss() { const ext = renderer.getContext().getExtension('WEBGL_lose_context'); if (ext) { ext.loseContext(); setTimeout(() => ext.restoreContext(), 800); return true; } return false; } };
+  return { kind: 'three', skipShot: () => roadCam.dir.skip(), get director() { return roadCam.dir; }, get roadCam() { return roadCam; }, setGfx, gfxLevel: () => Q.level, render, setCamera, reset, resize, stats, diag, project, visibleAhead, prewarm, setLook, resetLook, get look() { return look; }, get P() { return P; }, applyLook, camera: roadCam, renderer, scene, setRoad(r) { roadRef = r; }, fx, props, cars, city, state, CAM, get post() { return post; }, get showroom() { return showroom; }, simulateContextLoss() { const ext = renderer.getContext().getExtension('WEBGL_lose_context'); if (ext) { ext.loseContext(); setTimeout(() => ext.restoreContext(), 800); return true; } return false; } };
 }
