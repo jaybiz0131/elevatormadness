@@ -21,6 +21,7 @@ import { loadEnemyModels } from './enemyModels.js';
 import { loadPropModels } from './propModels.js';
 import { MODELS } from './carModel.js';
 import { createShowroom } from './showroom.js';
+import { modelLine, MODEL_STATUS } from './glbLoad.js';
 import { Q, LEVELS, setLevel, parseOverrides } from '../../quality.js';
 const V = new Vector3(), V2 = new Vector3(), SUN = new Vector3();
 function rainTexture() { const c = document.createElement('canvas'); c.width = 256; c.height = 256; const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 256, 256); let a = 7; const rng = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 1; for (let i = 0; i < 90; i++) { const px = rng() * 256, py = rng() * 256, l = 14 + rng() * 26; x.globalAlpha = 0.3 + rng() * 0.6; x.beginPath(); x.moveTo(px, py); x.lineTo(px + 2, py + l); x.stroke(); } const t = new CanvasTexture(c); t.wrapS = t.wrapT = RepeatWrapping; t.colorSpace = SRGBColorSpace; return t; }
@@ -52,6 +53,8 @@ export function createThreeRenderer(canvas, opts = {}) {
   let look = lookFor(opts.look || 'night'), P = Object.assign({}, LOOKS[look]); if (IS_IOS) P.msaa = 2;
   const makePost = () => createPost(renderer, scene, camera, Object.assign({}, P, { msaa: Math.min(P.msaa, Q.msaa), bloomRes: Q.bloom }));
   let post = makePost();
+  renderer.debug.onShaderError = (gl, program, vs, fs) => { state.shaderErrors = (state.shaderErrors || 0) + 1; state.lastError = 'shader: ' + String(gl.getProgramInfoLog(program) || '').slice(0, 90); };
+  window.addEventListener('unhandledrejection', (e) => { state.lastError = 'error: ' + String(e.reason && (e.reason.message || e.reason)).slice(0, 110); });
   const state = { scale: 1, cap: 1, frameMs: 16, lost: false, chroma: 0, fovKick: 0, elapsed: 0, postError: null, glError: null, frames: 0 };
   function applyLook() {
     const az = P.sunAzimuth * Math.PI / 180, el = Math.max(3, P.sunElevation) * Math.PI / 180; SUN.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)); fx.setSun(SUN); fx.setLook(P);
@@ -148,7 +151,7 @@ export function createThreeRenderer(canvas, opts = {}) {
     for (const m of temp) cars.release(m); fx.begin(); fx.end();
   }
   // one line for the title card and the frame counter: what the device is running
-  function diag() { let gpu = '?'; try { const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch (e) {} return `${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} · ${String(gpu).slice(0, 40)} · post ${post.config}${state.postError ? ' · post failed: ' + state.postError : ''}${state.glError ? ' · ' + state.glError : ''}${state.lost ? ' · CONTEXT LOST' : ''} · hero ${state.heroInfo && HERO_MODE === 'glb' ? 'glb ' + state.heroInfo.triangles + ' tris' : 'code'}${state.heroError ? ' (glb failed: ' + state.heroError + ')' : ''} · shadow ${key.shadow.mapSize.x} · scale ${state.scale.toFixed(2)}/${state.cap.toFixed(2)} · dpr ${window.devicePixelRatio}`; }
+  function diag() { let gpu = '?'; try { const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch (e) {} return `${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'} · ${String(gpu).slice(0, 40)} · post ${post.config}${state.postError ? ' · post failed: ' + state.postError : ''}${state.glError ? ' · ' + state.glError : ''}${state.lost ? ' · CONTEXT LOST' : ''} · hero ${state.heroInfo && HERO_MODE === 'glb' ? 'glb ' + state.heroInfo.triangles + ' tris' : 'code'}${state.heroError ? ' (glb failed: ' + state.heroError + ')' : ''} · shadow ${key.shadow.mapSize.x} · scale ${state.scale.toFixed(2)}/${state.cap.toFixed(2)} · dpr ${window.devicePixelRatio} · ${modelLine().split('\n')[0]}${MODEL_STATUS.failed.size ? ' FAILED ' + [...MODEL_STATUS.failed.keys()].join(' ') : ''}${MODEL_STATUS.notex.size ? ' NO TEXTURE ' + [...MODEL_STATUS.notex].join(' ') : ''}`; }
   function stats() { const i = renderer.info; return { calls: i.render.calls, triangles: i.render.triangles, textures: i.memory.textures, geometries: i.memory.geometries, scale: state.scale, cap: state.cap, frameMs: state.frameMs, programs: i.programs ? i.programs.length : 0 }; }
   // a working copy per look, so the tune panel's edits stay with their look for the session; resetLook goes back to looks.js
   const work = {}; work[look] = P;

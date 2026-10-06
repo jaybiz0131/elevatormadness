@@ -8,7 +8,7 @@
 // Paint: per facet by position (u along from the nose, h up, s out from the centre line) and facet angle, into vertex colours plus a
 // `surf` attribute (roughness, metalness, glow, brake flag) that one shared material reads: one draw call for the whole body.
 import { MeshStandardMaterial, MeshPhysicalMaterial, Color, Matrix4, Vector3, Box3, Float32BufferAttribute } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { loadGlb } from './glbLoad.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import MODELS from 'virtual:models';
 export { MODELS };
@@ -23,7 +23,7 @@ export function fixNormals(geo) {
   n.needsUpdate = true; return fixed;
 }
 export async function fitGlb(url, { length, width, nose = 'auto', up = null }) {
-  const gltf = await new GLTFLoader().loadAsync(url); gltf.scene.updateMatrixWorld(true);
+  const gltf = await loadGlb(url); gltf.scene.updateMatrixWorld(true);
   const parts = [];
   // a textured model keeps its UVs and normals and hands back its first material's base colour and normal maps; an untextured one is
   // reduced to positions (flat-shaded and painted in code)

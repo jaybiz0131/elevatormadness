@@ -79,7 +79,7 @@ setSink((ev) => {
 function simulate(dt, playing) {
   advance(dt, playing);
   const minute = G.t / 60;
-  audio.setEngine(clamp((Math.abs(G.speed) - 300) / 1000, 0, 1) + (G.air > 0 ? 0.2 : 0) + (G.burnout > 0 ? 0.6 : 0) + (G.in.gas && playing ? 0.15 : 0), playing); audio.setGunSpin(playing ? G.gunSpin : 0); ui.fire.classList.toggle('hot', G.hot > 0);
+  audio.setEngine(clamp((Math.abs(G.speed) - 300) / 1000, 0, 1) + (G.air > 0 ? 0.2 : 0) + (G.burnout > 0 ? 0.6 : 0) + (G.in.gas && playing ? 0.15 : 0), playing, { firing: playing && (G.flashT2 > 0 || G.gunSpin > 0.05), gas: !!(G.in.gas && playing), limp: !!G.limp && playing }); ui.fire.classList.toggle('hot', G.hot > 0);
   audio.setDrive(playing && G.air <= 0 ? clamp((Math.abs(G.slip) * 180 / Math.PI - 8) / 30, 0, 1) + (G.burnout > 0 ? 0.6 : 0) : 0, playing && G.scraping ? 1 : 0);
   audio.music(dt, G.finale ? 3 : G.prog > 0.3 ? 2 : 1);
 }

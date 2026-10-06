@@ -5,9 +5,9 @@ const le16 = n => String.fromCharCode(n & 255, (n >> 8) & 255), le32 = n => le16
 const SILENT_WAV = 'data:audio/wav;base64,' + btoa('RIFF' + le32(36 + 800) + 'WAVEfmt ' + le32(16) + le16(1) + le16(1) + le32(8000) + le32(8000) + le16(1) + le16(8) + 'data' + le32(800) + '\x80'.repeat(800));
 export const audio = {
   ctx: null, master: null, sfx: null, musicG: null, engine: null, engineGain: null, layers: [], nextBeat: 0, beat: 0,
-  init() { if (this.ctx) return; try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } const c = this.ctx;
+  init(ctx) { if (this.ctx) return; try { this.ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } const c = this.ctx;
     this.master = c.createGain(); this.master.connect(c.destination); this.sfx = c.createGain(); this.sfx.gain.value = S.sound ? 1 : 0; this.sfx.connect(this.master); this.musicG = c.createGain(); this.musicG.gain.value = S.music ? 0.5 : 0; this.musicG.connect(this.master);
-    const g = c.createGain(); g.gain.value = 0; const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 400; const o1 = c.createOscillator(), o2 = c.createOscillator(); o1.type = 'sawtooth'; o2.type = 'square'; o1.frequency.value = 70; o2.frequency.value = 35; o1.connect(f); o2.connect(f); f.connect(g); g.connect(this.sfx); o1.start(); o2.start(); this.engine = [o1, o2, f]; this.engineGain = g; this.makeBuffers(); },
+    this.makeBuffers(); this.makeEngine(); },
   resume() { if (this.ctx && this.ctx.state !== 'running') { try { this.ctx.resume(); } catch (e) {} } },
   // Mobile unlock, called from real user gestures (touchend, click, keydown): resume the context, start a silent buffer (the iOS
   // unlock), and loop a silent <audio> element so the page counts as media playback and the ring/silent switch no longer mutes it.
@@ -28,8 +28,59 @@ export const audio = {
   pop() { this.noise(0.05, 0.4, 2000); this.tone('square', 90, 60, 0.06, 0.12); },
   chirp() { this.tone('triangle', 1400, 900, 0.05, 0.06); },
   apply() { if (!this.ctx) return; this.sfx.gain.value = S.sound ? 1 : 0; this.musicG.gain.value = S.music ? 0.5 : 0; },
-  setEngine(speed01, running) { if (!this.ctx) return; const t = this.ctx.currentTime; this.engine[0].frequency.setTargetAtTime(60 + 90 * speed01, t, 0.1); this.engine[1].frequency.setTargetAtTime(30 + 45 * speed01, t, 0.1); this.engine[2].frequency.setTargetAtTime(300 + 900 * speed01, t, 0.1); this.engineGain.gain.setTargetAtTime(running ? 0.04 + 0.04 * speed01 : 0.012, t, 0.1); },
-  tone(type, f0, f1, dur, vol, when = 0, dest) { if (!this.ctx) return; const c = this.ctx, t = c.currentTime + when; const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0005, t + dur); o.connect(g); g.connect(dest || this.sfx); o.start(t); o.stop(t + dur + 0.02); },
+  // The engine (Stop 2 finish): a deep, heavy V8-like beast, built from scratch here, nothing sampled or copied.
+  //  pulse loop: a 20 Hz train of uneven combustion thumps (a lopsided firing order) played faster as the revs rise, through a low-pass that
+  //              never opens past 1.1 kHz, so there is no thin whine at top speed;
+  //  growl:      two detuned saws an octave and a bit above the pulse, squashed by a waveshaper (the harmonics are what a phone speaker can
+  //              play), chopped at the firing rate;
+  //  sub:        a sine at 30 to 52 Hz with a soft second harmonic, the weight you feel;
+  //  crackle:    pops and burbles when the throttle lifts; bark: a rev surge and a low bang on every kill speed burst.
+  makeEngine() {
+    const c = this.ctx, sr = c.sampleRate; const N = Math.floor(sr * 0.8); const buf = c.createBuffer(1, N, sr), d = buf.getChannelData(0);
+    let seed = 777; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296 * 2 - 1; };
+    const lope = [1, 0.8, 0.95, 0.72, 1, 0.84, 0.9, 0.76, 1, 0.8, 0.98, 0.7, 0.96, 0.86, 0.92, 0.78];   // 16 pulses, uneven like a cross-plane V8
+    for (let k = 0; k < 16; k++) { const t0 = Math.floor((k / 20 + rnd() * 0.0012) * sr); let lp = 0;
+      for (let i = 0; i < 0.09 * sr; i++) { const t = i / sr; const idx = (t0 + i) % N; lp += (rnd() - lp) * 0.12;
+        const body = (Math.sin(2 * Math.PI * 72 * t) * Math.exp(-t / 0.02) + 0.7 * Math.sin(2 * Math.PI * 144 * t) * Math.exp(-t / 0.014) + 0.45 * Math.sin(2 * Math.PI * 216 * t) * Math.exp(-t / 0.01));
+        d[idx] += lope[k] * (body + lp * Math.exp(-t / 0.012) * 1.3); } }
+    let pk = 0; for (let i = 0; i < N; i++) pk = Math.max(pk, Math.abs(d[i])); for (let i = 0; i < N; i++) d[i] /= pk;
+    const loop = c.createBufferSource(); loop.buffer = buf; loop.loop = true; const lpf = c.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 400; lpf.Q.value = 1.2; const pulseG = c.createGain(); pulseG.gain.value = 0;
+    loop.connect(lpf); lpf.connect(pulseG);
+    const sa = c.createOscillator(), sb = c.createOscillator(); sa.type = 'sawtooth'; sb.type = 'sawtooth'; const gf = c.createBiquadFilter(); gf.type = 'lowpass'; gf.frequency.value = 500; gf.Q.value = 2;
+    const shaper = c.createWaveShaper(); { const n = 512, cv = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; cv[i] = Math.tanh(x * 3.2) * 0.9; } shaper.curve = cv; shaper.oversample = '2x'; }
+    const chop = c.createGain(); chop.gain.value = 0.7; const lfo = c.createOscillator(); lfo.type = 'sine'; const lfoD = c.createGain(); lfoD.gain.value = 0.3; lfo.connect(lfoD); lfoD.connect(chop.gain);
+    const growlG = c.createGain(); growlG.gain.value = 0; sa.connect(shaper); sb.connect(shaper); shaper.connect(gf); gf.connect(chop); chop.connect(growlG);
+    const sub = c.createOscillator(), sub2 = c.createOscillator(); sub.type = 'sine'; sub2.type = 'sine'; const subG = c.createGain(); subG.gain.value = 0; const sub2G = c.createGain(); sub2G.gain.value = 0.3; sub.connect(subG); sub2.connect(sub2G); sub2G.connect(subG);
+    this.engBus = c.createGain(); this.engBus.gain.value = 0; const sat = c.createWaveShaper(); { const n = 256, cv = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; cv[i] = Math.tanh(x * 1.6); } sat.curve = cv; }
+    pulseG.connect(sat); growlG.connect(sat); subG.connect(sat); sat.connect(this.engBus); this.engBus.connect(this.sfx);
+    loop.start(); sa.start(); sb.start(); sub.start(); sub2.start(); lfo.start();
+    this.eng = { loop, lpf, pulseG, sa, sb, gf, growlG, sub, sub2, subG, lfo, chop }; this.engDuck = 1; this.barkT = -9; this.prevGas = false; this.popT = 0; this.crackleN = 0; this.crackleNext = 0;
+  },
+  setEngine(speed01, running, o) {
+    if (!this.ctx || !this.eng) return; o = o || {}; const c = this.ctx, t = c.currentTime, e = this.eng; const s = Math.max(0, Math.min(1.3, speed01));
+    const bark = Math.max(0, 1 - (t - this.barkT) / 0.55); const limp = o.limp ? 1 : 0;
+    const rate = (0.72 + 1.05 * s) * (1 + 0.28 * bark) * (1 - 0.18 * limp) + (o.gas ? 0.05 : 0);   // pulses per second: 14 at idle to about 36 flat out
+    e.loop.playbackRate.setTargetAtTime(rate, t, 0.08); e.lpf.frequency.setTargetAtTime(300 + 700 * Math.min(1, s) + 250 * bark, t, 0.1);
+    const f0 = 46 * rate; e.sa.frequency.setTargetAtTime(f0, t, 0.08); e.sb.frequency.setTargetAtTime(f0 * 1.503, t, 0.08); e.gf.frequency.setTargetAtTime(450 + 800 * Math.min(1, s), t, 0.1); e.lfo.frequency.setTargetAtTime(20 * rate, t, 0.08);
+    e.sub.frequency.setTargetAtTime(29 + 24 * Math.min(1, s) + 7 * bark, t, 0.1); e.sub2.frequency.setTargetAtTime(58 + 48 * Math.min(1, s) + 14 * bark, t, 0.1);
+    const load = running ? (o.gas ? 1 : 0.8) : 0.55; e.pulseG.gain.setTargetAtTime(0.95 * load + 0.2 * bark, t, 0.08); e.growlG.gain.setTargetAtTime((0.55 + 0.75 * Math.min(1, s)) * load + 0.35 * bark, t, 0.1); e.subG.gain.setTargetAtTime(0.3 + 0.06 * Math.min(1, s) + 0.45 * bark, t, 0.1);
+    // under the gatling while it fires (down to 38%, quickly), back up in about a third of a second after
+    const duckT = o.firing ? 0.38 : 1; this.engDuck += (duckT - this.engDuck) * (duckT < this.engDuck ? 0.25 : 0.06);
+    this.engBus.gain.setTargetAtTime((running ? 0.62 : 0.08) * this.engDuck * (S.sound ? 1 : 0), t, 0.05);
+    // pops and crackle when the throttle lifts at speed, a sputter now and then in limp
+    const lift = this.prevGas && !o.gas && s > 0.3; this.prevGas = !!o.gas; if (lift) { this.crackleN = 3 + Math.floor(Math.random() * 4); this.crackleNext = t; }
+    if (this.crackleN > 0 && t >= this.crackleNext) { this.crackleN--; this.crackleNext = t + 0.05 + Math.random() * 0.1; this.crackle(0.5 + Math.random() * 0.5); }
+    if (limp && t > this.popT) { this.popT = t + 0.35 + Math.random() * 0.5; this.crackle(0.7); }
+  },
+  // one exhaust pop: a band of noise and a short falling thump
+  crackle(v) { if (!this.ctx) return; const c = this.ctx, t = c.currentTime; const n = Math.floor(c.sampleRate * 0.07), b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0); let lp = 0;
+    for (let i = 0; i < n; i++) { lp += ((Math.random() * 2 - 1) - lp) * 0.5; d[i] = lp * Math.exp(-i / (c.sampleRate * 0.012)); } const src = c.createBufferSource(); src.buffer = b; const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 500 + Math.random() * 700; bp.Q.value = 0.9; const g = c.createGain(); g.gain.value = 0.55 * v * (this.engDuck || 1); src.connect(bp); bp.connect(g); g.connect(this.sfx); src.start(t);
+    const o = c.createOscillator(), og = c.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(55, t + 0.06); og.gain.setValueAtTime(0.4 * v, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.07); o.connect(og); og.connect(this.sfx); o.start(t); o.stop(t + 0.08); },
+  // a deep bark on a kill speed burst: the revs jump (in setEngine), a low bang, a throaty saw burst
+  bark() { if (!this.ctx) return; const c = this.ctx, t = c.currentTime; this.barkT = t;
+    const o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(96, t); o.frequency.exponentialRampToValueAtTime(34, t + 0.28); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.7, t + 0.015); g.gain.exponentialRampToValueAtTime(0.001, t + 0.34); o.connect(g); g.connect(this.sfx); o.start(t); o.stop(t + 0.36);
+    const sw = c.createOscillator(), sg = c.createGain(), lf = c.createBiquadFilter(); sw.type = 'sawtooth'; sw.frequency.setValueAtTime(70, t); sw.frequency.exponentialRampToValueAtTime(52, t + 0.3); lf.type = 'lowpass'; lf.frequency.setValueAtTime(700, t); lf.frequency.exponentialRampToValueAtTime(180, t + 0.3); sg.gain.setValueAtTime(0.0001, t); sg.gain.exponentialRampToValueAtTime(0.38, t + 0.02); sg.gain.exponentialRampToValueAtTime(0.001, t + 0.32); sw.connect(lf); lf.connect(sg); sg.connect(this.sfx); sw.start(t); sw.stop(t + 0.34);
+    this.crackleN = 2; this.crackleNext = t + 0.2; },  tone(type, f0, f1, dur, vol, when = 0, dest) { if (!this.ctx) return; const c = this.ctx, t = c.currentTime + when; const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0005, t + dur); o.connect(g); g.connect(dest || this.sfx); o.start(t); o.stop(t + dur + 0.02); },
   noise(dur, vol, cutoff, when = 0) { if (!this.ctx) return; const c = this.ctx, t = c.currentTime + when; const n = Math.floor(c.sampleRate * dur), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n); const s = c.createBufferSource(); s.buffer = buf; const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff; const g = c.createGain(); g.gain.value = vol; s.connect(f); f.connect(g); g.connect(this.sfx); s.start(t); },
   // Pre-rendered one-shots (Sprint D): the gatling fires 20 rounds a second, so a round is one buffer source, not a handful of nodes.
   // shot: a crack on top of a short low thump (heavy, a little different each time); hit: a metal tick; kill: sub boom, crunch and ring;
@@ -45,14 +96,12 @@ export const audio = {
   play(buf, rate = 1, gain = 1) { if (!this.ctx || !buf) return; const c = this.ctx; const s = c.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate; const g = c.createGain(); g.gain.value = gain; s.connect(g); g.connect(this.sfx); s.start(); },
   shot() { if (!this.buf) return; this.shotN = (this.shotN || 0) + 1; this.play(this.buf.shot[this.shotN % 3], 0.94 + Math.random() * 0.12, this.shotN % 3 === 0 ? 0.62 : 0.5); },
   hit() { if (this.buf) this.play(this.buf.hit, 0.9 + Math.random() * 0.3, 0.28); },
-  kill(n) { if (!this.buf) return; this.play(this.buf.kill, 1 - Math.min(n, 5) * 0.015, 0.95); if (n > 1) this.tone('triangle', 500 + n * 90, 500 + n * 90, 0.12, 0.1, 0.05); },
+  kill(n) { this.bark(); if (!this.buf) return; this.play(this.buf.kill, 1 - Math.min(n, 5) * 0.015, 0.95); if (n > 1) this.tone('triangle', 500 + n * 90, 500 + n * 90, 0.12, 0.1, 0.05); },
   ram(light) { if (this.buf) this.play(this.buf.ram, light ? 1.25 : 1, light ? 0.75 : 1); },
   whoosh() { this.noise(0.3, 0.25, 3200); this.tone('sine', 900, 300, 0.25, 0.05); },
   win() { [523, 659, 784, 1046].forEach((f, i) => this.tone('triangle', f, f, 0.5, 0.14, i * 0.12)); this.tone('sawtooth', 130, 260, 0.9, 0.1); },
-  // the gatling's spin-up: a whine that climbs for the whole second the barrels take to come up to speed, and a low motor under it;
-  // silent at rest (nodes started lazily on first use)
-  setGunSpin(s) { if (!this.ctx) return; if (!this.rotary) { const c = this.ctx, o = c.createOscillator(), o2 = c.createOscillator(), o3 = c.createOscillator(), g = c.createGain(), f = c.createBiquadFilter(); o.type = 'sawtooth'; o2.type = 'triangle'; o3.type = 'square'; f.type = 'lowpass'; f.frequency.value = 1800; g.gain.value = 0; o.connect(f); o2.connect(f); o3.connect(f); f.connect(g); g.connect(this.sfx); o.start(); o2.start(); o3.start(); this.rotary = { o, o2, o3, g, f }; }
-    const t = this.ctx.currentTime, k = s * s; this.rotary.o.frequency.setTargetAtTime(70 + 640 * k, t, 0.04); this.rotary.o2.frequency.setTargetAtTime(140 + 1280 * k, t, 0.04); this.rotary.o3.frequency.setTargetAtTime(35 + 60 * s, t, 0.05); this.rotary.f.frequency.setTargetAtTime(500 + 2400 * s, t, 0.05); this.rotary.g.gain.setTargetAtTime(s > 0.02 ? (s >= 1 ? 0.028 : 0.05 * s) : 0, t, 0.05); },
+  // (the gatling's spin-up whine was removed in Stop 2: the barrels come up to speed silently, the rounds are the sound)
+  setGunSpin() {},
   cannon() { this.noise(0.14, 0.8, 1100); this.tone('square', 160, 50, 0.16, 0.2); this.tone('sine', 70, 30, 0.25, 0.35); },
   ping(kill) { this.tone('triangle', kill ? 2600 : 2200, kill ? 3200 : 1800, 0.05, 0.05); },
   crunch(bass) { this.noise(0.16, 0.7, 1800); this.tone('sawtooth', 140, 50, 0.16, 0.2); if (bass) this.tone('sine', 70, 30, 0.3, 0.4); },

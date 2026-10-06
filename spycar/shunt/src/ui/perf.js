@@ -1,6 +1,7 @@
 // ?perf=1: a live overlay (fps, frame ms, draw calls, triangles, textures, resolution scale). ?bench=1: plays the recorded skilled run of
 // the beauty route, then shows average fps, 1% low, worst frame and the resolution scale it settled on. ?bench=soak: ten minutes,
 // first minute against last. ?shots=1 plays the same run for the postcard tool. Headless numbers are not iPhone numbers.
+import { modelLine } from '../render/three/glbLoad.js';
 import bench from '../../replays/beauty.json';
 import { S } from '../settings.js';
 // Show FPS (Settings > Developer > Show FPS, remembered; or ?debug=1): a small readout in the top right corner with the current frames
@@ -14,7 +15,7 @@ function createDebug(Q, renderer) {
     n++; acc += dt; if (performance.now() - t < 500) return; t = performance.now();
     const fps = n / Math.max(1e-3, acc); n = 0; acc = 0; win[wi] = fps; wi = (wi + 1) % win.length; wn = Math.min(win.length, wn + 1);
     let low = fps; for (let k = 0; k < wn; k++) low = Math.min(low, win[k]);
-    const rs = renderer.stats ? renderer.stats() : null; el.textContent = `${fps.toFixed(0)} FPS\nLOW ${low.toFixed(0)} (10 s)` + (rs && renderer.gfxLevel ? `\n${renderer.gfxLevel().toUpperCase()} x${rs.scale.toFixed(2)}` : ''); el.classList.toggle('over', low < 55);
+    const rs = renderer.stats ? renderer.stats() : null; el.textContent = `${fps.toFixed(0)} FPS\nLOW ${low.toFixed(0)} (10 s)` + (rs && renderer.gfxLevel ? `\n${renderer.gfxLevel().toUpperCase()} x${rs.scale.toFixed(2)}` : '') + '\n' + modelLine() + (renderer.state && renderer.state.shaderErrors ? '\nSHADER ERRORS ' + renderer.state.shaderErrors : '') + (renderer.state && renderer.state.lastError ? '\n' + renderer.state.lastError : ''); el.classList.toggle('over', low < 55);
   };
 }
 export function createPerf(Q, renderer, hud) {

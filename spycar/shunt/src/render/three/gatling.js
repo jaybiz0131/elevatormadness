@@ -3,12 +3,12 @@
 // the muzzle (cars.js). The model is very dark, so its cyan texels (rims, trim) get a glow that the game raises with the spin and with
 // every muzzle flash. Fitted here: barrels turned to point forward (-z), scaled to GUN.length, sat on the hood at GUN.at.
 import { Group, Mesh, Object3D, MeshStandardMaterial, Color } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { loadGlb } from './glbLoad.js';
 import MODELS from 'virtual:models';
 export const GUN = { length: 1.5, at: [0, 0.74, -1.3] };   // metres; the mount point on the hero's hood (hero local: forward -z)
 export async function loadGatling(url = MODELS.wpn_gatling) {
   if (!url) throw new Error('wpn_gatling.glb is not in the build');
-  const gltf = await new GLTFLoader().loadAsync(url); const model = gltf.scene; const glow = { value: 0.4 };
+  const gltf = await loadGlb(url); const model = gltf.scene; const glow = { value: 0.4 };
   model.traverse((o) => {
     o.frustumCulled = false; if (!o.isMesh) return; o.castShadow = true;
     const old = o.material; const m = new MeshStandardMaterial({ map: old.map || null, normalMap: old.normalMap || null, metalnessMap: old.metalnessMap || null, roughnessMap: old.roughnessMap || null, metalness: 1, roughness: 1, envMapIntensity: 1.6 });

@@ -3,7 +3,7 @@
 // own front is +z and up is +y (all checked by front and side views, 2026-10-05). Each type is one InstancedMesh: one draw per type.
 // city.js and props.js put them where the code-built kit pieces stood; a type with no file keeps its kit piece.
 import { InstancedMesh, MeshStandardMaterial, Box3, Vector3 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { loadGlb } from './glbLoad.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MODELS, fixNormals } from './carModel.js';
 // size: [axis, metres]; cap: most instances at once; shadow: casts a shadow (the large pieces only, to keep the shadow pass small)
@@ -42,7 +42,7 @@ function addLights(m, kind, H) {
   m.customProgramCacheKey = () => 'prop-lights-' + kind;
 }
 async function loadOne(url, [axis, metres], lights) {
-  const gltf = await new GLTFLoader().loadAsync(url); gltf.scene.updateMatrixWorld(true);
+  const gltf = await loadGlb(url); gltf.scene.updateMatrixWorld(true);
   const parts = []; let mat = null;
   gltf.scene.traverse((o) => { if (!o.isMesh) return; if (!mat) mat = o.material; let g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); g = g.index ? g.toNonIndexed() : g; parts.push(g); });
   const geo = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);

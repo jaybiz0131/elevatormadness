@@ -31,8 +31,8 @@ export function tickEnemyLights(elapsed) { MULE_PULSE.value = 0.5 + 0.5 * Math.s
 const NO_BRAKE = { value: 0 };
 // body colour from the approved top-view sheet (the main hull layer), accent from the role; enemies show red headlights (the threat
 // cue from the 2D build), the supply truck white ones
-function paletteFor(kind) { const body = ENEMY_SHAPES[kind].reduce((a, L) => (!L.glow && !L.glass && (!a || (L.h[1] - L.h[0]) > (a.h[1] - a.h[0]))) ? L : a, null).col;
-  return palette(body, { accent: ENEMY_ROLES[kind].accent, head: kind === 'truck' ? '#fff3c4' : '#ff4a3a', headGlow: kind === 'truck' ? 3 : 2.4, metal: 0.4, rough: 0.32, bodyGlow: kind === 'truck' ? 0.12 : 0.04 }); }
+function paletteFor(kind) { const body = (ENEMY_SHAPES[kind] || ENEMY_SHAPES.weak).reduce((a, L) => (!L.glow && !L.glass && (!a || (L.h[1] - L.h[0]) > (a.h[1] - a.h[0]))) ? L : a, null).col;
+  return palette(body, { accent: (ENEMY_ROLES[kind] || ENEMY_ROLES.weak).accent, head: kind === 'truck' ? '#fff3c4' : '#ff4a3a', headGlow: kind === 'truck' ? 3 : 2.4, metal: 0.4, rough: 0.32, bodyGlow: kind === 'truck' ? 0.12 : 0.04 }); }
 export async function loadEnemyModels(scene, cap = 24) {
   const out = {}; const Q = new URLSearchParams(location.search);
   for (const [kind, name] of Object.entries(ENEMY_FILES)) {
