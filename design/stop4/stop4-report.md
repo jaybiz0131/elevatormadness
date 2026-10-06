@@ -1,6 +1,6 @@
 # Sprint D, Stop 4: controls, carnage and cameras (report)
 
-Build: https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn (version filled at the end). Branch `shunt-3d`. Stop 5 is not started.
+Build: https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn (version 26). Branch `shunt-3d`. Stop 5 is not started.
 **The sim changed** (replay rev `D4`): six new baselines `ctrl-s{1,2,3}-{active,idle}.json` plus a new `beauty.json`; the `feel-*` D3 baselines are retired.
 
 ## 1. Controls (Jack's correction applied: NO auto-fire)
@@ -44,3 +44,22 @@ Height, distance and angle are three views of one pair of numbers (height = dist
 - Software GL renders at phone size, stepped in sim time. Feel is for Jack's hands.
 
 ## Checks
+
+| Check | Result |
+|---|---|
+| Replays | 7 of 7 new baselines (`ctrl-s{1,2,3}-{active,idle}`, `beauty`) match on two sync passes each (14 of 14), and `beauty.json` matches through the live 3D frame loop (90 of 90 hashes), on the build that was published (the live run was repeated after the last camera change) |
+| Draw calls, worst frame in two full runs (one frame every 8 s) | 80 (limit 150) |
+| Triangles, same | 249k (limit 400k) |
+| Size | 13,107,658 bytes, 9.6 KB more than Stop 3 (limit +0.3 MB; 15 MB cap) |
+| Frame cost | busy moment at High, scale 1.5, software GL: the same stretch costs the same or less than the Stop 3 build (17.8 to 18.4 s against 19.7 to 19.8 s; different sim state, so read it as "no measurable cost"). The see-through shader runs on building pixels only. **Jack's phone is the FPS gate: Show FPS, the 10 s low.** |
+| Bots (sync, final build) | skilled bot reaches the city in 105 to 115 s (S, S, A); no-input bots in 125 to 138 s; "weak" bot (late brake, no drift) 127 to 136 s and the casual bot 122 to 130 s, grades A to S. The weak driver no longer needs the extra minute the Stop 2 bot did: speed is automatic and the corner lift keeps it off the walls. |
+| Hero shots per run (director on camera B, scripted runs) | 9, 9, 5 and 8 (the 5 is a run with enemies close most of the time, where danger holds shots back); never closer than 8.3 s; no angle twice in a row; the corner cam holds about 25 to 35 s of a 105 to 127 s run |
+| No em dashes in player-facing text | checked |
+
+## Not done or not verified
+- **All of it is software-GL renders and scripted bots.** How the brake-tap drift feels under a thumb, whether FIRE and BRAKE rock cleanly at 112 px with a 20 px gap, whether the corner cam is too busy, and the FPS low on Jack's phone need his hands.
+- The brake is a plain hold (slows to 400 pt/s). There is no handbrake 180 (the turn-around move is Stop 5). BOOST is a reserved empty spot.
+- Camera A has no director. B and C share the same auto shots (C is scaled closer); the hero shots are the same for both.
+- The see-through fade is a screen-door dither, so it shows a faint pattern close up. It only touches the city's building blocks, not the small imported props (storefront, signs).
+- The weak-driver bot is not a weak human. Tell me if the weak-driver case is too easy now.
+- Stop 5 (hills and jumps, boost, the turn-around move, shock mines) is not started.

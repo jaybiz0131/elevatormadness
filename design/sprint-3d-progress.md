@@ -114,3 +114,7 @@ hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mo
   - Tools: `tools/simtest.mjs` (sync scripted run, counts and step cost), `tools/capture.mjs` (stills from a replay), `tools/clip.mjs` (mp4 from a replay or seed, `--find=pileup|roll|two|wallslam`).
   - Report: design/stop3/stop3-report.md. Build v25 https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn. Baselines `replays/feel-s{1,2,3}-{active,idle}.json` and `beauty.json` (rev D3).
 - Next: Stop 4 (camera director, Camera Lab, hills and jumps) after Jack's go-ahead.
+- Stop 3 (done by another session): Rapier crash physics, pile-ups, two wheels, rollover, automatic drift. Report: design/stop3/stop3-report.md.
+- Stop 4 (controls, carnage and cameras): BRAKE back with the brake-tap drift, no auto-fire, FIRE and BRAKE side by side, MISSILE above, BOOST spot reserved; fewer civilians and every hit on one is catastrophic (launch, civilian pile-up bonus); cameras A, B, C
+  (title card selector, Settings, in-play button); camera director with seven named shots, corner/drift cam, see-through buildings, hero shots with a budget and tap to skip, Fewer hero shots; Camera Lab in the tune panel.
+  Sim changed: new baselines (rev D4). Report: design/stop4/stop4-report.md. Next: Stop 5 (hills and jumps, boost, the turn-around move, shock mines).
