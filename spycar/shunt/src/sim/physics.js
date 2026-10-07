@@ -513,7 +513,7 @@ export function spinStep(dt) {
 // every round that lands: a spark burst and flash at the impact, a tick, a tiny camera twitch; the round that kills is a wreck (below)
 export function gunHit(c, b) {
   G.fx.push({ x: b.x, y: b.y, t: 0, life: 0.09, hit: true });
-  if (c.kind === 'armored') { spark(b.x, b.y, 3); sfx.ping(false); return; }
+  if (c.kind === 'armored') { spark(b.x, b.y, 3); sfx.hit(); return; }
   c.hp -= b.dmg; c.hitFlash = 0.08; spark(b.x, b.y, 4); sfx.hit(); G.kick.y += 0.55; G.trauma = Math.max(G.trauma, 0.08);
   if (c.hp <= 0) wreck(c, 'gun', true);
 }
@@ -674,24 +674,24 @@ export function breakUp(c, how) { const B = BREAK[how] || [2, 0.8]; const n = B[
 // a flying piece hits something: a live enemy hard enough is flipped (a pile-up), softer it spins out; a civilian is knocked about; the hero only feels a knock
 export function chunkHit(ch, o) {
   if (!ch.rb || ch.hitCd > 0) return; const v = ch.rb.linvel(); const Ch = T.chunk;
-  if (o.type === 'wall') { const sp = Math.max(Math.hypot(v.x, v.y, v.z), ch.pv || 0); if (sp > 6) { ch.hitCd = 0.5; addScar(o.side, ch.y, Math.max(0.6, ch.h || 1), 0); addHeat(ch.y, o.side, T.facade.pieceHeat, ch.h || 1); spark(ch.x + o.side * 12, ch.y, 4); if (Math.abs(ch.y - G.dist) < 900) sfx.ping(false); } return; }
+  if (o.type === 'wall') { const sp = Math.max(Math.hypot(v.x, v.y, v.z), ch.pv || 0); if (sp > 6) { ch.hitCd = 0.5; addScar(o.side, ch.y, Math.max(0.6, ch.h || 1), 0); addHeat(ch.y, o.side, T.facade.pieceHeat, ch.h || 1); spark(ch.x + o.side * 12, ch.y, 4); if (Math.abs(ch.y - G.dist) < 900) sfx.crunch(false, Math.min(0.6, sp / 40)); } return; }
   if (o.type === 'car' && o.car && o.car.alive && !o.car.wrecked) { const d = o.car; const rel = Math.hypot(v.x - (d.vx || 0) * CM, v.y, v.z + (d.speed || 0) * CM); if (rel < Ch.knockV) return; ch.hitCd = 0.3;
     if (d.kind === 'civ') { if (rel > T.crash.civCrash) civCrash(d, { vx: v.x / CM, vs: -v.z / CM, vy: v.y }, rel); else { d.honk = 0.5; d.vx += Math.sign(v.x || 1) * 160; } return; }
     if (d.kind === 'truck' || d.kind === 'armored') return;
-    spark(d.x, d.y, 6); if (Math.abs(d.y - G.dist) < 900) sfx.crunch(false);
+    spark(d.x, d.y, 6); if (Math.abs(d.y - G.dist) < 900) sfx.crunch(false, Math.min(1, rel / 24));
     if (rel > Ch.flipV) { d.vx = v.x / CM * 0.5; G.pileups++; G.chunkFlips++; d.viaCiv = false; wreck(d, 'pileup', ch.credit); } else { d.spinOut = 0.6; d.vx += Math.sign(v.x || 1) * 200; d.shunted = true; if (ch.credit) creditCar(d, 'shunt'); }
     return; }
-  if (o.type === 'hero' && G.air <= 0) { const rel = Math.hypot(v.x - G.vx * CM, v.z + G.fwd * CM); if (rel > 6) { ch.hitCd = 0.4; spark(G.x, G.dist, 4); sfx.ping(false); hap(10); G.kick.x += Math.sign(v.x || 1) * 2; } }
+  if (o.type === 'hero' && G.air <= 0) { const rel = Math.hypot(v.x - G.vx * CM, v.z + G.fwd * CM); if (rel > 6) { ch.hitCd = 0.4; spark(G.x, G.dist, 4); sfx.crunch(false, Math.min(0.8, rel / 24)); hap(10); G.kick.x += Math.sign(v.x || 1) * 2; } }
 }
 export function crashHit(c, o) {
   if (!c.alive) return; const C = T.crash; const v = impactSpeed(c, o);
   if (o.type === 'ground') { if ((c.vy || 0) < -5 && c.hitCd <= 0) { c.hitCd = 0.2; spark(c.x, c.y, 4); G.fx.push({ x: c.x, y: c.y, t: 0, life: 0.4, thud: true, k: Math.min(1, -c.vy / 14) }); if (Math.abs(c.y - G.dist) < 900) sfx.land(); } return; }
-  if (o.type === 'wreck') { if (v > C.wallFx && c.hitCd <= 0) { c.hitCd = 0.25; spark((c.x + o.car.x) / 2, (c.y + o.car.y) / 2, 6); if (Math.abs(c.y - G.dist) < 900) sfx.crunch(false); } return; }
+  if (o.type === 'wreck') { if (v > C.wallFx && c.hitCd <= 0) { c.hitCd = 0.25; spark((c.x + o.car.x) / 2, (c.y + o.car.y) / 2, 6); if (Math.abs(c.y - G.dist) < 900) sfx.crunch(false, Math.min(1, v / 20)); } return; }
   if (o.type === 'rail' || o.type === 'wall') {
     if (v < C.wallFx || c.hitCd > 0) return; c.hitCd = 0.3; const wall = o.type === 'wall';
     // a wreck slamming into a building: sparks, glass, parts off the car (the renderer reads the fx); into the rail: sparks
     G.fx.push({ x: c.x, y: c.y, t: 0, life: 1.2, slam: true, side: o.side, glass: wall && v > C.wallFx + 3, parts: v > C.wallFx + 5 ? (v > 18 ? 3 : 2) : 0, k: Math.min(1, v / 25), h: c.h || 1 });
-    spark(c.x + o.side * 10, c.y, wall ? 14 : 8); if (Math.abs(c.y - G.dist) < 1000) { sfx.crunch(true); if (wall && v > 12) kickShake(0, 0, 0.25); } if (wall) G.wallSlams++;
+    spark(c.x + o.side * 10, c.y, wall ? 14 : 8); if (Math.abs(c.y - G.dist) < 1000) { sfx.crunch(true, Math.min(1, v / 22)); if (wall && v > 12) kickShake(0, 0, 0.25); } if (wall) G.wallSlams++;
     // Stop 6: a wreck hitting a building hard blows up against it (once per car): a fireball on the wall, glass, and the facade catches fire
     if (wall) { addScar(o.side, c.y, c.h || 1.2, 1); if (v > C.wallBoom && !c.walled) { c.walled = true; G.wallBooms++; addHeat(c.y, o.side, T.facade.boomHeat, c.h || 1.2); G.fx.push({ x: c.x, y: c.y, t: 0, life: 0.7, wallBoom: true, side: o.side, k: Math.min(1, v / 26), h: c.h || 1.2 }); sfx.wreck(); if (Math.abs(c.y - G.dist) < 1000) kickShake(o.side * 2, 2, 0.5); if (c.credit && !c.civCrash) addScore(T.score.wallSmash, c.x, c.y, false, 'WALL SMASH'); } else addHeat(c.y, o.side, 2, c.h || 1.2); }
     return;

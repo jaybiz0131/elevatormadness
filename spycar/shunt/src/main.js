@@ -9,6 +9,7 @@ import { slamTarget, wreck, creditCar } from './sim/physics.js';
 import { initCrash, CRASH, crashLine } from './sim/crash.js';
 import { audio, buzz } from './audio/audio.js';
 import { files } from './audio/files.js';
+import logoData from '../../../assets/brand/bern1_title_fire.jpg?inline';
 import { stage, cv, ui, $, view, callout, hideCallout, updateSpecial, pulseSpecial, updateBoost, resetBoostUi } from './ui/dom.js';
 import { showCard, refreshSettings, screen, setScreen, setSettingsFrom, settingsFrom } from './ui/cards.js';
 import { input, bindInput, applyControls, showInput } from './input/input.js';
@@ -44,13 +45,16 @@ function freshRun(reseed) {
   newRun(seed, { sens: S.sens, autoDrift: S.autoDrift, hairpinWall: Q.get('wall') !== '0', intro: Q.get('intro') !== '0' });
   if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.boost.hidden = true; ui.puck.hidden = true; ui.ebrake.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; updateSpecial(G);
 }
-// Stop 7: the app opens on the showroom car with TAP TO START (iOS blocks audio until a tap). The tap plays theme_full from 0:00, every time; the BERN-1 logo punches in on the beat, then the menu
+// Stop 7: the app opens on the showroom car with TAP TO START (iOS blocks audio until a tap). The tap plays the theme from 0:00, every time; the BERN-1 logo punches in on the beat, then the menu
 // fades in with the music playing (tpStage: 0 waiting for the beat, 1 logo in, 2 menu). Nothing is skipped or seeked: a tap during the intro shows the menu early, the music runs on.
+// the title art (assets/brand/bern1_title_fire.jpg, black background) is inside the page as a data URL; the CSS draws it with screen blending, so its black is the showroom showing through. The text BERN-1 stays
+// hidden: it shows only if the picture cannot be decoded.
+ui.logoImg.onload = () => ui.logo.classList.add('img'); ui.logoImg.onerror = () => ui.logo.classList.remove('img'); ui.logoImg.src = logoData;
 let introWas = false, tpStage = 2, tapWall = 0, tapSince = nowMs();
 function enterTap() { phase = 'tap'; ui.card.hidden = true; ui.pause.hidden = true; ui.tap.hidden = false; tapSince = nowMs(); updateTap(); }
 function enterTitle() { phase = 'title'; tpStage = 2; delete ui.card.dataset.tp; showCard('title', app); }
-function tapReady() { const st = files.status('theme_full'); return st === 'ready' || st === 'failed' || nowMs() - tapSince > 25000; }
-function updateTap() { if (phase !== 'tap') return; const ok = tapReady(); ui.tap.classList.toggle('wait', !ok); ui.tapText.textContent = ok ? 'TAP TO START' : 'LOADING'; ui.tapNote.textContent = ok ? '' : (files.bytes.theme_full ? Math.round(files.bytes.theme_full / 1024) + ' KB' : ''); }
+function tapReady() { const st = files.status('theme'); return st === 'ready' || st === 'failed' || nowMs() - tapSince > 25000; }
+function updateTap() { if (phase !== 'tap') return; const ok = tapReady(); ui.tap.classList.toggle('wait', !ok); ui.tapText.textContent = ok ? 'TAP TO START' : 'LOADING'; ui.tapNote.textContent = ok ? '' : (files.bytes.theme ? Math.round(files.bytes.theme / 1024) + ' KB' : ''); }
 function tapStart() {
   if (phase !== 'tap' || !tapReady()) return; audio.init(); audio.unlock(); audio.resume();
   const playing = audio.theme.startFull(); ui.tap.hidden = true; phase = 'title'; tapWall = nowMs(); showCard('title', app);

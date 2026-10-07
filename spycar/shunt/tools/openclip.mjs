@@ -16,8 +16,8 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: Number(opt.dsf || 2), hasTouch: true }); page.on('pageerror', e => console.log('PAGE ERROR', e.message.slice(0, 200)));
 await page.goto('file://' + path.join(here, '..', 'dist', 'shunt.html') + '?scale=' + (opt.scale || 1.25) + '&seed=' + seed); await page.waitForFunction(() => window.__shunt && window.__shunt.renderer().state && window.__shunt.renderer().state.modelsReady, null, { timeout: 120000, polling: 500 }).catch(() => {}); await page.waitForTimeout(1500);
 // the theme files in, as the loader would have decoded them
-const PCM = { theme_full: pcm('theme_full.m4a'), theme_loop: pcm('theme_loop.m4a') };
-await page.evaluate((P) => { const sh = window.__shunt, a = sh.audio; a.boot(); for (const n of ['theme_full', 'theme_loop']) { const u8 = Uint8Array.from(atob(P[n]), c => c.charCodeAt(0)); const f = new Float32Array(u8.buffer, 0, u8.length >> 2); const b = a.ctx.createBuffer(1, f.length, 22050); b.copyToChannel(f, 0); sh.files.set(n, b); } }, PCM);
+const PCM = { theme: pcm('theme_full_64k.m4a') };
+await page.evaluate((P) => { const sh = window.__shunt, a = sh.audio; a.boot(); for (const n of ['theme']) { const u8 = Uint8Array.from(atob(P[n]), c => c.charCodeAt(0)); const f = new Float32Array(u8.buffer, 0, u8.length >> 2); const b = a.ctx.createBuffer(1, f.length, 22050); b.copyToChannel(f, 0); sh.files.set(n, b); } }, PCM);
 const T = await page.evaluate(() => ({ intro: window.__shunt.T.intro }));
 const tapAt = 2.5, hitWait = null; let vt = 0; const log = []; let punchVT = -1, menuVT = -1, playVT = -1, tapVT = -1;
 const clock = async () => { await page.evaluate((ms) => { window.__clockMs = ms; }, vt * 1000 + 1000); };
@@ -46,7 +46,7 @@ if (!opt.noaudio) {
   const total = vt + 0.5, SR = 44100; const ev = { tap: tapVT, play: playVT, appear: playVT + T.intro.appear, slideEnd: playVT + T.intro.appear + T.intro.slide, roar: playVT + T.intro.roar, whip: playVT + T.intro.whipAt, go: playVT + (go === null ? T.intro.total : go) };
   const b64 = await page.evaluate(async ({ P, total, ev, T }) => {
     const sh = window.__shunt, audio = sh.audio, files = sh.files, SR = 44100; const off = new OfflineAudioContext(2, Math.ceil(SR * total), SR); audio.ctx = null; audio.noiseBuf = null; audio.drive = null; audio.init(off);
-    for (const n of ['theme_full', 'theme_loop']) { const u8 = Uint8Array.from(atob(P[n]), c => c.charCodeAt(0)); const f = new Float32Array(u8.buffer, 0, u8.length >> 2); const b = off.createBuffer(1, f.length, 22050); b.copyToChannel(f, 0); files.set(n, b); }
+    for (const n of ['theme']) { const u8 = Uint8Array.from(atob(P[n]), c => c.charCodeAt(0)); const f = new Float32Array(u8.buffer, 0, u8.length >> 2); const b = off.createBuffer(1, f.length, 22050); b.copyToChannel(f, 0); files.set(n, b); }
     const q = (t) => Math.ceil(t * SR / 128) * 128 / SR; const steps = []; const at = (t, fn) => steps.push([q(Math.max(0.01, t)), fn]);
     at(ev.tap, () => audio.theme.startFull()); at(ev.play, () => audio.theme.toLoop(1.6)); at(ev.roar, () => audio.introRoar()); at(ev.whip, () => { audio.slam(); audio.brake(); }); at(ev.slideEnd, () => audio.turbo(1)); at(ev.go, () => audio.turbo(1));
     for (let t = ev.appear; t < ev.go + 2; t += 0.04) { const k = Math.min(1, Math.max(0, (t - ev.appear) / T.slide)); const sliding = t < ev.slideEnd; at(t, () => { audio.setDrive({ slip: sliding ? 1 : 0, speed: sliding ? 0.6 * (1 - k) : 0 }); audio.setEngine(sliding ? 0.5 * (1 - k) : 0, true, { quiet: false }); audio.updateMusic(0.04, {}); }); }

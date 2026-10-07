@@ -7,6 +7,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1b1d22">
 <title>BERN-1</title>
+<meta name="apple-mobile-web-app-title" content="BERN-1">
+<link rel="apple-touch-icon" sizes="180x180" href="__APPLE_TOUCH_ICON__">
+<link rel="icon" type="image/png" href="__APPLE_TOUCH_ICON__">
 <style>
   /* Gray-box, sprint 1-4 build plus the audit's Sprint A (design/spy-car-audit-2.pdf). Plain shapes, colour means role. Portrait stage fills the viewport aspect; HUD top 15%, special button bottom corner. */
   :root {
@@ -146,7 +149,13 @@
   #card.over { justify-content: flex-end; padding-bottom: calc(26px + var(--safe-bottom, 0px)); background: linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.2) 38%, rgba(0,0,0,0.82) 52%); }
   /* the showroom title (Stop 3): the 3D showroom shows through; the logo sits at the top, PLAY and the small buttons at the bottom */
   #card.showroom { justify-content: flex-end; background: linear-gradient(to bottom, rgba(3,4,10,0.55) 0%, rgba(3,4,10,0) 24%, rgba(3,4,10,0) 58%, rgba(3,4,10,0.7) 82%); padding-bottom: calc(22px + var(--safe-bottom, 0px)); gap: 12px; }
+  /* the title art (assets/brand/bern1_title.webp, black background, drawn with screen blending so the black is the showroom): the text is only the fallback until the picture has loaded */
+  #card .logo img { display: none; width: 100%; height: auto; mix-blend-mode: screen; pointer-events: none; -webkit-user-drag: none; image-rendering: auto; }
+  #card .logo.img img { display: block; }
+  #card .logo.img .logoText { display: none; }
+  #card.showroom .logo.img { top: calc(10px + var(--safe-top, 0px)); font-size: 0; padding-left: 0; text-shadow: none; }
   #card.showroom .logo { position: absolute; left: 0; right: 0; top: calc(58px + var(--safe-top, 0px)); text-align: center; font-size: 64px; line-height: 1; letter-spacing: 0.14em; padding-left: 0.14em; color: #eafcff; text-shadow: 0 0 6px rgba(55,230,255,0.9), 0 0 26px rgba(55,230,255,0.6), 0 0 60px rgba(55,230,255,0.35); font-style: italic; }
+  #card .logo.img ~ .title { top: calc(198px + var(--safe-top, 0px)) !important; }
   #card.showroom .title { position: absolute; left: 0; right: 0; top: calc(144px + var(--safe-top, 0px)); font-size: 14px; letter-spacing: 0.42em; padding-left: 0.42em; color: rgba(255,255,255,0.72); font-weight: 700; }
   #card.showroom .score { font-size: 17px; letter-spacing: 0.18em; color: rgba(255,255,255,0.8); font-weight: 700; }
   #card.showroom .lines { font-size: 13px; color: rgba(255,255,255,0.55); }
@@ -196,7 +205,7 @@
       <div id="skipHint" hidden>TAP TO SKIP</div>
       <div id="punchFlash"></div>
       <div id="card" hidden>
-        <div class="logo" id="cardLogo" hidden>BERN-1</div>
+        <div class="logo" id="cardLogo" hidden><img id="logoImg" alt="BERN-1" draggable="false"><span class="logoText">BERN-1</span></div>
         <div class="title" id="cardTitle"></div>
         <div class="score" id="cardScore">0</div>
         <div class="stars" id="cardStars" hidden></div>

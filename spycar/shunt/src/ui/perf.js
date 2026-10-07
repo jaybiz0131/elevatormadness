@@ -5,6 +5,7 @@ import { modelLine } from '../render/three/glbLoad.js';
 import { crashLine } from '../sim/crash.js';
 import bench from '../../replays/beauty.json';
 import { S } from '../settings.js';
+import { files } from '../audio/files.js';
 // Show FPS (Settings > Developer > Show FPS, remembered; or ?debug=1): a small readout in the top right corner with the current frames
 // per second and the lowest over the last 10 seconds. FPS is measured over half-second windows; the low is the worst of the last 20
 // windows. Amber under 55. Draw calls and triangles are in the Frame counter (?perf=1).
@@ -16,7 +17,7 @@ function createDebug(Q, renderer) {
     n++; acc += dt; if (performance.now() - t < 500) return; t = performance.now();
     const fps = n / Math.max(1e-3, acc); n = 0; acc = 0; win[wi] = fps; wi = (wi + 1) % win.length; wn = Math.min(win.length, wn + 1);
     let low = fps; for (let k = 0; k < wn; k++) low = Math.min(low, win[k]);
-    const rs = renderer.stats ? renderer.stats() : null; el.textContent = `${fps.toFixed(0)} FPS\nLOW ${low.toFixed(0)} (10 s)` + (rs && renderer.gfxLevel ? `\n${renderer.gfxLevel().toUpperCase()} x${rs.scale.toFixed(2)}` : '') + '\n' + modelLine() + '\n' + crashLine() + (renderer.state && renderer.state.shaderErrors ? '\nSHADER ERRORS ' + renderer.state.shaderErrors : '') + (renderer.state && renderer.state.lastError ? '\n' + renderer.state.lastError : ''); el.classList.toggle('over', low < 55);
+    const rs = renderer.stats ? renderer.stats() : null; el.textContent = `${fps.toFixed(0)} FPS\nLOW ${low.toFixed(0)} (10 s)` + (rs && renderer.gfxLevel ? `\n${renderer.gfxLevel().toUpperCase()} x${rs.scale.toFixed(2)}` : '') + '\n' + modelLine() + '\n' + crashLine() + '\n' + files.audioLine() + (renderer.state && renderer.state.shaderErrors ? '\nSHADER ERRORS ' + renderer.state.shaderErrors : '') + (renderer.state && renderer.state.lastError ? '\n' + renderer.state.lastError : ''); el.classList.toggle('over', low < 55);
   };
 }
 export function createPerf(Q, renderer, hud) {

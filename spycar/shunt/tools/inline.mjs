@@ -7,12 +7,12 @@ let html = fs.readFileSync(new URL('index.html', dist), 'utf8');
 html = html.replace(/<script type="module"[^>]*src="([^"]+)"[^>]*><\/script>/g, (m, src) => '<script type="module">' + fs.readFileSync(new URL('.' + src, dist), 'utf8').replace(/<\/script/g, '<\\/script') + '</script>');
 html = html.replace(/<link rel="modulepreload"[^>]*>\n?/g, '');
 html = html.replace(/<link rel="stylesheet"[^>]*href="(\/assets\/[^"]+\.css)"[^>]*>/g, (m, href) => '<style>' + fs.readFileSync(new URL('.' + href, dist), 'utf8') + '</style>');
+// the home-screen icon: assets/brand/apple-touch-icon-180.png goes into the page as a data URL (the placeholder __APPLE_TOUCH_ICON__ in index.html), like the theme and the title art: nothing is fetched from beside the page
+const icon = 'data:image/png;base64,' + fs.readFileSync(new URL('../../../assets/brand/apple-touch-icon-180.png', import.meta.url)).toString('base64');
+html = html.replaceAll('__APPLE_TOUCH_ICON__', icon);
 fs.writeFileSync(new URL('shunt.html', dist), html);
 const i = html.indexOf('<title>'); const j = html.indexOf('</head>');
 const art = html.slice(i, j) + html.slice(html.indexOf('<body>') + 6, html.lastIndexOf('</body>'));
 fs.writeFileSync(new URL('artifact.html', dist), art.trim() + '\n');
-// Stop 7: the audio files stay out of the page: copied beside it in dist/audio (for a local server and for the published artifact's `files`), and the GitHub Pages copy reads the repo's assets/audio
-const audioSrc = new URL('../../../assets/audio/', import.meta.url); let audioNote = 'no audio files';
-if (fs.existsSync(audioSrc)) { fs.mkdirSync(new URL('audio/', dist), { recursive: true }); let n = 0, bytes = 0; for (const f of fs.readdirSync(audioSrc)) { if (!/\.(m4a|mp3|ogg|wav)$/.test(f)) continue; fs.copyFileSync(new URL(f, audioSrc), new URL('audio/' + f, dist)); n++; bytes += fs.statSync(new URL(f, audioSrc)).size; } audioNote = n + ' audio files (' + (bytes / 1048576).toFixed(1) + ' MB) in dist/audio, outside the page'; }
-fs.mkdirSync(new URL('../play/', import.meta.url), { recursive: true }); fs.writeFileSync(new URL('../play/index.html', import.meta.url), html.replace('<head>', '<head>\n<meta name="shunt-audio-base" content="../../../assets/audio/">'));
-console.log(audioNote + '; play/index.html (for GitHub Pages);', 'dist/shunt.html', (html.length / 1024).toFixed(0), 'KB; dist/artifact.html', (art.length / 1024).toFixed(0), 'KB');
+fs.mkdirSync(new URL('../play/', import.meta.url), { recursive: true }); fs.writeFileSync(new URL('../play/index.html', import.meta.url), html);   // (GitHub Pages: the same single file)
+console.log('play/index.html (for GitHub Pages); dist/shunt.html', (html.length / 1024).toFixed(0), 'KB; dist/artifact.html', (art.length / 1024).toFixed(0), 'KB');
