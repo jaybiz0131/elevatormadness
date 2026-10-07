@@ -22,8 +22,10 @@ export const files = {
   onChange(f) { this.waiters.push(f); },
   async load(ctx, name) {
     const info = FILES[name]; if (!info || this.state[name] === 'ready' || this.state[name] === 'loading') return this.buf[name] || null; this.state[name] = 'loading'; this.fire();
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try { const r = await fetch(urlOf(info)); if (!r.ok) throw new Error('HTTP ' + r.status); const data = await r.arrayBuffer(); this.bytes[name] = data.byteLength; this.buf[name] = await decode(ctx, data); this.state[name] = 'ready'; this.err[name] = ''; this.fire(); return this.buf[name]; }
+    // the published artifact serves .mp4 and not .m4a (same container, same bytes), so a .m4a that is not found is tried as .mp4, then once more
+    const tries = [urlOf(info), urlOf({ url: info.url.replace(/\.m4a$/, '.mp4') }), urlOf(info)];
+    for (let attempt = 0; attempt < tries.length; attempt++) {
+      try { const r = await fetch(tries[attempt]); if (!r.ok) throw new Error('HTTP ' + r.status); const data = await r.arrayBuffer(); this.bytes[name] = data.byteLength; this.buf[name] = await decode(ctx, data); this.state[name] = 'ready'; this.err[name] = ''; this.fire(); return this.buf[name]; }
       catch (e) { this.err[name] = String(e && e.message || e).slice(0, 80); }
     }
     this.state[name] = 'failed'; this.fire(); return null;

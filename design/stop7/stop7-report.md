@@ -34,6 +34,7 @@ It is part of the sim (`sim/intro.js`), so replays and the live loop agree on it
 
 ## 3. Audio as separate files
 - **Not in the page.** `assets/audio/*.m4a` are copied to `dist/audio/` by the build and published beside the page; the page size is unchanged by them (2.9 MB of placeholders sit outside it).
+- **The published artifact does not serve `.m4a`** (only `.mp4` among audio-capable types), so the artifact carries the same two files, byte for byte, as `audio/theme_full.mp4` and `audio/theme_loop.mp4`, and the loader tries `.m4a`, then `.mp4`, then `.m4a` once more. An m4a is an MP4 container; `decodeAudioData` reads the bytes, not the name. Checked here with a local server that had only the `.mp4` copies: the loader asked for the `.m4a` (404), then fetched the `.mp4` (200, both files); decoding it is the part that cannot run in headless Chromium.
 - **Loader (`audio/files.js`).** One manifest, `FILES`. A recording is added by putting the file in `assets/audio/` and adding one line (url, optional `loopStart`, `loopEnd`, `hit`); `files.get(name)` returns the decoded buffer (or null while loading), `audio.playFile(name, { loop, gain, rate })` plays it. Fetch and decode once, in order, one retry, nothing blocks the game. A comment in the file shows the line for Jack's engine recordings (`engine_idle`). `?audio=<base url>` tries another server by hand; the GitHub Pages copy reads the files from the repo's `assets/audio` folder through a meta tag.
 - **Music under the sound.** The theme runs under everything else (Music defaults to 80%) and ducks to 62% while the gatling fires and to 45% for about 0.8 s after a blast, then comes back by itself.
 - **Settings:** **Music** and **Effects** volume sliders (saved; Effects scales every sound, Music only the theme).
@@ -57,7 +58,7 @@ Software-GL render stepped in a virtual clock (`tools/openclip.mjs`): the soundt
 | Replay, live frame loop | `beauty.json` matches through the real frame loop (lite renderer, software GL): **38 of 38 hashes**, 105 s |
 | Draw calls | **71** worst frame in the opening clip; limit 150 (the in-run scene is unchanged from Stop 6's 101) |
 | Triangles | **184k** worst frame in the opening clip (limit 400k; Stop 6's in-run worst was 246k) |
-| Size | `dist/shunt.html` 13,181,448 bytes, **8,495 bytes (0.008 MB) more** than Stop 6 (13,172,953); limit +0.3 MB, 15 MB cap. The two m4a files (2.9 MB) are published beside it and are not counted |
+| Size | `dist/shunt.html` 13,181,515 bytes, **8,562 bytes (0.008 MB) more** than Stop 6 (13,172,953); limit +0.3 MB, 15 MB cap. The two m4a files (2.9 MB) are published beside it and are not counted |
 | Errors | none in the page on any bot run; no em dashes in the new player-facing text |
 | Bots (sync, final build, seeds 1 to 4) | skilled: A, C, A, C (104 to 135 s). casual: B, C, C, C (116 to 135 s). weak ("novice"): C, C, C, C (134 to 160 s). Every run reaches the city (Stop 6: A, A, C, A / A, C, C, C / C, C, C, C) |
 
