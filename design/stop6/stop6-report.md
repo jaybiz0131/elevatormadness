@@ -54,11 +54,11 @@ Also `proof/fire-on-facade-closeup.png` (flames, soot and chips on one facade).
 |---|---|
 | Puck mapping (real pointer events, `tools/puck.mjs`) | 14 of 14: touch middle = gas; up; right level and sagging = gas + fire; left level and sagging = gas + e-brake; down-right hard = brake + fire; centre slightly low = gas; pull down = full brake; held = reverse; back to gas; lift off = coast; simple GAS button |
 | Replays, sync | 7 of 7 new baselines match on two sync passes each (14 of 14); hashes 111, 300, 114, 300, 130, 300 and 90 |
-| Replay, live frame loop | LIVE_RESULT |
+| Replay, live frame loop | `beauty.json` matches through the real frame loop (the lite renderer, software GL): **90 of 90 hashes**, 223 s |
 | Draw calls | **101** worst frame across the four clips (66, 73, 98, 101); limit 150 |
 | Triangles | **246k** worst (limit 400k) |
 | Size | 13,172,953 bytes, **27,839 bytes (0.03 MB) more** than Stop 5 (limit +0.3 MB; 15 MB cap) |
-| Physics cost | PHYS_RESULT |
+| Physics cost | Rapier 0.16 ms a step with wrecks and pieces flying (90 s scripted run, 6 wrecks at most); the whole sim step 0.20 ms. Building boxes: about 100 static bodies in the window, created as chunks enter it |
 | **FPS** | **Not measured: Jack's phone is the gate (Show FPS, the 10 s low should be 50 or more).** New per-frame work: up to 56 cloak puffs, 96 decals (one draw), 22 fresh chips and 6 fires. Low graphics halves the cloak and uses fewer flames |
 | Buildings vs road | 0 offenders of 110,220 buildings (50 seeds, 2 configs), min 45.5 pt; the build fails below 40 pt |
 | Bots (sync, final build, seeds 1 to 4) | skilled: A, A, C, A (107 to 127 s). casual: A, C, C, C (122 to 133 s). weak ("novice"): C, C, C, C (143 to 156 s). Every run reaches the city; no input never gets there (3 armor lost, 19 to 38 U-turns) |
