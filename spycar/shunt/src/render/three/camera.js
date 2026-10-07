@@ -2,7 +2,7 @@
 // the road. Heading follows the road 0.4 s ahead through a critically damped spring. It pulls back and widens a little with speed,
 // rolls 5 degrees into a drift, and shakes by a capped offset. Every vector here is reused: no allocation per frame.
 import { PerspectiveCamera, Vector3, Quaternion, Euler, Raycaster } from 'three';
-import { clamp } from '../../sim/constants.js';
+import { clamp, REF, T } from '../../sim/constants.js';
 import { M } from './scale.js';
 import { ShotDirector, SHOTS } from './shots.js';
 export const CAM = { fov: 42, pitch: 47, dist: 76, pitchHi: 56, distHi: 92, fovSpeed: 12, distSpeed: 26, lowerThird: 1 / 3, yaw: 0, fixed: false, leadS: 0.4, leadCap: 0.44, spring: 14, roll: 5, shakeM: 1.2, shakeDeg: 2, look: 1.5, lean: 5, blend: 0.7, punchFov: 0.045, punchDist: 0.07, shakeFrac: 0.045, kickFrac: 0.03 };
@@ -28,7 +28,7 @@ export class RoadCamera {
     this.anchor = new Vector3(); this.pos = new Vector3(); this.fwd = new Vector3(); this.right = new Vector3(); this.q = new Quaternion(); this.e = new Euler();
     this.WP = { X: 0, Y: 0 }; this.psiInit = false; this.dir = new ShotDirector(); this.P = { pitch: 21, dist: 66, fov: 44, yaw: 0, lower: 0.38, lean: 5, aim: 0 }; this.T = { pitch: 21, dist: 66, fov: 44, yaw: 0, lower: 0.38, lean: 5, aim: 0, blend: 0.7 }; this.pInit = false; this.shot = 'base'; this.wp2 = { X: 0, Y: 0 };
   }
-  reset() { this.pInit = false; this.dir.reset(); this.psiInit = false; this.psiV = 0; this.zoom = 0; this.roll = 0; this.look = 0; this.fovKick = 0; this.lift = 0; this.blocked = false; }
+  reset() { this.iw = 1; this.pInit = false; this.dir.reset(); this.psiInit = false; this.psiV = 0; this.zoom = 0; this.roll = 0; this.look = 0; this.fovKick = 0; this.lift = 0; this.blocked = false; }
   // the meshes that may stand between the camera and the car (the city's building chunks): when one does, the camera lifts
   // toward the high view (pitchHi, distHi) until the line is clear again. Tested every other frame on the previous frame's position.
   setOccluders(group, city) { this.occluders = group; this.occCity = city || null; this.hit = new Vector3(); }
@@ -88,7 +88,23 @@ export class RoadCamera {
       this.pos.addScaledVector(this.right, sx); this.pos.y += sy; this.rollShake = CAM.shakeDeg * tr * noise1(elapsed * 23 + 3); } else this.rollShake = 0;
     const cam = this.cam; cam.position.copy(this.pos); cam.fov = fov; cam.updateProjectionMatrix();
     this.e.set(-(pitchDeg * Math.PI / 180), -psiC, (this.roll + this.rollShake) * Math.PI / 180, 'YXZ'); cam.quaternion.setFromEuler(this.e);
+    this.applyIntro(G, road, dt);
     cam.updateMatrixWorld();
+  }
+  // Stop 7: the opening scene. A low camera in front of where the hero will stop, looking back down the empty road (the pursuers' headlights come up behind the car); from T.intro.orbit it swings
+  // round the car, front to behind, on the road's right, and its pose melts into the normal chase camera by GO, so the hand-over is not a cut. A skip eases the same way over 0.45 s.
+  applyIntro(G, road, dt) {
+    const I = G.intro, cam = this.cam; if (!this.ip) { this.ip = new Vector3(); this.iq = new Quaternion(); this.ifov = 50; this.iw = 1; this.ia = new Vector3(); this.im = null; this.ih = new Vector3(); this.iu = new Vector3(0, 1, 0); this.la = new PerspectiveCamera(); this.nq = new Quaternion(); this.np = new Vector3(); }
+    if (!I && this.iw >= 1) return;
+    let w;
+    if (I) { const c = T.intro, t = I.t; road.world(REF, I.s, this.WP); this.ih.set(this.WP.X * M, road.at(I.s).elev * M, -this.WP.Y * M); const psi = road.frame(I.s).psi, fx = Math.sin(psi), fz = -Math.cos(psi), rx = Math.cos(psi), rz = Math.sin(psi);
+      const u3 = clamp((t - c.orbit) / (c.total - c.orbit), 0, 1), e = u3 * u3 * (3 - 2 * u3), th = Math.PI * (1 - e), R = 15 - 4 * e, side = 0.6 * R * Math.sin(th), ahead = -R * Math.cos(th);
+      this.ip.set(this.ih.x + fx * ahead + rx * (side + 2.2 * (1 - e)), this.ih.y + 1.15 + 3.2 * e, this.ih.z + fz * ahead + rz * (side + 2.2 * (1 - e)));
+      const k = e; const a = clamp(u3 * 5, 0, 1), aa = a * a * (3 - 2 * a), bx = this.ih.x - fx * 55, bz = this.ih.z - fz * 55; this.ia.set(bx + (this.ih.x - bx) * aa + fx * 2 * k, this.ih.y + 1.2, bz + (this.ih.z - bz) * aa + fz * 2 * k);   // from the far headlights to the car, then ahead of it
+      this.la.position.copy(this.ip); this.la.up.set(0, 1, 0); this.la.lookAt(this.ia); this.iq.copy(this.la.quaternion); this.ifov = 56; w = clamp((u3 - 0.4) / 0.6, 0, 1); w = w * w * (3 - 2 * w); this.iw = w; this.im = true; }
+    else { this.iw = Math.min(1, this.iw + dt / 0.45); w = this.iw; w = w * w * (3 - 2 * w); }
+    this.np.copy(cam.position); this.nq.copy(cam.quaternion); const nf = cam.fov;
+    cam.position.copy(this.ip).lerp(this.np, w); cam.quaternion.copy(this.iq).slerp(this.nq, w); cam.fov = this.ifov + (nf - this.ifov) * w; cam.updateProjectionMatrix(); this.pos.copy(cam.position);
   }
 }
 // Camera Lab (tune panel): edits to A, B, C and every shot are kept in this browser and survive a reload; DEFAULTS is what Reset puts back

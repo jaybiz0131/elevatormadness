@@ -23,7 +23,7 @@ export let G = null;
 // A fresh run from a seed and the settings the sim is allowed to read. The caller owns the seed (random, daily or replayed).
 export function newRun(seed, cfg) {
   const road = new Road(seed);
-  G = { road, rng: mulberry32(seed ^ 0x5bd1e995), seed, cfg: { sens: cfg.sens, autoDrift: cfg.autoDrift, hairpinWall: !!cfg.hairpinWall }, ticks: 0, steps: 0, ev: [], hashes: [], rec: null, rep: null, in: { off: 0, brake: false, gas: false, fire: false, special: false, slam: 0, flicks: 0, p: 0, thr: 0, ebrake: false, boost: false, mine: false }, playing: false, dead: false, t: 0, acc: 0, dist: 0, pdist: 0, speed: 0, cruise: T.drive.cruise, fwd: 0, x: REF, px: REF, vx: 0, targetX: REF, rawTargetX: REF, lean: 0, sq: 1,
+  G = { road, rng: mulberry32(seed ^ 0x5bd1e995), seed, cfg: { sens: cfg.sens, autoDrift: cfg.autoDrift, hairpinWall: !!cfg.hairpinWall, intro: !!cfg.intro }, ticks: 0, steps: 0, ev: [], hashes: [], rec: null, rep: null, in: { off: 0, brake: false, gas: false, fire: false, special: false, slam: 0, flicks: 0, p: 0, thr: 0, ebrake: false, boost: false, mine: false, skip: false }, playing: false, dead: false, t: 0, acc: 0, dist: 0, pdist: 0, speed: 0, cruise: T.drive.cruise, fwd: 0, x: REF, px: REF, vx: 0, targetX: REF, rawTargetX: REF, lean: 0, sq: 1,
         heading: 0, phi: 0, slip: 0, slipping: false, drifting: false, easyDrift: false, brakeOn: false, driftDir: 0, driftT: 0, driftTier: 0, driftCharge: 0, driftBank: 0, driftDirty: false, driftExitT: 0, wobble: 0,
         turbo: 0, turboT: 0, slipT: 0, slipBoostT: 0, braking: false, burnout: 0, popT: 0, puffAcc: 0, sparkAcc: 0, puffs: [], ribbons: [], ribL: null, ribR: null, slideVx: 0, rumbleT: 0, cornerCalls: 0, hairpins: 0, cornerLog: [], teach: null, teachT: 0, pulsed: false,
         wallHits: 0, wideT: 0, wallT: 0, drifts: 0, driftSlams: 0, turbos: 0, driftPoints: 0, driftTierMax: 0, topSpeed: 0, speedSum: 0, speedN: 0, districtsPassed: 0,
@@ -40,9 +40,10 @@ export function newRun(seed, cfg) {
         // driver control: which way the nose points down the road, the e-brake 180 in progress, the burnout charge and the fishtail
         face: 1, flip: null, flipLock: false, flipA: 0, flips: 0, flipDone: 0, bo: 0, burnouts: 0, fish: 0, fishV: 0, uturns: 0, chunks: [], chunkHits: [], chunkFlips: 0, broken: 0,
         // Stop 6: the smoke cloak (thickness, whether the hero is hidden, where the enemies think it is) and the damaged street (decals, fires, heat per facade cell)
-        cloak: 0, cloakOn: false, seenX: REF, seenY: 0, seenFwd: 0, offX: 0, offY: 0, offTX: 0, offTY: 0, offT: 0, cloaks: 0, lostSeen: 0, wideShots: 0, scars: [], fires: [], heatCells: [], chips: 0, facadeFires: 0, wallBooms: 0, scarN: 0 };
+        intro: null, heroHidden: false, introSkips: 0, cloak: 0, cloakOn: false, seenX: REF, seenY: 0, seenFwd: 0, offX: 0, offY: 0, offTX: 0, offTY: 0, offT: 0, cloaks: 0, lostSeen: 0, wideShots: 0, scars: [], fires: [], heatCells: [], chips: 0, facadeFires: 0, wallBooms: 0, scarN: 0 };
   crashReset();   // a fresh physics world for every run (replays rebuild it from the same start)
   G.x = REF; G.special = { kind: 'missiles', ammo: 3, level: 1 };   // Sprint 4: start armed, the supply truck tops it up
   return G;
 }
-export function beginRun() { G.burnout = 0.6; G.speed = 0; }
+// the run begins with the opening scene (the hero is not on the road until it blasts in; the run's clock starts at GO), or, with the opening off (tools), the old 0.6 s countdown
+export function beginRun() { G.speed = 0; if (G.cfg.intro) { G.intro = { t: 0, s: G.dist }; G.heroHidden = true; G.x = REF; G.px = REF; } else G.burnout = 0.6; }

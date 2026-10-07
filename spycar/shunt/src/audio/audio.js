@@ -1,13 +1,22 @@
 // Web Audio: engine and drive layers read G each frame; one-shot sounds arrive as sim events.
 import { S } from '../settings.js';
+import { files, FILES } from './files.js';
+import { Music } from './music.js';
 // 0.1 s of silence, 8 kHz mono 8-bit PCM, as a data URI (the media element that holds the playback session on iOS)
 const le16 = n => String.fromCharCode(n & 255, (n >> 8) & 255), le32 = n => le16(n & 0xffff) + le16(n >>> 16);
 const SILENT_WAV = 'data:audio/wav;base64,' + btoa('RIFF' + le32(36 + 800) + 'WAVEfmt ' + le32(16) + le16(1) + le16(1) + le32(8000) + le32(8000) + le16(1) + le16(8) + 'data' + le32(800) + '\x80'.repeat(800));
 export const audio = {
+  theme: { state: 'idle', time: () => -1, hit: () => null, startFull: () => false, toLoop() {}, update() {}, failed: () => true },   // replaced by the Music director when the context exists
   ctx: null, master: null, sfx: null, musicG: null, engine: null, engineGain: null, layers: [], nextBeat: 0, beat: 0,
   init(ctx) { if (this.ctx) return; try { this.ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } const c = this.ctx;
-    this.master = c.createGain(); this.master.connect(c.destination); this.sfx = c.createGain(); this.sfx.gain.value = S.sound ? 1 : 0; this.sfx.connect(this.master); this.musicG = c.createGain(); this.musicG.gain.value = S.music ? 0.5 : 0; this.musicG.connect(this.master);
+    this.master = c.createGain(); this.master.connect(c.destination); this.sfx = c.createGain(); this.sfx.gain.value = S.sound ? S.sfxVol : 0; this.sfx.connect(this.master); this.musicG = c.createGain(); this.musicG.gain.value = S.music ? 0.5 * S.musicVol : 0; this.musicG.connect(this.master);
+    this.musicDuck = c.createGain(); this.musicDuck.connect(this.musicG); this.theme = new Music(this); this.boomEnv = 0; this.duckNow = 1;
     this.makeBuffers(); this.makeEngine(); },
+  // Stop 7: called as the page opens, before any tap: make the (suspended) context so the theme can be fetched and decoded while the TAP TO START screen shows; iOS lets a context be
+  // created and used to decode before a gesture, and the first tap resumes it and starts the theme on the same call
+  boot() { this.init(); if (this.ctx && !this.booted) { this.booted = true; files.loadAll(this.ctx, ['theme_full', 'theme_loop']); } },
+  // a recording from assets/audio/ (files.js), once: opts { rate, gain, loop, when }; returns the source or null if the file is not there (the caller keeps its synthesised sound)
+  playFile(name, o = {}) { const b = files.get(name); if (!b || !this.ctx) return null; const c = this.ctx, s = c.createBufferSource(); s.buffer = b; s.playbackRate.value = o.rate || 1; const g = c.createGain(); g.gain.value = o.gain === undefined ? 1 : o.gain; if (o.loop) { s.loop = true; const f = FILES[name] || {}; s.loopStart = f.loopStart || 0; s.loopEnd = Math.min(f.loopEnd || b.duration, b.duration); } s.connect(g); g.connect(this.sfx); s.start(c.currentTime + (o.when || 0)); return s; },
   resume() { if (this.ctx && this.ctx.state !== 'running') { try { this.ctx.resume(); } catch (e) {} } },
   // Mobile unlock, called from real user gestures (touchend, click, keydown): resume the context, start a silent buffer (the iOS
   // unlock), and loop a silent <audio> element so the page counts as media playback and the ring/silent switch no longer mutes it.
@@ -69,7 +78,10 @@ export const audio = {
   shock() { this.noise(0.25, 0.9, 5000); this.tone('sawtooth', 2400, 200, 0.35, 0.16); this.tone('square', 1500, 120, 0.25, 0.1, 0.05); this.tone('sine', 70, 30, 0.4, 0.45, 0.04); },
   pop() { this.noise(0.05, 0.4, 2000); this.tone('square', 90, 60, 0.06, 0.12); },
   chirp() { this.tone('triangle', 1400, 900, 0.05, 0.06); },
-  apply() { if (!this.ctx) return; this.sfx.gain.value = S.sound ? 1 : 0; this.musicG.gain.value = S.music ? 0.5 : 0; },
+  apply() { if (!this.ctx) return; this.sfx.gain.value = S.sound ? S.sfxVol : 0; this.musicG.gain.value = S.music ? 0.5 * S.musicVol : 0; },
+  // per frame: the music sits under the engine, the guns and the explosions: it ducks to 62% while the gatling fires and to 45% for about 0.8 s after a blast, and comes back by itself;
+  // a loop asked for before its file was ready starts the moment it is
+  updateMusic(dt, o) { if (!this.ctx) return; o = o || {}; this.boomEnv = Math.max(0, (this.boomEnv || 0) - dt / 0.8); const tgt = Math.min(1 - 0.38 * (o.firing ? 1 : 0), 1 - 0.55 * this.boomEnv); this.duckNow += (tgt - this.duckNow) * Math.min(1, dt * (tgt < this.duckNow ? 14 : 3)); this.musicDuck.gain.value = this.duckNow; this.theme.update(); },
   // The engine (Stop 2 finish): a deep, heavy V8-like beast, built from scratch here, nothing sampled or copied.
   //  pulse loop: a 20 Hz train of uneven combustion thumps (a lopsided firing order) played faster as the revs rise, through a low-pass that
   //              never opens past 1.1 kHz, so there is no thin whine at top speed;
@@ -108,7 +120,7 @@ export const audio = {
     const load = running ? (o.gas ? 1 : 0.8) : 0.55; e.pulseG.gain.setTargetAtTime(0.95 * load + 0.2 * bark, t, 0.08); e.growlG.gain.setTargetAtTime((0.55 + 0.75 * Math.min(1, s)) * load + 0.35 * bark, t, 0.1); e.subG.gain.setTargetAtTime(0.3 + 0.06 * Math.min(1, s) + 0.45 * bark, t, 0.1);
     // under the gatling while it fires (down to 38%, quickly), back up in about a third of a second after
     const duckT = o.firing ? 0.38 : 1; this.engDuck += (duckT - this.engDuck) * (duckT < this.engDuck ? 0.25 : 0.06);
-    this.engBus.gain.setTargetAtTime((running ? 0.62 : 0.08) * this.engDuck * (S.sound ? 1 : 0), t, 0.05); this.setFiring(!!o.firing);
+    this.engBus.gain.setTargetAtTime((o.quiet ? 0 : running ? 0.62 : 0.08) * this.engDuck * (S.sound ? 1 : 0), t, 0.05); this.setFiring(!!o.firing);
     // pops and crackle when the throttle lifts at speed, a sputter now and then in limp
     const lift = this.prevGas && !o.gas && s > 0.3; this.prevGas = !!o.gas; if (lift) { this.crackleN = 3 + Math.floor(Math.random() * 4); this.crackleNext = t; }
     if (this.crackleN > 0 && t >= this.crackleNext) { this.crackleN--; this.crackleNext = t + 0.05 + Math.random() * 0.1; this.crackle(0.5 + Math.random() * 0.5); }
@@ -154,30 +166,41 @@ export const audio = {
     if (!this.bed) { if (!on) return; const bus = c.createGain(), o = c.createOscillator(), n = c.createBufferSource(), lp = c.createBiquadFilter(), g = c.createGain(); o.type = 'triangle'; o.frequency.value = 47; n.buffer = this.getNoise(); n.loop = true; lp.type = 'lowpass'; lp.frequency.value = 110; lp.Q.value = 1; g.gain.value = 0; o.connect(g); n.connect(lp); lp.connect(g); g.connect(bus); o.start(); n.start(0, 1.1); this.bed = { bus, g, live: false, last: 0 }; }
     const b = this.bed; if (on) { b.last = t; if (!b.live) { b.live = true; b.bus.connect(this.sfx); } b.g.gain.setTargetAtTime(0.1, t, 0.017); } else { b.g.gain.setTargetAtTime(0, t, 0.05); if (b.live && t - b.last > 0.7) { b.live = false; try { b.bus.disconnect(); } catch (e) {} } } },
   hit() { if (this.buf) this.play(this.buf.hit, 0.9 + Math.random() * 0.3, 0.28); },
-  kill(n) { this.bark(); if (!this.buf) return; this.play(this.buf.kill, 1 - Math.min(n, 5) * 0.015, 0.95); if (n > 1) this.tone('triangle', 500 + n * 90, 500 + n * 90, 0.12, 0.1, 0.05); },
-  ram(light) { if (this.buf) this.play(this.buf.ram, light ? 1.25 : 1, light ? 0.75 : 1); },
+  kill(n) { this.boomEnv = 1; this.bark(); if (!this.buf) return; this.play(this.buf.kill, 1 - Math.min(n, 5) * 0.015, 0.95); if (n > 1) this.tone('triangle', 500 + n * 90, 500 + n * 90, 0.12, 0.1, 0.05); },
+  ram(light) { this.boomEnv = Math.max(this.boomEnv || 0, 0.7); if (this.buf) this.play(this.buf.ram, light ? 1.25 : 1, light ? 0.75 : 1); },
   whoosh() { this.noise(0.3, 0.25, 3200); this.tone('sine', 900, 300, 0.25, 0.05); },
   win() { [523, 659, 784, 1046].forEach((f, i) => this.tone('triangle', f, f, 0.5, 0.14, i * 0.12)); this.tone('sawtooth', 130, 260, 0.9, 0.1); },
   // (the gatling's spin-up whine was removed in Stop 2: the barrels come up to speed silently, the rounds are the sound)
   setGunSpin() {},
-  cannon() { this.noise(0.14, 0.8, 1100); this.tone('square', 160, 50, 0.16, 0.2); this.tone('sine', 70, 30, 0.25, 0.35); },
+  cannon() { this.boomEnv = 1; this.noise(0.14, 0.8, 1100); this.tone('square', 160, 50, 0.16, 0.2); this.tone('sine', 70, 30, 0.25, 0.35); },
   ping(kill) { this.tone('triangle', kill ? 2600 : 2200, kill ? 3200 : 1800, 0.05, 0.05); },
-  crunch(bass) { this.noise(0.16, 0.7, 1800); this.tone('sawtooth', 140, 50, 0.16, 0.2); if (bass) this.tone('sine', 70, 30, 0.3, 0.4); },
-  wreck() { this.tone('sine', 180, 420, 0.08, 0.15); this.noise(0.5, 0.9, 1200, 0.06); this.tone('sine', 80, 28, 0.55, 0.5, 0.06); },
+  crunch(bass) { this.boomEnv = 1; this.noise(0.16, 0.7, 1800); this.tone('sawtooth', 140, 50, 0.16, 0.2); if (bass) this.tone('sine', 70, 30, 0.3, 0.4); },
+  wreck() { this.boomEnv = 1; this.tone('sine', 180, 420, 0.08, 0.15); this.noise(0.5, 0.9, 1200, 0.06); this.tone('sine', 80, 28, 0.55, 0.5, 0.06); },
   chain(n) { this.tone('triangle', 500 + n * 90, 500 + n * 90, 0.12, 0.12); if (n === 3 || n === 5 || n === 8) { this.tone('square', 330 * (n / 3), 660 * (n / 3), 0.25, 0.1, 0.05); this.tone('square', 495 * (n / 3), 990 * (n / 3), 0.35, 0.1, 0.15); } },
   chime() { this.tone('triangle', 660, 660, 0.1, 0.12); this.tone('triangle', 990, 990, 0.25, 0.12, 0.09); },
   horn() { this.tone('sawtooth', 300, 220, 0.4, 0.12); },
   damage() { this.noise(0.25, 0.9, 1500); this.tone('square', 880, 880, 0.08, 0.08, 0.05); this.tone('square', 880, 880, 0.08, 0.08, 0.2); },
   launch() { this.noise(0.5, 0.35, 600); this.tone('sawtooth', 120, 240, 0.5, 0.1); },
   land() { this.noise(0.12, 0.6, 500); this.tone('sine', 90, 50, 0.15, 0.25); },
-  stomp() { this.wreck(); this.tone('sine', 50, 25, 0.5, 0.5); },
+  stomp() { this.boomEnv = 1; this.wreck(); this.tone('sine', 50, 25, 0.5, 0.5); },
   missile() { this.noise(0.4, 0.5, 2500); this.tone('sawtooth', 400, 900, 0.4, 0.08); },
+  // Stop 7: the engine off-screen at the start of the opening: it climbs from a low rumble to a snarl as it comes in from the right (a pan from hard right to centre), a rush of tyre and air
+  // under it, and the revs fall off as the car slides to a stop
+  introRoar() { if (!this.ctx) return; const c = this.ctx, t = c.currentTime; const out = c.createGain(); out.gain.value = 0; let dest = out; if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.setValueAtTime(0.95, t); p.pan.linearRampToValueAtTime(0.1, t + 1.5); out.connect(p); p.connect(this.sfx); } else out.connect(this.sfx);
+    out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(0.9, t + 0.85); out.gain.setValueAtTime(0.9, t + 0.9); out.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(260, t); lp.frequency.exponentialRampToValueAtTime(1500, t + 0.85); lp.frequency.exponentialRampToValueAtTime(420, t + 2.1); lp.Q.value = 1.4;
+    const sh = c.createWaveShaper(); { const n = 256, cv = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; cv[i] = Math.tanh(x * 3.4); } sh.curve = cv; }
+    sh.connect(lp); lp.connect(out);
+    for (const [det, ty] of [[0, 'sawtooth'], [1.007, 'sawtooth'], [0.5, 'square']]) { const o = c.createOscillator(); o.type = ty; o.frequency.setValueAtTime(48 * (det || 1), t); o.frequency.exponentialRampToValueAtTime(150 * (det || 1), t + 0.9); o.frequency.exponentialRampToValueAtTime(70 * (det || 1), t + 2.1); const g = c.createGain(); g.gain.value = det === 0.5 ? 0.4 : 0.55; o.connect(g); g.connect(sh); o.start(t); o.stop(t + 2.3); }
+    const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.setValueAtTime(14, t); lfo.frequency.exponentialRampToValueAtTime(42, t + 0.9); lg.gain.value = 0.16; lfo.connect(lg); lg.connect(out.gain); lfo.start(t); lfo.stop(t + 2.3);   // the firing-order flutter
+    this.noise(1.6, 0.35, 2600); },
   slam() { this.tone('sawtooth', 200, 600, 0.12, 0.08); this.noise(0.08, 0.3, 3000); },
   nitro() { this.tone('sawtooth', 100, 500, 0.6, 0.12); this.noise(0.6, 0.4, 800); },
   sight() { this.tone('square', 1200, 1200, 0.06, 0.05); this.tone('square', 1200, 1200, 0.06, 0.05, 0.12); },
-  death() { this.noise(1.0, 1.0, 900); this.tone('sawtooth', 200, 30, 1.0, 0.25); this.tone('sine', 60, 20, 1.2, 0.5); },
+  death() { this.boomEnv = 1; this.noise(1.0, 1.0, 900); this.tone('sawtooth', 200, 30, 1.0, 0.25); this.tone('sine', 60, 20, 1.2, 0.5); },
   // music: three procedural layers tied to the director's wave intensity
-  music(dt, intensity) { if (!this.ctx || !S.music) return; const c = this.ctx; if (c.currentTime < this.nextBeat) return; const bpm = 128, beatLen = 60 / bpm; this.nextBeat = Math.max(c.currentTime, this.nextBeat) + beatLen / 2; const b = this.beat++;
+  music(dt, intensity) { if (!this.ctx || !S.music || !this.theme.failed()) return;   // the old synth music plays only if both theme files failed to load
+    const c = this.ctx; if (c.currentTime < this.nextBeat) return; const bpm = 128, beatLen = 60 / bpm; this.nextBeat = Math.max(c.currentTime, this.nextBeat) + beatLen / 2; const b = this.beat++;
     const root = [55, 55, 65.4, 49][Math.floor(b / 16) % 4];
     if (b % 2 === 0) this.tone('square', root, root, 0.18, 0.08, 0, this.musicG);                               // layer 1: bass pulse
     if (intensity >= 1 && b % 4 === 2) this.tone('triangle', root * 4, root * 4, 0.08, 0.05, 0, this.musicG);  // layer 2: off-beat tick

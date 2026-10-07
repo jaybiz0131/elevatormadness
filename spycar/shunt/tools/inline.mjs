@@ -11,5 +11,8 @@ fs.writeFileSync(new URL('shunt.html', dist), html);
 const i = html.indexOf('<title>'); const j = html.indexOf('</head>');
 const art = html.slice(i, j) + html.slice(html.indexOf('<body>') + 6, html.lastIndexOf('</body>'));
 fs.writeFileSync(new URL('artifact.html', dist), art.trim() + '\n');
-fs.mkdirSync(new URL('../play/', import.meta.url), { recursive: true }); fs.writeFileSync(new URL('../play/index.html', import.meta.url), html);
-console.log('play/index.html (for GitHub Pages);', 'dist/shunt.html', (html.length / 1024).toFixed(0), 'KB; dist/artifact.html', (art.length / 1024).toFixed(0), 'KB');
+// Stop 7: the audio files stay out of the page: copied beside it in dist/audio (for a local server and for the published artifact's `files`), and the GitHub Pages copy reads the repo's assets/audio
+const audioSrc = new URL('../../../assets/audio/', import.meta.url); let audioNote = 'no audio files';
+if (fs.existsSync(audioSrc)) { fs.mkdirSync(new URL('audio/', dist), { recursive: true }); let n = 0, bytes = 0; for (const f of fs.readdirSync(audioSrc)) { if (!/\.(m4a|mp3|ogg|wav)$/.test(f)) continue; fs.copyFileSync(new URL(f, audioSrc), new URL('audio/' + f, dist)); n++; bytes += fs.statSync(new URL(f, audioSrc)).size; } audioNote = n + ' audio files (' + (bytes / 1048576).toFixed(1) + ' MB) in dist/audio, outside the page'; }
+fs.mkdirSync(new URL('../play/', import.meta.url), { recursive: true }); fs.writeFileSync(new URL('../play/index.html', import.meta.url), html.replace('<head>', '<head>\n<meta name="shunt-audio-base" content="../../../assets/audio/">'));
+console.log(audioNote + '; play/index.html (for GitHub Pages);', 'dist/shunt.html', (html.length / 1024).toFixed(0), 'KB; dist/artifact.html', (art.length / 1024).toFixed(0), 'KB');

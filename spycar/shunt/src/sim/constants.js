@@ -53,6 +53,11 @@ export const T = {
   // half a turn in `flipT` s (scrubbing `flipDrag`); with gas past `burnThr` below `burnStop` pt/s it is a burnout: held at least `burnMin` s (up to `burnMax`), letting go launches
   // the car at `launch` pt/s with up to `burnTurbo` of turbo for `burnFor` s. The fishtail is a damped spring on the yaw (`fishK`, `fishC`) kicked by `fishKick`.
   ebrake: { decel: 700, flipU: 1.5, flipSpeed: 160, flipBendV: 400, flipT: 0.5, flipDrag: 1.6, burnThr: 0.4, burnStop: 60, burnMin: 0.4, burnMax: 1.6, launch: 340, burnTurbo: 420, burnFor: 1.0, fishK: 40, fishC: 3.5, fishKick: 90, fishSlide: 40 },
+  // Stop 7: the opening. Seconds from PLAY to GO (the clock of the run starts at GO): an empty road and a beat of quiet (`quiet`), an engine off-screen (`roar`), the hero blasting
+  // in from the screen's right at `appear` and sliding to a stop over `slide`, a 180 whipped between `whipAt` and `whipAt + whipFor` (nose to the camera round to facing down the road),
+  // the pursuers' headlights flaring from `flare`, the camera swinging from the front of the car to behind it from `orbit` to `total` (GO). The hero stops at the road's centre; it arrives
+  // from `from` pt (across, along) away along a diagonal.
+  intro: { total: 4.4, quiet: 1.15, roar: 0.7, appear: 1.15, slide: 0.95, whipAt: 1.32, whipFor: 0.72, flare: 1.9, orbit: 2.5, from: [190, 170] },
   // Stop 6: the smoke cloak. `G.cloak` (0..1) is how thick the smoke is round the hero: a burnout, a long drift, a 180 and a skidding e-brake pour it in (`burn`,
   // `drift` ramping over `driftRamp` s after `driftAfter` s, `flip`, `skid` per second); it thins at `decay` a second and faster the quicker the car moves (it
   // leaves the cloud behind, `speedDecay` per 1,000 pt/s). Above `on` the hero is hidden: enemies lose track (they steer for where it was, `off` pt of wander, and a
@@ -96,7 +101,7 @@ export const T = {
   // the pacing director: the first wave at `first` s, then a wave every 8 to 15 s (shorter as the run goes on); with no threat in the
   // window for `floor` s (or fewer than the tier's minimum for `floorMore` s) a filler enemy appears at once, so the road is never quiet for long and never for 5 s. Weave lines of slow traffic,
   // pickups when armor or missiles run low, and the near-miss bonus.
-  pace: { tierTime: 240, first: 3.5, waveMin: 8, waveMax: 15, floor: 0.3, floorMore: 0.8, window: [-700, 3200], visible: [-300, 1800], fillCool: 1.6, weaveEvery: [12, 18], pickupEvery: [12, 20], caps: [3, 4, 5, 6], nearMiss: 16 },
+  pace: { tierTime: 240, first: 0.15, waveMin: 8, waveMax: 15, floor: 0.3, floorMore: 0.8, window: [-700, 3200], visible: [-300, 1800], fillCool: 1.6, weaveEvery: [12, 18], pickupEvery: [12, 20], caps: [3, 4, 5, 6], nearMiss: 16 },
   // score by cause (audit, "Give the kills back to the player"): a wreck the player caused pays base × the cause multiplier;
   // the car is the main weapon, so Slam, shunt, ram, wall and oil kills pay 3× a gun kill; enemy-on-enemy accidents pay nothing
   score: { weak: 100, bruiser: 250, gunner: 250, armored: 400, cause: { gun: 1, missile: 1, mine: 3, slam: 3, shunt: 3, ram: 3, rail: 3, wall: 3, oil: 3, stomp: 3, chain: 2, barrel: 2, pileup: 2 }, pileUp: 150, civPile: 450,

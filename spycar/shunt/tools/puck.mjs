@@ -8,7 +8,7 @@ const here = path.dirname(fileURLToPath(import.meta.url)); const out = path.reso
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true });
 const errors = []; page.on('pageerror', e => errors.push(e.message.slice(0, 200)));
-await page.goto('file://' + path.join(here, '..', 'dist', 'shunt.html') + '?lite=1&seed=3'); await page.waitForFunction(() => window.__shunt && window.__shunt.G); await page.waitForTimeout(800);
+await page.goto('file://' + path.join(here, '..', 'dist', 'shunt.html') + '?lite=1&intro=0&seed=3'); await page.waitForFunction(() => window.__shunt && window.__shunt.G); await page.waitForTimeout(800);
 await page.evaluate(() => { window.__shunt.startPlaying(); window.__shunt.runSteps(80); });
 const st = () => page.evaluate(() => { const g = window.__shunt.G; return { thr: +g.in.thr.toFixed(2), fire: g.in.fire, eb: g.in.ebrake, speed: Math.round(g.speed), shots: g.shots }; });
 const steps = (n) => page.evaluate((n) => window.__shunt.runSteps(n), n);

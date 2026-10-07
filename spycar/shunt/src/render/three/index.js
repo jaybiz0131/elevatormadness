@@ -109,7 +109,7 @@ export function createThreeRenderer(canvas, opts = {}) {
   }
   function render(dt, st) {
     if (state.lost) return;
-    if (st.phase === 'title' && showroom && !NO_SHOWROOM) { renderShowroom(dt, st); return; }
+    if ((st.phase === 'title' || st.phase === 'tap') && showroom && !NO_SHOWROOM) { renderShowroom(dt, st); return; }
     if (showroomOn) useScene(false); state.elapsed = st.elapsed; const G = st.G; roadRef = G.road;
     const alpha = clamp(G.acc * 120, 0, 1); let rx, rdist, frame = null;
     if (st.phase === 'over' && G.replay.count) { const R = G.replay; const span = R.count / 30 / 0.6 + 0.5; const t = G.replayT % span; const idx = Math.min(R.count - 1, Math.floor(t * 0.6 * 30)); frame = R.frames[(R.head - R.count + idx + 45 * 2) % 45]; rx = frame.x; rdist = frame.y; }

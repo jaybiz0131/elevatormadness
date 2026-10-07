@@ -133,3 +133,10 @@ director, the hood gatling with heavy hit and kill feedback, and a three minute 
 Jack's v27 verdict: awesome, much more fun. This stop fixed the puck (touching it is gas; fire and e-brake never cancel it), gave the tyres a voice (screech, a heavier gatling), added the smoke
 cloak (burnouts and long drifts hide the hero, enemies lose track), stopped buildings standing in the road (a layout module and a build gate) and made the street take damage (chips, facade fires,
 wrecks that blow up against buildings). See `design/stop6/stop6-report.md`. Next stop (not started): heat, roadblocks, the drone, enemy weapons, audio loaded as separate files.
+
+
+## Update (2026-10-07): Sprint D, Stop 7, the first 30 seconds
+Stop 6 was accepted. This stop built TAP TO START with the theme (the logo punches in on the beat, the music carries through the menus and crossfades into the loop when the run starts), replaced the starting ramp with
+a 4.4 s opening scene (the hero blasts in sliding sideways, whips a 180 in tyre smoke, the pursuers' headlights flare, the camera swings round to behind it, GO), moved the music to separate published files with a loader for
+later recordings, added Music and Effects sliders, and added a Puck section to the tune panel. The theme files are placeholders until Jack's arrive. See `design/stop7/stop7-report.md`. Next stop (not started): heat,
+roadblocks, the drone, enemy weapons.

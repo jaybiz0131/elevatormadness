@@ -5,12 +5,13 @@
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { CAM_PRESETS, setCamPreset, camBase, labSave, labReset } from './camera.js';
 import { SHOTS, SHOT_NAMES } from './shots.js';
+import { PUCK, PUCK_DEFAULT, savePuck, input } from '../../input/input.js';
 const CSS = `.lil-gui.tune { --font-size: 13px; --input-font-size: 13px; --widget-height: 30px; --title-height: 36px; --name-width: 44%; --font-family: var(--font-body);
   position: fixed; right: 8px; top: calc(8px + env(safe-area-inset-top, 0px)); z-index: 50; width: min(300px, 86vw); max-height: 80vh; overflow: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }`;
 function copy(text) { console.log(text); try { if (navigator.clipboard) return navigator.clipboard.writeText(text); } catch (e) {} const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch (e) {} t.remove(); }
 export function createTune(renderer) {
   if (!document.getElementById('tuneCss')) { const s = document.createElement('style'); s.id = 'tuneCss'; s.textContent = CSS; document.head.appendChild(s); }
-  let gui = null, open = { 'Camera Lab': false, 'Sky and fog': false, Light: false, Post: false, Grade: false, 'City and road': false };
+  let gui = null, tick = 0, open = { 'Camera Lab': false, 'Sky and fog': false, Light: false, Post: false, Grade: false, 'City and road': false, Puck: true };
   function build(startOpen) {
     if (gui) { for (const f of gui.folders) open[f._title] = !f._closed; gui.destroy(); }
     const P = renderer.P; const re = () => renderer.applyLook();
@@ -33,6 +34,13 @@ export function createTune(renderer) {
     for (const k of Object.keys(CAM_PRESETS)) { const g = f6.addFolder('Camera ' + k + (k === 'A' ? ' (high)' : k === 'B' ? ' (chase)' : ' (close)')); g.close(); rig(CAM_PRESETS[k], g, []); g.add(CAM_PRESETS[k], 'pitchHi', 0, 80, 0.5).name('lift angle').onChange(sync); g.add(CAM_PRESETS[k], 'distHi', 5, 140, 0.5).name('lift distance').onChange(sync); }
     for (const k of Object.keys(SHOTS)) { const g = f6.addFolder(SHOT_NAMES[k] || k); g.close(); rig(SHOTS[k], g, ['yaw']); if ('aim' in SHOTS[k]) g.add(SHOTS[k], 'aim', 0, 40, 1).name('aim at exit (deg)').onChange(sync); if ('hold' in SHOTS[k]) g.add(SHOTS[k], 'hold', 1, 3, 0.1).name('length (s)').onChange(sync); }
     f6.add({ copy() { copy(JSON.stringify({ presets: CAM_PRESETS, shots: SHOTS })); } }, 'copy').name('Copy camera values'); f6.add({ reset() { labReset(); refreshAll(); } }, 'reset').name('Reset cameras');
+    // Stop 7: the control puck. The numbers are fractions of the puck's radius (measured from its centre). They apply at once and are kept in this browser; Copy puck values puts them on the clipboard.
+    // The readout shows what the thumb is telling the car right now (try it with a thumb on the puck while this panel is open)
+    const f7 = folder('Puck'); const live = { gas: '', fire: '', ebrake: '' }; const pk = () => { savePuck(); };
+    f7.add(PUCK, 'lift', 0.05, 0.9, 0.01).name('gas lifts at (middle)').onChange(pk); f7.add(PUCK, 'liftSide', 0.2, 1.0, 0.01).name('gas lifts at (fire, e-brake)').onChange(pk); f7.add(PUCK, 'run', 0.05, 0.8, 0.01).name('then full brake after').onChange(pk); f7.add(PUCK, 'zone', 0.15, 0.7, 0.01).name('fire / e-brake from').onChange(pk);
+    f7.add(live, 'gas').name('gas now').listen().disable(); f7.add(live, 'fire').name('fire now').listen().disable(); f7.add(live, 'ebrake').name('e-brake now').listen().disable();
+    if (tick) clearInterval(tick); tick = setInterval(() => { const t = input.puckId !== null ? input.puckThr : 0; live.gas = input.puckId === null ? 'off the puck (coast)' : t >= 0.99 ? 'full gas' : t > 0.05 ? Math.round(t * 100) + '% gas' : t > -0.05 ? 'coast' : Math.round(-t * 100) + '% brake'; live.fire = input.puckFire ? 'FIRE' : '-'; live.ebrake = input.puckEb ? 'E-BRAKE' : '-'; }, 100);
+    f7.add({ copy() { copy(JSON.stringify(PUCK)); } }, 'copy').name('Copy puck values'); f7.add({ reset() { Object.assign(PUCK, PUCK_DEFAULT); pk(); refreshAll(); } }, 'reset').name('Reset puck');
     gui.add({ copy() { copy(JSON.stringify(renderer.P)); } }, 'copy').name('Copy look JSON');
     gui.add({ reset() { renderer.resetLook(); build(true); } }, 'reset').name('Reset this look');
     if (!startOpen) gui.close();

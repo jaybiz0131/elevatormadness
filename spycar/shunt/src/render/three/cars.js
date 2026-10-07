@@ -131,6 +131,7 @@ export class CarSystem {
     // the imported hero turns its wheels with the road speed and lights its tail bar under braking
     const dtE = Math.min(0.1, Math.max(0, elapsed - (this.lastE ?? elapsed))); this.lastE = elapsed;
     if (this.heroGlb && this.heroGlb.visible) this.heroGlb.userData.tick(dtE, (st.phase === 'over' ? 0 : G.speed) * M, !!(G.in && G.in.brake) || !!G.braking);
+    if (G.heroHidden) { this.player.visible = false; this.lastShots = G.shots; return; }   // Stop 7: the opening scene: the road is empty until the hero blasts in
     const m = this.player; const spin = G.gunSpin || 0; const z = G.jumpZ; const lift = z * 3.5; const lean = (st.lean !== undefined ? st.lean : G.lean) * Math.PI / 180 + (st.phase === 'over' ? 0 : (G.face < 0 ? Math.PI : 0) + G.flipA + G.fish);   // driver control: the nose can point back down the road, the 180 and the fishtail
     this.place(m, G, rx, rdist, lean, lift); m.scale.set((2 - G.sq), G.sq, 1 + z * 0.1);
     // Stop 3: the body. Roll with the lateral load and squat or dive with the speed change (G.body, stepped in the sim); in a hard turn the

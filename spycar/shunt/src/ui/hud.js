@@ -65,7 +65,7 @@ export function createHud(container, renderer) {
   const set = (k, v, f) => { if (last[k] !== v) { last[k] = v; f(v); } };
   const pt = { x: 0, y: 0, visible: false };
   function update(st) {
-    const G = st.G; const phase = st.phase; el.hidden = phase === 'title';
+    const G = st.G; const phase = st.phase; el.hidden = phase === 'title' || phase === 'tap';
     set('score', G.score, v => nScore.textContent = fmt(v));
     set('best', Math.max(G.score, st.best), v => bestEl.textContent = 'BEST ' + fmt(v));
     set('armor', G.armor, v => { for (let i = 0; i < armorBars.length; i++) armorBars[i].classList.toggle('on', i < v); });

@@ -4,9 +4,16 @@ import { H, REF, STEP, T } from '../sim/constants.js';
 import { G } from '../sim/state.js';
 import { THR_Q, deriveInput } from '../sim/step.js';
 import { stage, ui, view } from '../ui/dom.js';
+// Stop 7: the puck's numbers, live, so the tune panel can change them on the phone (kept in this browser; Copy gives the values). `lift`: how far down (of the puck's radius) the thumb
+// goes before the gas starts to ease off in the middle; `liftSide`: the same in the FIRE and E-BRAKE zones; `run`: how much further down it is from there to full brake;
+// `zone`: how far sideways (of the radius) the thumb goes before FIRE or the E-BRAKE starts.
+export const PUCK = { lift: 0.30, liftSide: 0.62, run: 0.30, zone: 0.38 };
+export const PUCK_DEFAULT = { ...PUCK };
+try { const d = JSON.parse(localStorage.getItem('shunt-puck') || 'null'); if (d) for (const k in PUCK) if (typeof d[k] === 'number') PUCK[k] = d[k]; } catch (e) {}
+export function savePuck() { try { localStorage.setItem('shunt-puck', JSON.stringify(PUCK)); } catch (e) {} }
 export const TRAIL = 24;   // ring of recent thumb samples {x, t(ms, event timeStamp)}
 export const input = {
-  playing: false, allowIdleTouch: true, now: 0, id: null, anchor: null, carAnchor: 0, cur: null, keys: {}, trail: [], trailN: 0, flickT: -1e9, lastKeyTap: { k: null, t: -9 }, brake: false, padId: null, gas: false, gasId: null, fireHeld: false, fireId: null, slamReq: 0, specialReq: false, flickN: 0, boostReq: false, mineReq: false, holdTimer: 0, puckId: null, puckThr: 0, puckFire: false, puckEb: false, ebHeld: false, ebId: null,
+  playing: false, allowIdleTouch: true, now: 0, id: null, anchor: null, carAnchor: 0, cur: null, keys: {}, trail: [], trailN: 0, flickT: -1e9, lastKeyTap: { k: null, t: -9 }, brake: false, padId: null, gas: false, gasId: null, fireHeld: false, fireId: null, slamReq: 0, specialReq: false, flickN: 0, boostReq: false, mineReq: false, holdTimer: 0, skipReq: false, introOn: false, introSkipOK: false, puckId: null, puckThr: 0, puckFire: false, puckEb: false, ebHeld: false, ebId: null,
   reset() { this.id = null; this.anchor = null; this.cur = null; this.trailN = 0; this.brake = false; this.padId = null; this.gas = false; this.gasId = null; this.fireHeld = false; this.fireId = null; this.slamReq = 0; this.specialReq = false; this.flickN = 0; this.boostReq = false; this.mineReq = false; clearTimeout(this.holdTimer); this.puckId = null; this.puckThr = 0; this.puckFire = false; this.puckEb = false; this.ebHeld = false; this.ebId = null; setPuck(0, 0, false); ui.ebrake.classList.remove('held'); ui.pad.classList.remove('held'); ui.gas.classList.remove('held'); ui.fire.classList.remove('held'); },
   requestSlam(dir) { this.slamReq = dir; }, requestSpecial() { this.specialReq = true; },
   // one snapshot per fixed step: everything the simulation may read from the player. The keyboard moves the anchor here, in step time.
@@ -15,7 +22,7 @@ export const input = {
   snapshot(out, playing) { const fs = this.mirror(); if (this.keys.left || this.keys.right) this.carAnchor += fs * ((this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0)) * T.maxLateral * S.sens * STEP; let off = this.carAnchor; if (this.anchor && !(this.keys.left || this.keys.right)) off += fs * this.thumbOff(); if (!Number.isFinite(off)) { off = 0; this.carAnchor = 0; }   // a NaN here would make a replay (JSON turns NaN into null) differ from the run
     // driver control: the throttle comes from the puck while a thumb is on it, else from GAS and BRAKE (buttons or keys); quantised so the replay sees the same number
     let thr = this.puckId !== null ? this.puckThr : ((this.gas || this.keys.gas) ? 1 : 0) - ((this.brake || this.keys.brake) ? 1 : 0); thr = Math.round(Math.max(-1, Math.min(1, thr)) * THR_Q) / THR_Q;
-    out.off = off; out.thr = thr; out.ebrake = this.ebHeld || this.puckEb || !!this.keys.ebrake; deriveInput(out); out.fire = this.fireHeld || this.puckFire || !!this.keys.fire; out.special = this.specialReq; out.slam = this.slamReq; out.flicks = this.flickN; out.p = playing ? 1 : 0; out.boost = this.boostReq; out.mine = this.mineReq; this.slamReq = 0; this.specialReq = false; this.flickN = 0; this.boostReq = false; this.mineReq = false; return out; },
+    out.off = off; out.thr = thr; out.ebrake = this.ebHeld || this.puckEb || !!this.keys.ebrake; deriveInput(out); out.fire = this.fireHeld || this.puckFire || !!this.keys.fire; out.special = this.specialReq; out.slam = this.slamReq; out.flicks = this.flickN; out.p = playing ? 1 : 0; out.boost = this.boostReq; out.mine = this.mineReq; out.skip = this.skipReq && this.introOn; this.skipReq = false; this.slamReq = 0; this.specialReq = false; this.flickN = 0; this.boostReq = false; this.mineReq = false; return out; },
   // driver control: with the car turned round (G.face < 0) the camera looks back down the road, so the thumb and the keys are mirrored to keep "right on the
   // screen" meaning right; a bot (raw) steers in road space. thumbOff: the thumb's pull from where it touched down, in road pt
   mirror() { return G && !this.raw && G.face < 0 ? -1 : 1; },
@@ -52,7 +59,8 @@ stage.addEventListener('pointerdown', e => {
   if (e.target.closest && e.target.closest('.tap')) return;
   e.preventDefault(); app.onTouch();
   if (!app.canTouch()) return;
-  app.onStart();
+  if (input.introOn && input.introSkipOK) input.skipReq = true;   // a tap skips the opening, once it has been seen
+  app.onStart('pointer');
   const p = stagePoint(e); input.down(e.pointerId, p.x, p.y, e.timeStamp);
   try { stage.setPointerCapture(e.pointerId); } catch (err) {}
 });
@@ -61,7 +69,7 @@ stage.addEventListener('pointermove', e => { const list = e.getCoalescedEvents ?
 const upH = e => input.up(e.pointerId);
 stage.addEventListener('pointerup', upH); stage.addEventListener('pointercancel', upH);
 const KEYS = { ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', ' ': 'fire', j: 'fire', f: 'fire', k: 'special', x: 'special', q: 'slamL', e: 'slamR', Shift: 'ebrake', c: 'ebrake', s: 'brake', ArrowDown: 'brake', ArrowUp: 'gas', w: 'gas', b: 'boost', m: 'mine' };
-window.addEventListener('keydown', e => { const k = KEYS[e.key]; if (!k) { if (e.key === 'p' || e.key === 'Escape') app.onPause(); return; } e.preventDefault(); app.onTouch(); if (e.repeat) return; app.onStart(); if (app.onRestartKey && k === 'fire' && app.onRestartKey()) return; if (k === 'special') input.requestSpecial(); else input.key(k); input.keys[k] = true; if (k === 'brake') { input.brake = true; ui.pad.classList.add('held'); } if (k === 'gas') ui.gas.classList.add('held'); if (k === 'fire') ui.fire.classList.add('held'); });
+window.addEventListener('keydown', e => { const k = KEYS[e.key]; if (!k) { if (e.key === 'p' || e.key === 'Escape') app.onPause(); return; } e.preventDefault(); app.onTouch(); if (e.repeat) return; app.onStart('key'); if (input.introOn && input.introSkipOK) input.skipReq = true; if (app.onRestartKey && k === 'fire' && app.onRestartKey()) return; if (k === 'special') input.requestSpecial(); else input.key(k); input.keys[k] = true; if (k === 'brake') { input.brake = true; ui.pad.classList.add('held'); } if (k === 'gas') ui.gas.classList.add('held'); if (k === 'fire') ui.fire.classList.add('held'); });
 window.addEventListener('keyup', e => { const k = KEYS[e.key]; if (k) { e.preventDefault(); input.keys[k] = false; if (k === 'brake') { input.brake = false; ui.pad.classList.remove('held'); } if (k === 'gas') ui.gas.classList.remove('held'); if (k === 'fire') ui.fire.classList.remove('held'); } });
 // gas and fire: hold buttons like the pedal pad
 for (const [el, field, idField] of [[ui.gas, 'gas', 'gasId'], [ui.fire, 'fireHeld', 'fireId']]) { let y0 = 0, swiped = false; el.addEventListener('pointerdown', e => { e.preventDefault(); app.onTouch(); input[field] = true; input[idField] = e.pointerId; y0 = e.clientY; swiped = false; el.classList.add('held'); try { el.setPointerCapture(e.pointerId); } catch (err) {} });
@@ -85,12 +93,11 @@ ui.ebrake.addEventListener('pointerup', ebUp); ui.ebrake.addEventListener('point
 // the puck: the thumb's offset from the puck's centre, over 40% of its size, is the stick. Vertical: gas up (analog), coast in the middle, brake and then
 // reverse down. Horizontal: past 38% right the gatling fires, past 38% left the e-brake holds; both combine with the throttle (gas plus guns up-right,
 // standing fire down-right). The dot follows the thumb; a short buzz marks entering FIRE, E-BRAKE or crossing from gas to brake.
-const PZ = 0.38, BRK = [0.3, 0.62, 0.3];   // where the pull down starts to lift (centre, fire and e-brake zones) and how far it runs to full brake
 function puckMove(e) { const r = ui.puck.getBoundingClientRect(); const R = r.width * 0.4; let vx = (e.clientX - (r.left + r.width / 2)) / R, vy = (e.clientY - (r.top + r.height / 2)) / R; const m = Math.hypot(vx, vy); if (m > 1) { vx /= m; vy /= m; }
   // Stop 6: touching the puck anywhere is GAS, so the car keeps moving; the thumb only lifts for a deliberate pull down (BRAKE, and then reverse once stopped).
   // The FIRE and E-BRAKE zones never cancel the gas: sliding sideways keeps it, and there the pull down has to be harder (`BRK`) so a thumb that drifts low
   // on its way across does not brake. Lifting the thumb off is the only coast.
-  const fire = vx > PZ, eb = vx < -PZ, side = fire || eb, d = Math.max(0, vy), b0 = side ? BRK[1] : BRK[0], thr = d <= b0 ? 1 : 1 - 2 * Math.min(1, (d - b0) / BRK[2]);
+  const fire = vx > PUCK.zone, eb = vx < -PUCK.zone, side = fire || eb, d = Math.max(0, vy), b0 = side ? PUCK.liftSide : PUCK.lift, thr = d <= b0 ? 1 : 1 - 2 * Math.min(1, (d - b0) / Math.max(0.05, PUCK.run));
   const zone = (fire ? 'f' : eb ? 'e' : '') + (thr > 0.15 ? 'g' : thr < -0.15 ? 'b' : '');
   if (fire && !input.puckFire || eb && !input.puckEb || (thr < -0.15 && input.puckThr >= -0.15)) buzz(8);
   input.puckThr = thr; input.puckFire = fire; input.puckEb = eb; setPuck(vx * R / r.width * ui.puck.offsetWidth, vy * R / r.height * ui.puck.offsetHeight, true, zone); }

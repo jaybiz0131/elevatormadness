@@ -156,3 +156,14 @@ hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mo
   - Tools: `tools/s6test.mjs` (scenarios: burnout, wallfire, drift, gunnerwide, chip), `tools/s6clip.mjs` (scenario clips: puckfire, cloak, wallspray, carboom; `--find=chip|fire|wallboom|cloak`),
     `tools/s6still.mjs`, `tools/s6events.mjs <replay>`, `tools/audiolive.mjs`. `window.__shunt.fling(car, m/s)` is a staging hook.
   - Report and clips: design/stop6/stop6-report.md. Next stop (not started): heat, roadblocks, drone, enemy weapons, audio loaded as separate files.
+- Stop 7, THE FIRST 30 SECONDS (Stop 6 accepted; Jack's v28 FPS note was empty, so no perf change). Sim changed: replay format 5, rev `D8`, baselines `replays/open-s{1,2,3}-{active,idle}.json` and `beauty.json`; the `chaos-*` D7 baselines are retired.
+  - TAP TO START (`main.js` phase 'tap'): the spinning showroom car with a pulsing prompt; the tap (click, touchend or key: the iOS audio gestures) plays `theme_full.m4a` from 0:00 every time, the SHUNT logo punches in at the beat
+    (`audio/files.js findHit`, or `hit` on `FILES.theme_full`), the menu follows with the music running; PLAY crossfades into `theme_loop.m4a` (loopStart 0, loopEnd 82.5612). `audio/music.js` is the director.
+  - Opening scene (`sim/intro.js`, `T.intro`): 4.4 s after PLAY, in the sim: empty road, a beat of quiet, an off-screen roar, the hero slides in from the right, a screeching 180, a stop facing down the road, pursuer headlights
+    (`chaos.js drawChasers`), the camera swings front to behind (`camera.js applyIntro`, blended into camera C), GO with `G.t` = 0. The starting ramp is gone; the first wave is two Darts 470 pt behind (on the car 2.54 s after GO).
+    A tap or key skips it once `S.introSeen` (recorded in the replay). `?intro=0` turns it off (the old 0.6 s countdown).
+  - Audio as files: `assets/audio/*.m4a` -> `dist/audio/` (outside the page); `audio/files.js` manifest `FILES` and loader (fetch, decode, retry, `files.get`, `audio.playFile`) for Jack's engine recordings later; Music and Effects
+    sliders in Settings; the theme ducks for the gatling and blasts. **The two m4a files are PLACEHOLDERS** (`tools/mkplaceholder.mjs`); Jack's drop in with the same names.
+  - Tune panel: Puck folder (`lift`, `liftSide`, `run`, `zone`; copy and reset); `input/input.js PUCK` is the live object.
+  - Tools: `tools/introtest.mjs`, `tools/openclip.mjs <out.mp4>` (the full opening with the music), `tools/mkplaceholder.mjs`; `__shunt.startPlaying()` now hides the TAP TO START screen, `playtest.mjs` ignores the file:// audio fetch error.
+  - Report and clips: design/stop7/stop7-report.md. Next stop (not started): heat, roadblocks, the drone, enemy weapons.

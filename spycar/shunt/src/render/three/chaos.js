@@ -47,7 +47,18 @@ export class Chaos {
   // one frame: draws into fx's batches. `n` is fx.update's running count of sorted smoke puffs; returns it. `car` and `cam` are world Vector3s.
   draw(fx, G, elapsed, cam, car, n) {
     let dt = this.last < 0 ? 0 : clamp(elapsed - this.last, 0, 0.1); this.last = elapsed;
-    n = this.drawCloak(fx, G, dt, elapsed, cam, car, n); n = this.drawFacade(fx, G, dt, elapsed, cam, n); return n;
+    n = this.drawCloak(fx, G, dt, elapsed, cam, car, n); n = this.drawFacade(fx, G, dt, elapsed, cam, n); this.drawChasers(fx, G, elapsed); return n;
+  }
+  // Stop 7: the pursuers' headlights flaring in the distance behind the hero while the opening plays (and for a moment after GO, as the first cars arrive): two pairs far back down the road,
+  // each flaring white with a sudden bloom, then settling to a hard glare with a long wet streak on the road under it
+  drawChasers(fx, G, elapsed) {
+    const c = T.intro; let k = 0, tt = 0, s0 = G.dist;
+    if (G.intro) { tt = G.intro.t; k = clamp((tt - c.flare) / 0.35, 0, 1); s0 = G.intro.s; } else if (G.t < 0.9 && G.playing && G.cfg.intro && G.steps > 60) { tt = c.total + G.t; k = clamp(1 - G.t / 0.9, 0, 1); s0 = G.dist; }
+    if (k <= 0) return; const bloom = Math.max(0, 1 - Math.abs(tt - (c.flare + 0.12)) / 0.22);
+    const pairs = [[-31, 980, 1], [14, 1240, 0.8]];
+    for (const [x, d, a] of pairs) { for (const sx of [-1, 1]) { toWorld(G.road, REF + x + sx * 11, s0 - d, V); const hot = a * k * (0.8 + 0.2 * Math.sin(elapsed * 31 + x));
+      fx.glow(V.x, V.y + 0.8, V.z, 2.6 + 9 * bloom, 1, 0.96, 0.82, 0.55 * hot + 0.4 * bloom); fx.glow(V.x, V.y + 0.8, V.z, 0.9, 3.4, 3.4, 3.0, hot);
+      fx.streak(V.x, V.y, V.z, 1, 0.96, 0.85, 0.6 * hot, -(G.road.frame(s0 - d).psi), 22); } }
   }
   drawCloak(fx, G, dt, elapsed, cam, car, n) {
     const c = this.c; if (car) { if (this.hasPrev && dt > 0) { this.vel.set((car.x - this.prev.x) / dt, 0, (car.z - this.prev.z) / dt); const sp = this.vel.length(); if (sp > 90) this.vel.multiplyScalar(90 / sp); } else this.vel.set(0, 0, 0); this.prev.copy(car); this.hasPrev = true; }

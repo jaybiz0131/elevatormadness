@@ -155,6 +155,24 @@
   @keyframes playGlow { 0%, 100% { box-shadow: 0 0 0 2px rgba(255,255,255,0.35) inset, 0 6px 26px rgba(55,230,255,0.45); } 50% { box-shadow: 0 0 0 2px rgba(255,255,255,0.5) inset, 0 6px 40px rgba(55,230,255,0.8); } }
   #card.showroom .row { max-width: 300px; }
   #card.showroom .row .btn { background: rgba(10,14,24,0.6); border: 1px solid rgba(255,255,255,0.22); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  /* Stop 7: TAP TO START (the first tap unlocks the audio and starts the theme), the logo's punch-in on the beat, and the menu that follows it; nothing but the showroom car until then */
+  #tapStart { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: calc(15% + var(--safe-bottom, 0px)); gap: 8px; background: linear-gradient(to bottom, rgba(3,4,10,0) 55%, rgba(3,4,10,0.62) 100%); font-family: var(--font-display); color: #eafcff; cursor: pointer; border: 0; width: 100%; }
+  #tapStart[hidden] { display: none; }
+  #tapStart .t { font-weight: 700; font-size: 26px; letter-spacing: 0.34em; padding-left: 0.34em; text-shadow: 0 0 8px rgba(55,230,255,0.9), 0 0 28px rgba(55,230,255,0.55); animation: tapPulse 1.3s ease-in-out infinite; }
+  #tapStart small { font-size: 12px; letter-spacing: 0.22em; color: rgba(255,255,255,0.55); min-height: 14px; }
+  #tapStart.wait .t { animation: none; opacity: 0.45; font-size: 18px; }
+  @keyframes tapPulse { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.07); } }
+  #card > * { transition: opacity 0.4s; }
+  #card[data-tp="0"] > *, #card[data-tp="1"] > *:not(.logo) { opacity: 0; pointer-events: none; }
+  #card[data-tp="0"] { background: transparent; } #card[data-tp="0"].showroom, #card[data-tp="1"].showroom { background: transparent; }
+  #card .logo.punch { animation: logoPunch 0.55s cubic-bezier(0.2, 1.5, 0.3, 1) both; }
+  @keyframes logoPunch { 0% { transform: scale(3.2); opacity: 0; filter: blur(14px) brightness(3); } 30% { opacity: 1; filter: blur(0) brightness(2.4); } 100% { transform: scale(1); opacity: 1; filter: none; } }
+  #punchFlash { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 22%, rgba(200,250,255,0.95) 0%, rgba(55,230,255,0.45) 35%, rgba(55,230,255,0) 70%); mix-blend-mode: screen; }
+  #punchFlash.go { animation: flash 0.6s ease-out; } @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+  /* the opening scene: no HUD and no controls; a small hint to skip it once it has been seen */
+  #ui.intro #puck, #ui.intro #special, #ui.intro #boost, #ui.intro #pause, #ui.intro #camBtn, #ui.intro #hud, #ui.intro #gas, #ui.intro #fire, #ui.intro #pad, #ui.intro #ebrake { visibility: hidden !important; }
+  #skipHint { position: absolute; left: 0; right: 0; bottom: calc(26px + var(--safe-bottom, 0px)); text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.3em; color: rgba(255,255,255,0.6); pointer-events: none; }
+  #skipHint[hidden] { display: none; }
   .btn:focus-visible { outline: 2px solid var(--player); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { .callout { transition: none; } #special.pulse, #card.showroom #btnPrimary { animation: none; } }
 </style>
@@ -174,6 +192,9 @@
       <button id="boost" class="tap" aria-label="Boost, a short strong burst of speed" hidden><span class="blbl">BOOST</span></button>
       <button id="ebrake" class="tap" aria-label="E-brake: drift in a turn, a 180 with full steer, a burnout with gas at a stop" hidden>E-BRAKE</button>
       <div id="puck" class="tap" aria-label="Drive: touch for gas, pull down to brake and reverse, slide right to fire, slide left for the e-brake" hidden><span class="pz pzU">GAS</span><span class="pz pzD">BRAKE<br>REV</span><span class="pz pzR">FIRE</span><span class="pz pzL">E-BRAKE</span><span class="pring"></span><span id="puckDot"></span></div>
+      <button id="tapStart" class="tap" hidden aria-label="Tap to start"><span class="t" id="tapText">TAP TO START</span><small id="tapNote"></small></button>
+      <div id="skipHint" hidden>TAP TO SKIP</div>
+      <div id="punchFlash"></div>
       <div id="card" hidden>
         <div class="logo" id="cardLogo" hidden>SHUNT</div>
         <div class="title" id="cardTitle"></div>
@@ -186,6 +207,8 @@
           <div class="grp">Audio</div>
           <label><span>Sound</span><button class="sw tap" id="sSound" role="switch" aria-label="Sound"></button></label>
           <label><span>Music</span><button class="sw tap" id="sMusic" role="switch" aria-label="Music"></button></label>
+          <label><span>Music volume <b id="sMusicVal">80%</b></span><input id="sMusicVol" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="Music volume"></label>
+          <label><span>Effects volume <b id="sSfxVal">100%</b></span><input id="sSfxVol" type="range" min="0" max="1" step="0.05" value="1" aria-label="Effects volume"></label>
           <div class="grp">Controls</div>
           <label><span>Special button side</span><button class="sw seg tap" id="sHand">RIGHT</button></label>
           <label><span>Sensitivity <b id="sSensVal">1.0×</b></span><input id="sSens" type="range" min="0.7" max="1.6" step="0.1" value="1" aria-label="Sensitivity"></label>

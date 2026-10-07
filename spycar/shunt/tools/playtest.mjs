@@ -30,7 +30,7 @@ const lite = !opt.full && !/r=canvas/.test(opt.query || ''); if (lite) opt.query
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: lite ? 1 : 2, hasTouch: true });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
-page.on('console', m => { if (m.type() === 'error' && !/ERR_CERT|net::/.test(m.text())) errors.push('console: ' + m.text()); });
+page.on('console', m => { if (m.type() === 'error' && !/ERR_CERT|net::|Fetch API cannot load file:/.test(m.text())) errors.push('console: ' + m.text()); });
 await page.addInitScript(() => { if (new URLSearchParams(location.search).get('fine')) globalThis.__fineHash = true; });
 await page.addInitScript(PACE);
 await page.goto(pageUrl + '?' + [seed !== null ? 'seed=' + seed : '', opt.query || ''].filter(Boolean).join('&'));   // --query=r=canvas&wall=1 adds page options

@@ -73,12 +73,13 @@ function waveList(p) {
   return r < 0.34 ? [['gunner', 1], ['bruiser', 0], ['weak', 0], ['weak', 1]] : r < 0.67 ? [['gunner', 1], ['gunner', 1], ['bruiser', 0]] : [['bruiser', 0], ['weak', 0], ['weak', 1]];
 }
 function startWave(p, cap) {
-  let list = waveList(p);
+  let list = G.waveIdx === 0 ? [['weak', 1], ['weak', 1]] : waveList(p);   // Stop 7: the first pursuers always come up from behind, so they are on the player 2 to 3 s after GO
   if (p > 0.5 && G.waveIdx % 4 === 3 && !G.cars.some(c => c.alive && c.kind === 'armored')) list = [['armored', 0], ['weak', 1]].concat(list.slice(0, 1));
   const have = attackers(T.pace.window[0], T.pace.window[1]); const room = Math.max(0, cap - have);
   if (room === 0) { G.waveT = 2; return; }   // the road is full: try again shortly
   list = list.slice(0, G.armor <= 1 ? Math.min(room, 2) : room);
-  list.forEach((m, i) => { const f = () => spawnAttacker(m[0], !!m[1], false); if (i === 0) f(); else G.queue.push({ t: i * 0.7, fn: f }); });
+  const first = G.waveIdx === 0;   // Stop 7: the first pursuers start 470 pt back (not 650), so they reach a car pulling away from a standstill 2 to 3 s after GO
+  list.forEach((m, i) => { const f = () => { const c = spawnAttacker(m[0], !!m[1], false); if (first) { c.y = c.py = G.dist - 470 - 60 * i; c.x = c.px = G.road.laneX(c.y, c.lane); } return c; }; if (i === 0) f(); else G.queue.push({ t: i * 0.7, fn: f }); });
   G.waveIdx++; G.waveN++; G.waveT = clamp(lerp(14, 9, p) + (G.rng() * 2 - 1) * 1.5, T.pace.waveMin, T.pace.waveMax);
 }
 function startFiller(p, finale) {
@@ -118,7 +119,7 @@ export function director() {
   else if (!G.hintMine && G.t >= 24 && G.minesDropped === 0 && G.cars.some(c => c.alive && !c.wrecked && isAttacker(c.kind) && c.y < G.dist - 60 && c.y > G.dist - 600)) { G.hintMine = 1; say('Shock mines', ['hold MISSILE to drop one', 'press M to drop one'], 1900); }
   if (G.ticks % 6 !== 0) return;
   const dt = 6 * STEP, p = progress(); G.prog = p; const pe = Math.max(p, G.t / T.pace.tierTime);   // pe: how far into the run the action is, by distance or by the clock
-  if (!G.opened && G.t >= 0.2) { G.opened = true; spawnRamp(170, playerLane(), 'none');   // the jump off the garage ramp
+  if (!G.opened && G.t >= 0.1) { G.opened = true;   // Stop 7: no starting ramp: the opening scene hands over a stopped car on an open road
     for (let i = 0; i < 4; i++) spawnCar('civ', freeLane(G.dist + 600, [playerLane()]), 480 + i * 480 + G.rng() * 160); }   // the street is already full of traffic when the run starts
   const technical = G.road.at(G.dist).sector.kind === 'technical';
   // limp mode: the enemies hold off, nothing new is thrown at the car, and a repair crate is sent a few seconds in
