@@ -1,4 +1,4 @@
-// Shunt: the main loop and the phase machine. The sim (src/sim) is headless and stepped at 120 Hz; the renderer, HUD, audio
+// BERN-1 (the repo and branch keep the old name, shunt): the main loop and the phase machine. The sim (src/sim) is headless and stepped at 120 Hz; the renderer, HUD, audio
 // and input hang off it from here. window.__shunt exposes the hooks the bots and the replay tools use.
 import { fontsReady } from './ui/fonts.js';
 import { T, H, clamp, fnv1a, localDate } from './sim/constants.js';
@@ -44,7 +44,7 @@ function freshRun(reseed) {
   newRun(seed, { sens: S.sens, autoDrift: S.autoDrift, hairpinWall: Q.get('wall') !== '0', intro: Q.get('intro') !== '0' });
   if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.boost.hidden = true; ui.puck.hidden = true; ui.ebrake.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; updateSpecial(G);
 }
-// Stop 7: the app opens on the showroom car with TAP TO START (iOS blocks audio until a tap). The tap plays theme_full from 0:00, every time; the SHUNT logo punches in on the beat, then the menu
+// Stop 7: the app opens on the showroom car with TAP TO START (iOS blocks audio until a tap). The tap plays theme_full from 0:00, every time; the BERN-1 logo punches in on the beat, then the menu
 // fades in with the music playing (tpStage: 0 waiting for the beat, 1 logo in, 2 menu). Nothing is skipped or seeked: a tap during the intro shows the menu early, the music runs on.
 let introWas = false, tpStage = 2, tapWall = 0, tapSince = nowMs();
 function enterTap() { phase = 'tap'; ui.card.hidden = true; ui.pause.hidden = true; ui.tap.hidden = false; tapSince = nowMs(); updateTap(); }
