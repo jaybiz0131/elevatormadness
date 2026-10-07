@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node tools/inline.mjs",
+    "build": "node tools/buildcheck.mjs --seeds=24 --quiet && vite build && node tools/inline.mjs",
+    "buildcheck": "node tools/buildcheck.mjs",
     "bots": "node tools/playtest.mjs",
     "replays": "node tools/replay.mjs"
   },

@@ -38,7 +38,9 @@ export function newRun(seed, cfg) {
         // Stop 5: the airborne state (height above the datum, vertical speed, time in the air), BOOST and the shock mines
         fz: 0, fvz: 0, hang: 0, hop: false, crestAir: false, airs: 0, airBest: 0, airEvt: 0, bst: T.boost.start, bstT: 0, bstDur: 1, boosts: 0, mines: [], mineAmmo: T.mine.ammo, minesDropped: 0, mineHits: 0, mineWrecks: 0,
         // driver control: which way the nose points down the road, the e-brake 180 in progress, the burnout charge and the fishtail
-        face: 1, flip: null, flipLock: false, flipA: 0, flips: 0, flipDone: 0, bo: 0, burnouts: 0, fish: 0, fishV: 0, uturns: 0, chunks: [], chunkHits: [], chunkFlips: 0, broken: 0 };
+        face: 1, flip: null, flipLock: false, flipA: 0, flips: 0, flipDone: 0, bo: 0, burnouts: 0, fish: 0, fishV: 0, uturns: 0, chunks: [], chunkHits: [], chunkFlips: 0, broken: 0,
+        // Stop 6: the smoke cloak (thickness, whether the hero is hidden, where the enemies think it is) and the damaged street (decals, fires, heat per facade cell)
+        cloak: 0, cloakOn: false, seenX: REF, seenY: 0, seenFwd: 0, offX: 0, offY: 0, offTX: 0, offTY: 0, offT: 0, cloaks: 0, lostSeen: 0, wideShots: 0, scars: [], fires: [], heatCells: [], chips: 0, facadeFires: 0, wallBooms: 0, scarN: 0 };
   crashReset();   // a fresh physics world for every run (replays rebuild it from the same start)
   G.x = REF; G.special = { kind: 'missiles', ammo: 3, level: 1 };   // Sprint 4: start armed, the supply truck tops it up
   return G;

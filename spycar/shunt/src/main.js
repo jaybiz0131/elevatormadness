@@ -5,7 +5,7 @@ import { T, H, clamp, fnv1a, localDate } from './sim/constants.js';
 import { S, saveSettings } from './settings.js';
 import { G, newRun, beginRun } from './sim/state.js';
 import { advance, simStep, setInputSource, setSink, decayPresentation, hashState, exportReplay, startRecording, attachReplay, runSteps, STEP_LEN } from './sim/step.js';
-import { slamTarget } from './sim/physics.js';
+import { slamTarget, wreck, creditCar } from './sim/physics.js';
 import { initCrash, CRASH, crashLine } from './sim/crash.js';
 import { audio, buzz } from './audio/audio.js';
 import { stage, cv, ui, $, view, callout, hideCallout, updateSpecial, pulseSpecial, updateBoost, resetBoostUi } from './ui/dom.js';
@@ -83,7 +83,9 @@ function simulate(dt, playing) {
   advance(dt, playing);
   const minute = G.t / 60;
   audio.setEngine(clamp((Math.abs(G.speed) - 300) / 1000, 0, 1) + (G.air > 0 ? 0.2 : 0) + (G.burnout > 0 ? 0.6 : 0) + (G.in.gas && playing ? 0.15 : 0), playing, { firing: playing && (G.flashT2 > 0 || G.gunSpin > 0.05), gas: !!(G.in.gas && playing), limp: !!G.limp && playing }); ui.fire.classList.toggle('hot', G.hot > 0);
-  audio.setDrive(playing && G.air <= 0 ? clamp((Math.abs(G.slip) * 180 / Math.PI - 8) / 30, 0, 1) + (G.burnout > 0 ? 0.6 : 0) : 0, playing && G.scraping ? 1 : 0);
+  { const on = playing && G.air <= 0, sp = Math.abs(G.speed), lat = Math.abs(G.vx) / Math.max(120, sp);   // the tyres: slide (slip angle, the 180), burnout (the timer builds the revs), hard cornering (sideways speed, grip exceeded), brake lock-up
+    audio.setDrive({ slip: on ? clamp((Math.abs(G.slip) * 180 / Math.PI - 8) / 30, 0, 1) * (G.drifting || G.slipping ? 1 : 0.7) + (G.flip ? 0.9 : 0) : 0, burn: on ? (G.bo > 0 ? 0.35 + 0.65 * clamp(G.bo / 1.0, 0, 1) : G.burnout > 0 ? 0.7 : 0) : 0,
+      turn: on ? Math.max(clamp((lat - 0.1) / 0.3, 0, 1), G.slipping ? 0.55 : 0, G.flip ? 0.8 : 0, G.in.ebrake && sp > 150 ? 0.5 : 0) : 0, lock: on && G.braking && sp > 420 ? 1 : 0, speed: clamp(sp / 1000, 0, 1.3), scrape: playing && G.scraping ? 1 : 0 }); }
   audio.music(dt, G.finale ? 3 : G.prog > 0.3 ? 2 : 1);
 }
 
@@ -143,6 +145,8 @@ async function start() { await Promise.race([fontsReady, new Promise(r => setTim
 function loadReplay(r) { seed = r.seed >>> 0; dailyMode = false; S.sens = r.cfg.sens; S.autoDrift = r.cfg.autoDrift; newRun(seed, { sens: r.cfg.sens, autoDrift: r.cfg.autoDrift, hairpinWall: !!r.cfg.hairpinWall }); if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.boost.hidden = true; ui.puck.hidden = true; ui.ebrake.hidden = true; ui.pad.hidden = true; updateSpecial(G); attachReplay(r); startPlaying(); return G; }
 window.__shunt = {
   get phase() { return phase; }, get G() { return G; }, get T() { return T; }, get S() { return S; }, input, slamTarget, app,
+  // staging hook for the clip tools: wreck a car (the player's doing) and throw its body sideways at `v` m/s (negative is left)
+  fling: (c, v, up = 3) => { creditCar(c, 'slam'); wreck(c, 'slam', true); if (c.rb) { const l = c.rb.linvel(); c.rb.setLinvel({ x: v, y: up, z: l.z }, true); } },
   fireSpecial: () => input.requestSpecial(), trySlam: (d) => input.requestSlam(d),
   startPlaying: () => { freshRun(false); startPlaying(); },
   resume: () => { syncRun = false; lastT = 0; },   // hand the sim back to the frame loop after synchronous stepping (capture tools)

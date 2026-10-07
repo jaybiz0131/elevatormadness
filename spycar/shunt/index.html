@@ -84,7 +84,7 @@
   #boost.ready .blbl { animation: pulse 0.7s infinite; display: inline-block; }
   #boost.on { background: #ffe9a8; color: #5a2a00; border-color: #fff; box-shadow: 0 0 30px rgba(255,200,80,0.95); text-shadow: none; }
   #boost.held { transform: scale(0.94); }
-  /* Driver control: the right thumb drives from one big puck (up gas, centre coast, down brake then reverse, right fire, left e-brake); MISSILE and BOOST are small
+  /* Driver control: the right thumb drives from one big puck (touch is gas, down brake then reverse, right gas and fire, left e-brake); MISSILE and BOOST are small
      buttons above it. "Simple buttons" swaps the puck for GAS, BRAKE, FIRE and E-BRAKE. #ui.lefty mirrors all of it for the left hand. */
   #puck { position: absolute; right: 12px; bottom: calc(14px + var(--safe-bottom, 0px)); width: 196px; height: 196px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.3); background: radial-gradient(circle, rgba(20,24,30,0.55) 0%, rgba(20,24,30,0.86) 70%); touch-action: none; user-select: none; -webkit-user-select: none; }
   #puck[hidden] { display: none; }
@@ -173,7 +173,7 @@
       <button id="fire" class="tap" aria-label="Fire, hold for the gatling" hidden>FIRE</button>
       <button id="boost" class="tap" aria-label="Boost, a short strong burst of speed" hidden><span class="blbl">BOOST</span></button>
       <button id="ebrake" class="tap" aria-label="E-brake: drift in a turn, a 180 with full steer, a burnout with gas at a stop" hidden>E-BRAKE</button>
-      <div id="puck" class="tap" aria-label="Drive: up gas, down brake and reverse, right fire, left e-brake" hidden><span class="pz pzU">GAS</span><span class="pz pzD">BRAKE<br>REV</span><span class="pz pzR">FIRE</span><span class="pz pzL">E-BRAKE</span><span class="pring"></span><span id="puckDot"></span></div>
+      <div id="puck" class="tap" aria-label="Drive: touch for gas, pull down to brake and reverse, slide right to fire, slide left for the e-brake" hidden><span class="pz pzU">GAS</span><span class="pz pzD">BRAKE<br>REV</span><span class="pz pzR">FIRE</span><span class="pz pzL">E-BRAKE</span><span class="pring"></span><span id="puckDot"></span></div>
       <div id="card" hidden>
         <div class="logo" id="cardLogo" hidden>SHUNT</div>
         <div class="title" id="cardTitle"></div>

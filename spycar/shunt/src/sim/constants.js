@@ -53,6 +53,15 @@ export const T = {
   // half a turn in `flipT` s (scrubbing `flipDrag`); with gas past `burnThr` below `burnStop` pt/s it is a burnout: held at least `burnMin` s (up to `burnMax`), letting go launches
   // the car at `launch` pt/s with up to `burnTurbo` of turbo for `burnFor` s. The fishtail is a damped spring on the yaw (`fishK`, `fishC`) kicked by `fishKick`.
   ebrake: { decel: 700, flipU: 1.5, flipSpeed: 160, flipBendV: 400, flipT: 0.5, flipDrag: 1.6, burnThr: 0.4, burnStop: 60, burnMin: 0.4, burnMax: 1.6, launch: 340, burnTurbo: 420, burnFor: 1.0, fishK: 40, fishC: 3.5, fishKick: 90, fishSlide: 40 },
+  // Stop 6: the smoke cloak. `G.cloak` (0..1) is how thick the smoke is round the hero: a burnout, a long drift, a 180 and a skidding e-brake pour it in (`burn`,
+  // `drift` ramping over `driftRamp` s after `driftAfter` s, `flip`, `skid` per second); it thins at `decay` a second and faster the quicker the car moves (it
+  // leaves the cloud behind, `speedDecay` per 1,000 pt/s). Above `on` the hero is hidden: enemies lose track (they steer for where it was, `off` pt of wander, and a
+  // Gunner fires `wide` pt wide); below `off` they find it again. The hero's guns are unaffected.
+  smoke: { on: 0.55, off: 0.3, burn: 1.7, flip: 1.5, skid: 0.55, drift: [0.8, 2.3], driftAfter: 0.4, driftRamp: 1.4, decay: 0.3, speedDecay: 0.85, offX: 110, offY: 260, wander: 0.55, wide: [48, 95], range: 2000 },
+  // Stop 6: the street takes damage. A round that reaches a building face chips it (a scar decal, dust, falling glass); chips and blasts heat a cell of the facade
+  // (`cell` pt long), which cools `cool` a second; at `fireAt` the facade catches fire for `fire` s (at most `fires` at once, `scars` decals in all, each lasting
+  // `scarLife` s). A wreck hitting a building at over `T.crash.wallBoom` m/s blows up there.
+  facade: { cell: 48, cool: 0.5, fireAt: 6, boomHeat: 14, pieceHeat: 3, fire: [7, 11], fires: 6, scars: 80, scarLife: 50 },
   // Driver control: enemies turn round. A chaser that wants to go the other way at more than `uturnV` pt/s for `uturnWait` s does a U-turn in `uturn` s;
   // below `slow` pt/s of road speed a Gunner may sit at either end of the car
   enemy: { uturn: 0.7, uturnV: 120, uturnWait: 0.35, slow: 300, chargeFrom: 240, chargeV: 560 },
@@ -91,7 +100,7 @@ export const T = {
   // score by cause (audit, "Give the kills back to the player"): a wreck the player caused pays base × the cause multiplier;
   // the car is the main weapon, so Slam, shunt, ram, wall and oil kills pay 3× a gun kill; enemy-on-enemy accidents pay nothing
   score: { weak: 100, bruiser: 250, gunner: 250, armored: 400, cause: { gun: 1, missile: 1, mine: 3, slam: 3, shunt: 3, ram: 3, rail: 3, wall: 3, oil: 3, stomp: 3, chain: 2, barrel: 2, pileup: 2 }, pileUp: 150, civPile: 450,
-           civilian: -100, crate: 250, graze: 10, grazeCap: 3, truckLoad: 100, clean: 120, closeCall: 50, shuntEnemy: 100, barrelDouble: 150, distancePer: 100, burnout: 150, flip: 200 },
+           civilian: -100, crate: 250, graze: 10, grazeCap: 3, truckLoad: 100, clean: 120, closeCall: 50, shuntEnemy: 100, barrelDouble: 150, distancePer: 100, burnout: 150, flip: 200, wallSmash: 120 },
   mercy: 2.5,   // after the car takes a hit, enemies wait this long before the next lunge or shot (and twice as long on one armor pip)
   graceSeconds: 60,   // damage halved for the first minute; armor comes from pickups and the supply truck
   // the barrier hit (step 6): fires over 1.15x the grip budget, keeps 45% of the speed, costs half an armor pip
@@ -99,7 +108,7 @@ export const T = {
   // Stop 3 crash physics (src/sim/crash.js; speeds in m/s): at most `cap` tumbling wrecks; `life` s before a body is retired; a wreck that hits
   // a live enemy above `pileUp` takes it down too (a pile-up), a civilian above `civCrash` spins out (rolls above `civRoll`, explodes only above
   // `civBoom`); a wreck slamming into the hero from the side above `heroRoll` rolls the hero
-  crash: { cap: 6, gravity: 24, friction: 0.8, massK: 1300, life: 5.5, blastUp: [7, 5], pileUp: 8, civCrash: 7, civRoll: 15, civBoom: 26, heroHit: 5, heroRoll: 12, wallFx: 6, barrelRoll: 22 },
+  crash: { wallBoom: 13, cap: 6, gravity: 24, friction: 0.8, massK: 1300, life: 5.5, blastUp: [7, 5], pileUp: 8, civCrash: 7, civRoll: 15, civBoom: 26, heroHit: 5, heroRoll: 12, wallFx: 6, barrelRoll: 22 },
   // the hero's body (presentation, but stepped in the sim): roll per pt/s^2 of lateral load, squat per pt/s^2 of speed change, and two wheels:
   // above `twoAt` x the grip budget for `twoFor` s (not drifting) the inside wheels lift up to `twoMax` degrees, then slam back down
   susp: { rollK: 0.0045, rollMax: 7, pitchK: 0.004, pitchMax: 4, k: 180, damp: 16, twoAt: 1.05, twoFor: 0.18, twoMax: 22, twoHold: 0.45 },

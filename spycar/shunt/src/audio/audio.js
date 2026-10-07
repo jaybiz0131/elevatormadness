@@ -16,12 +16,50 @@ export const audio = {
       try { if (!this.el) { const el = document.createElement('audio'); el.setAttribute('playsinline', ''); el.setAttribute('webkit-playsinline', ''); el.loop = true; el.volume = 0.01; el.src = SILENT_WAV; this.el = el; } const p = this.el.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
       if (this.ctx.state === 'running') this.unlocked = true; } },
   state() { return this.ctx ? this.ctx.state + (this.unlocked ? ' unlocked' : '') + (this.el && !this.el.paused ? ' media' : '') : 'no ctx'; },
-  // continuous driving layers: tyre squeal (rises with slip angle) and the rail screech, from one looping noise buffer
-  initDrive() { if (this.drive || !this.ctx) return; const c = this.ctx; const n = c.sampleRate, buf = c.createBuffer(1, n, n), d = buf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; const src = c.createBufferSource(); src.buffer = buf; src.loop = true;
-    const sq = c.createBiquadFilter(); sq.type = 'bandpass'; sq.frequency.value = 1100; sq.Q.value = 6; const sg = c.createGain(); sg.gain.value = 0; src.connect(sq); sq.connect(sg); sg.connect(this.sfx);
-    const sc = c.createBiquadFilter(); sc.type = 'highpass'; sc.frequency.value = 2600; const cg = c.createGain(); cg.gain.value = 0; src.connect(sc); sc.connect(cg); cg.connect(this.sfx); src.start();
-    this.drive = { sq, sg, cg }; },
-  setDrive(slip01, scrape01) { if (!this.ctx) return; this.initDrive(); const t = this.ctx.currentTime; this.drive.sg.gain.setTargetAtTime(0.12 * slip01, t, 0.05); this.drive.sq.frequency.setTargetAtTime(900 + 700 * slip01, t, 0.05); this.drive.cg.gain.setTargetAtTime(0.1 * scrape01, t, 0.05); },
+  // One shared 2 s white-noise buffer (seeded, so clips are repeatable) for the tyre, rail and rumble layers: each layer reads it through its own looping source.
+  getNoise() { if (this.noiseBuf) return this.noiseBuf; const c = this.ctx, n = c.sampleRate * 2, b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0); let s = 4242; for (let i = 0; i < n; i++) { s = (s * 1664525 + 1013904223) >>> 0; d[i] = s / 4294967296 * 2 - 1; } this.noiseBuf = b; return b; },
+  // Continuous driving layers, built on the first frame that needs them and cut off from the output (so the browser stops processing them) half a second after they go quiet.
+  //  squeal: a stick-slip tyre squeal: two detuned saws and a sine a fifth-ish above (inharmonic), a slow pitch wobble (6 Hz) and a rough amplitude flutter (30 to 90 Hz), through a lowpass that follows the pitch;
+  //  scrub:  band-passed noise (200 to 3,000 Hz) with the same flutter, the gritty skid;
+  //  roar:   low-passed noise chopped by a burble LFO, the spinning wheels of a burnout (its cutoff and burble rate rise with the revs);
+  //  rail:   the high-passed screech of the rail scrape.
+  initDrive() { if (this.drive || !this.ctx) return; const c = this.ctx; const bus = c.createGain(); bus.gain.value = 0.8;
+    const src = c.createBufferSource(); src.buffer = this.getNoise(); src.loop = true;
+    const oa = c.createOscillator(), ob = c.createOscillator(), oc = c.createOscillator(); oa.type = 'sawtooth'; ob.type = 'sawtooth'; oc.type = 'sine'; ob.detune.value = 29; oc.detune.value = 731;
+    const wob = c.createOscillator(), wobD = c.createGain(); wob.frequency.value = 6.2; wobD.gain.value = 36; wob.connect(wobD); wobD.connect(oa.detune); wobD.connect(ob.detune); wobD.connect(oc.detune);
+    const fl = c.createOscillator(), flD = c.createGain(); fl.type = 'triangle'; fl.frequency.value = 40; flD.gain.value = 0.28; fl.connect(flD);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3000; lp.Q.value = 0.8; const qa = c.createGain(); qa.gain.value = 0.72; flD.connect(qa.gain); const sqG = c.createGain(); sqG.gain.value = 0;
+    const ocG = c.createGain(); ocG.gain.value = 0.4; oa.connect(lp); ob.connect(lp); oc.connect(ocG); ocG.connect(lp); lp.connect(qa); qa.connect(sqG); sqG.connect(bus);
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1200; bp.Q.value = 0.8; const skF = c.createGain(); skF.gain.value = 0.72; flD.connect(skF.gain); const skG = c.createGain(); skG.gain.value = 0; src.connect(bp); bp.connect(skF); skF.connect(skG); skG.connect(bus);
+    const rl = c.createBiquadFilter(); rl.type = 'lowpass'; rl.frequency.value = 300; rl.Q.value = 1.1; const bl = c.createOscillator(), blD = c.createGain(); bl.frequency.value = 14; blD.gain.value = 0.3; bl.connect(blD);
+    const rF = c.createGain(); rF.gain.value = 0.7; blD.connect(rF.gain); const rG = c.createGain(); rG.gain.value = 0; src.connect(rl); rl.connect(rF); rF.connect(rG); rG.connect(bus);
+    const sc = c.createBiquadFilter(); sc.type = 'highpass'; sc.frequency.value = 2600; const cg = c.createGain(); cg.gain.value = 0; src.connect(sc); sc.connect(cg); cg.connect(bus);
+    src.start(0, 0.3); oa.start(); ob.start(); oc.start(); wob.start(); fl.start(); bl.start();
+    this.drive = { bus, oa, ob, oc, fl, lp, sqG, bp, skG, rl, bl, rG, cg, live: false, last: 0, armed: true, chirpT: -9, chirpK: 0, lockOn: false, lockT: -9 }; },
+  // o = { slip, burn, turn, lock, speed, scrape }, called every frame:
+  //  slip 0..1   a drift or slide (the squeal sweeps 700 to 1,600 Hz with it), turn 0..1 hard cornering load in grip (a quieter, higher squeal, 1,450 to 2,100 Hz),
+  //  burn 0..1   the burnout (a deep roar, a wheelspin squeal, both rising with the revs), lock 0 or 1 a brake lock-up (a short squeal on the rising edge),
+  //  speed 0..1.3 (1 is 1,000 pt/s: slow tyres squeal softer), scrape 0..1 the rail scrape. All of it is smoothed here, so a raw per-frame value is fine.
+  setDrive(o) { if (!this.ctx) return; o = o || {}; const c = this.ctx, t = c.currentTime; const k = (v) => Math.max(0, Math.min(1, +v || 0));
+    const sl = k(o.slip), bu = k(o.burn), tu = k(o.turn), lk = k(o.lock), sc = k(o.scrape), sp = Math.max(0, Math.min(1.3, +o.speed || 0));
+    if (!this.drive) { if (sl + bu + tu + lk + sc < 0.01) return; this.initDrive(); if (!this.drive) return; } const d = this.drive;
+    // a brake lock-up: a squeal that dies in about 0.4 s whatever the pedal does
+    if (lk > 0.5 && !d.lockOn) { d.lockOn = true; d.lockT = t; } else if (lk <= 0.5) d.lockOn = false;
+    const slE = Math.max(sl, d.lockOn ? 0.5 * Math.exp(-(t - d.lockT) / 0.2) : 0);
+    // the chirp: grip lets go, the pitch overshoots and settles in about 0.15 s, with a puff of scrub
+    if (d.armed && slE > 0.18) { d.armed = false; if (t - d.chirpT > 0.3) { d.chirpT = t; d.chirpK = 0.45 + 0.55 * Math.min(1, slE * 1.5); } } else if (slE < 0.08) d.armed = true;
+    const ce = d.chirpK * Math.exp(-(t - d.chirpT) / 0.07); const sf = 0.35 + 0.65 * Math.min(1, sp / 0.45), spc = Math.min(1, sp);
+    const qS = 0.8 * Math.pow(slE, 0.85) * sf, qT = 0.5 * tu * sf * (1 - 0.5 * slE), qB = 0.4 * bu; let Q = Math.min(1.1, qS + qT + qB); const qs = qS + qT + qB + 1e-4;
+    let f = (qS * (720 + 620 * slE + 260 * spc) + qT * (1450 + 420 * tu + 200 * spc) + qB * (700 + 450 * bu)) / qs; f = Math.max(700, Math.min(2200, f)) * (1 + 0.34 * ce); Q = Q * (1 + 0.8 * ce) + 0.12 * ce;
+    const dk = 0.6 + 0.4 * (this.engDuck || 1);   // a little under the gatling too, so squeal + guns + engine keep their headroom
+    const N = 0.5 * Math.pow(slE, 0.9) * sf + 0.2 * tu * sf + 0.2 * bu + 0.25 * ce, R = 0.5 * bu, Sc = 0.125 * sc;
+    const act = Math.max(Q, N, R, Sc); if (act > 0.004) { d.last = t; if (!d.live) { d.live = true; d.jump = true; d.bus.connect(this.sfx); } } else if (d.live && t - d.last > 0.6) { d.live = false; try { d.bus.disconnect(); } catch (e) {} } if (!d.live) return;
+    const j = d.jump; d.jump = false; const put = (p, v, tc) => { if (j) { p.cancelScheduledValues(t); p.setValueAtTime(v, t); } else p.setTargetAtTime(v, t, tc); };
+    put(d.oa.frequency, f, 0.02); put(d.ob.frequency, f, 0.02); put(d.oc.frequency, f * 1.0, 0.02); put(d.lp.frequency, Math.min(6000, f * 2.1 + 400), 0.03); put(d.fl.frequency, 30 + 45 * slE + 25 * spc + 20 * bu, 0.1);
+    put(d.sqG.gain, 0.12 * dk * Q, Q * 0.12 * dk > d.sqG.gain.value ? 0.02 : 0.045);
+    put(d.bp.frequency, 650 + 1500 * slE + 500 * tu + 400 * ce, 0.05); put(d.skG.gain, 0.3 * dk * N, 0.03);
+    put(d.rl.frequency, 260 + 1000 * bu, 0.08); put(d.bl.frequency, 11 + 26 * bu, 0.1); put(d.rG.gain, dk * R, 0.06);
+    put(d.cg.gain, Sc, 0.05); },
   turbo(tier) { this.noise(0.35, 0.3 + 0.15 * tier, 1500 + 800 * tier); this.tone('sawtooth', 180 * tier, 500 * tier, 0.3, 0.07); },
   draft() { this.noise(0.5, 0.25, 1200); this.tone('square', 600, 900, 0.08, 0.06, 0.5); },
   brake() { this.noise(0.2, 0.25, 500); },
@@ -70,7 +108,7 @@ export const audio = {
     const load = running ? (o.gas ? 1 : 0.8) : 0.55; e.pulseG.gain.setTargetAtTime(0.95 * load + 0.2 * bark, t, 0.08); e.growlG.gain.setTargetAtTime((0.55 + 0.75 * Math.min(1, s)) * load + 0.35 * bark, t, 0.1); e.subG.gain.setTargetAtTime(0.3 + 0.06 * Math.min(1, s) + 0.45 * bark, t, 0.1);
     // under the gatling while it fires (down to 38%, quickly), back up in about a third of a second after
     const duckT = o.firing ? 0.38 : 1; this.engDuck += (duckT - this.engDuck) * (duckT < this.engDuck ? 0.25 : 0.06);
-    this.engBus.gain.setTargetAtTime((running ? 0.62 : 0.08) * this.engDuck * (S.sound ? 1 : 0), t, 0.05);
+    this.engBus.gain.setTargetAtTime((running ? 0.62 : 0.08) * this.engDuck * (S.sound ? 1 : 0), t, 0.05); this.setFiring(!!o.firing);
     // pops and crackle when the throttle lifts at speed, a sputter now and then in limp
     const lift = this.prevGas && !o.gas && s > 0.3; this.prevGas = !!o.gas; if (lift) { this.crackleN = 3 + Math.floor(Math.random() * 4); this.crackleNext = t; }
     if (this.crackleN > 0 && t >= this.crackleNext) { this.crackleN--; this.crackleNext = t + 0.05 + Math.random() * 0.1; this.crackle(0.5 + Math.random() * 0.5); }
@@ -92,13 +130,29 @@ export const audio = {
   makeBuffers() {
     const c = this.ctx, sr = c.sampleRate; let ph = 0, lp = 0, prev = 0, seed = 12345; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296 * 2 - 1; };
     const mk = (dur, fn) => { ph = 0; prev = 0; lp = 0; const n = Math.floor(sr * dur), b = c.createBuffer(1, n, sr), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = fn(i / sr, i); let peak = 0; for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(d[i])); const k = peak > 0 ? 0.92 / peak : 1; for (let i = 0; i < n; i++) d[i] *= k; return b; };
-    this.buf = { shot: [0, 1, 2].map(v => { return mk(0.11, (t) => { const f = 150 - 95 * Math.min(1, t / 0.08) + v * 12; ph += 2 * Math.PI * f / sr; const thump = Math.sin(ph) * Math.exp(-t / 0.028); const n = rnd(); const crack = (n - prev) * Math.exp(-t / 0.005); prev = n; const clank = Math.sign(Math.sin(2 * Math.PI * (300 + v * 40) * t)) * Math.exp(-t / 0.014) * 0.25; return thump * 0.95 + crack * 0.8 + clank; }); }),
+    // The gatling round (Jack: deep, fast, punchy, a big machine gun, no whine): a low-mid chunk (a sine and a little triangle sweeping 220 to 60 Hz with a hard attack), a short sub (40 to 60 Hz),
+    // a mid thwack (a noise burst through a 560 to 780 Hz band-pass, soft-clipped), a very short dark crack (noise through a 2 kHz low-pass), all through a tanh shaper and a last low-pass at about 2.2 kHz,
+    // so nothing steady above 1.2 kHz survives. Five variants differ in pitch, thwack centre and noise; the sixth is the heavier first round of a burst (longer chunk, more sub).
+    const gun = (v, accent) => { const pit = [1, 0.9, 1.1, 0.95, 1.06, 0.88][v], fc = [560, 620, 700, 600, 740, 520][v], F = 2 * Math.sin(Math.PI * fc / sr), dur = accent ? 0.17 : 0.11; let p1 = 0, p2 = 0, cl = 0, lo = 0, bd = 0, ol = 0;
+      return mk(dur, (t) => { p1 += 2 * Math.PI * (60 + 160 * Math.exp(-t / 0.022)) * pit * (accent ? 0.92 : 1) / sr; const ph1 = p1 + 1.0; const tri = Math.asin(Math.sin(ph1)) * 2 / Math.PI;
+        const chunk = (0.8 * Math.sin(ph1) + 0.4 * tri) * Math.min(1, t / 0.0004) * Math.exp(-t / (accent ? 0.05 : 0.03));
+        p2 += 2 * Math.PI * (40 + 20 * Math.exp(-t / 0.012)) * pit / sr; const sub = Math.sin(p2) * Math.exp(-t / (accent ? 0.03 : 0.018));
+        const n = rnd(); const hi = n - lo - bd * 0.95; bd += F * hi; lo += F * bd; const thw = Math.tanh(bd * 2.4 * Math.exp(-t / 0.012)) * 0.8;
+        cl += (n - cl) * 0.3; const crack = cl * Math.exp(-t / 0.0035) * 1.2;
+        const x = Math.tanh((chunk * 1.0 + sub * (accent ? 0.7 : 0.4) + thw * 1.0 + crack * 0.45) * 1.9); ol += (x - ol) * 0.27; return ol * Math.min(1, (dur - t) / 0.006); }); };
+    this.buf = { shot: [0, 1, 2, 3, 4].map(v => gun(v, false)), heavy: gun(5, true),
       hit: mk(0.06, (t) => { const n = rnd(); const tick = (n - prev) * Math.exp(-t / 0.004); prev = n; return tick * 0.6 + Math.sin(2 * Math.PI * 2300 * t) * Math.exp(-t / 0.012) * 0.5; }),
       kill: mk(0.7, (t) => { ph += 2 * Math.PI * (95 - 62 * Math.min(1, t / 0.4)) / sr; const boom = Math.sin(ph) * Math.exp(-t / 0.2); lp += (rnd() - lp) * 0.18; const rumble = lp * Math.exp(-t / 0.16) * 2.2; const n = rnd(); const crack = (n - prev) * Math.exp(-t / 0.012); prev = n; const crunch = rnd() * Math.sin(2 * Math.PI * 640 * t) * Math.exp(-t / 0.07) * 0.6; return boom * 1.0 + rumble + crack * 0.9 + crunch; }),
       ram: mk(0.5, (t) => { ph += 2 * Math.PI * (80 - 40 * Math.min(1, t / 0.3)) / sr; const thud = Math.sin(ph) * Math.exp(-t / 0.13); lp += (rnd() - lp) * 0.25; const grind = lp * Math.exp(-t / 0.18) * 1.6; const ring = (Math.sin(2 * Math.PI * 310 * t) + 0.7 * Math.sin(2 * Math.PI * 477 * t)) * Math.exp(-t / 0.09) * 0.35; const n = rnd(); const crack = (n - prev) * Math.exp(-t / 0.01); prev = n; return thud * 1.1 + grind + ring + crack * 0.9; }) };
   },
   play(buf, rate = 1, gain = 1) { if (!this.ctx || !buf) return; const c = this.ctx; const s = c.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate; const g = c.createGain(); g.gain.value = gain; s.connect(g); g.connect(this.sfx); s.start(); },
-  shot() { if (!this.buf) return; this.shotN = (this.shotN || 0) + 1; this.play(this.buf.shot[this.shotN % 3], 0.94 + Math.random() * 0.12, this.shotN % 3 === 0 ? 0.62 : 0.5); },
+  // a round: one of five variants (never the same twice running) with a little pitch and level drift; the first round after a pause is the heavier accent
+  shot() { if (!this.buf) return; const t = this.ctx.currentTime; const first = t - (this.lastShot === undefined ? -9 : this.lastShot) > 0.3; this.lastShot = t; let v; do { v = Math.floor(Math.random() * 5); } while (v === this.lastV); this.lastV = v;
+    this.play(first ? this.buf.heavy : this.buf.shot[v], (0.95 + Math.random() * 0.1) * (first ? 0.97 : 1), (first ? 0.4 : 0.3) * (0.9 + Math.random() * 0.2)); },
+  // The rumble bed under a burst: a 47 Hz triangle (its odd harmonics at 141 and 235 Hz are what a phone speaker plays) and a sliver of low-passed noise, in over 50 ms, out over 150 ms; setEngine drives it from o.firing.
+  setFiring(on) { if (!this.ctx) return; on = !!on; const c = this.ctx, t = c.currentTime;
+    if (!this.bed) { if (!on) return; const bus = c.createGain(), o = c.createOscillator(), n = c.createBufferSource(), lp = c.createBiquadFilter(), g = c.createGain(); o.type = 'triangle'; o.frequency.value = 47; n.buffer = this.getNoise(); n.loop = true; lp.type = 'lowpass'; lp.frequency.value = 110; lp.Q.value = 1; g.gain.value = 0; o.connect(g); n.connect(lp); lp.connect(g); g.connect(bus); o.start(); n.start(0, 1.1); this.bed = { bus, g, live: false, last: 0 }; }
+    const b = this.bed; if (on) { b.last = t; if (!b.live) { b.live = true; b.bus.connect(this.sfx); } b.g.gain.setTargetAtTime(0.1, t, 0.017); } else { b.g.gain.setTargetAtTime(0, t, 0.05); if (b.live && t - b.last > 0.7) { b.live = false; try { b.bus.disconnect(); } catch (e) {} } } },
   hit() { if (this.buf) this.play(this.buf.hit, 0.9 + Math.random() * 0.3, 0.28); },
   kill(n) { this.bark(); if (!this.buf) return; this.play(this.buf.kill, 1 - Math.min(n, 5) * 0.015, 0.95); if (n > 1) this.tone('triangle', 500 + n * 90, 500 + n * 90, 0.12, 0.1, 0.05); },
   ram(light) { if (this.buf) this.play(this.buf.ram, light ? 1.25 : 1, light ? 0.75 : 1); },

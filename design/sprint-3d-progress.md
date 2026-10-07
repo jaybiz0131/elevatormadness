@@ -136,3 +136,23 @@ hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mo
     2.5 s after a 180 or a burnout; tyre smoke thins on the camera-to-car line.
   - Tools: `tools/dctest.mjs` (reverse, 180, burnout and a 50 s stand-off), `tools/dcscen.mjs <out>` (showcase replays for clips), `tools/puck.mjs`.
   - Report and clips: design/stop5/stop5-report.md. Build v27 https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn. Next: Jack's hands on the puck, then the next stop.
+- Stop 6, FEEL AND CHAOS (Jack's v27 verdict: awesome, he drove slowly to watch the carnage). Sim changed: rev `D7`, baselines `replays/chaos-s{1,2,3}-{active,idle}.json` and `beauty.json`; the `drive-*` D6 baselines are retired.
+  - Puck (`input/input.js` puckMove): touching it anywhere is GAS (thr 1). Only a deliberate pull down lifts it (`BRK` = [0.30, 0.62, 0.30]: where the pull starts to lift in the
+    centre and in the FIRE and E-BRAKE zones, and how far it runs to full brake); sliding right adds the gatling, sliding left the e-brake, neither cancels the gas. Lift off is the only coast.
+    `sim/physics.js driveSpeed`: gas keeps driving in an e-brake drift (and builds drift speed); gas with the e-brake held on a straight holds the speed (no drive, no lock-up); e-brake with no gas still
+    locks the wheels (`E.decel`); gas + e-brake below 60 pt/s is still the burnout. `tools/puck.mjs <outDir>` drives the real pointer events and fails on a wrong mapping.
+  - Smoke cloak (sim): `G.cloak` 0..1 charges from a burnout, a long drift, the 180 and a skidding e-brake and thins with time and speed (`T.smoke`); `G.cloakOn` (on 0.55, off 0.30)
+    freezes `G.seenX/seenY` and lets the enemies wander round them (`enemyAI`: `lost`, `px/py/pf`, a '?' pop); a Gunner aims `T.smoke.wide` pt wide (`G.wideShots`). Hero's guns unaffected. HUD: CLOAK bar.
+    Render (`render/three/chaos.js` drawCloak): a pool of big puffs in the tyre-smoke batch (`Q.cloud`: 56 high, 28 low), the camera-to-car line thins to 0.3, puffs the camera sits in fade.
+  - Buildings: `render/three/layout.js` (pure; city.js and the sim both read it) places every plot and tests it against the whole road (a hairpin's far arm and loops that come back count);
+    the old generator put buildings on the road where the road crosses or doubles back on itself. `tools/buildcheck.mjs` fails `npm run build` under 40 pt of clearance; `--legacy` reports the old
+    generator; `tools/buildmap.mjs` draws old vs new. The sim's building walls are now one Rapier box per real plot (`sim/crash.js syncWalls`), so no invisible wall in front of a tower.
+    `facadeAt(road, side, s)` gives the face a decal or fire sits on.
+  - Building chaos (sim state, `sim/facade.js`): `G.scars` (decals), `G.fires` (facade fires) and `G.heatCells` (chips and blasts heat a 48 pt cell, 6 heat = fire). A round that crosses the road
+    edge and meets a plot chips it; a wreck that hits a building at over `T.crash.wallBoom` (13 m/s) blows up there once and pays WALL SMASH; pieces chip walls. `crash.js impactSpeed` now
+    reads the speed before the solver for walls and rails. Render (`chaos.js drawFacade`): one instanced decal draw, dust, plaster, glass flecks, sparks, flame tongues (`fx.flames` batch) and smoke on the face.
+  - Audio (`audio/audio.js`): tyre squeal and scrub and burnout roar driven by `setDrive({slip, burn, turn, lock, speed, scrape})`; five heavier gatling rounds, an accent round and a low rumble bed
+    (no tone above about 1.2 kHz). `tools/audioclip.mjs <wav> [scene]` renders any of it offline.
+  - Tools: `tools/s6test.mjs` (scenarios: burnout, wallfire, drift, gunnerwide, chip), `tools/s6clip.mjs` (scenario clips: puckfire, cloak, wallspray, carboom; `--find=chip|fire|wallboom|cloak`),
+    `tools/s6still.mjs`, `tools/s6events.mjs <replay>`, `tools/audiolive.mjs`. `window.__shunt.fling(car, m/s)` is a staging hook.
+  - Report and clips: design/stop6/stop6-report.md. Next stop (not started): heat, roadblocks, drone, enemy weapons, audio loaded as separate files.

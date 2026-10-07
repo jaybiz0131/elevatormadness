@@ -3,6 +3,7 @@ import { event, playerLane, progress } from './director.js';
 import { emit, hap, say, sfx } from './events.js';
 import { DISTRICTS } from './road.js';
 import { G, compact, recordReplay } from './state.js';
+import { addChip, addHeat, addScar, ignite, facadeStep, facadeOf } from './facade.js';
 import { crashOn, crashStep, crashLaunch, crashBreak, setCrashHandler, setChunkHandler, PART_NAMES, impactSpeed, wreckVelocity, M as CM } from './crash.js';
 export function physics(dt, playing) {
   // previous state for interpolated rendering (audit, "Smooth movement" 2)
@@ -48,6 +49,7 @@ export function physics(dt, playing) {
   G.sq += (1 - G.sq) * Math.min(1, dt * 10);
   const prevDist = G.dist; G.dist += G.fwd * dt; G.road.ensure(G.dist + 2400);
   if (playing) { G.topSpeed = Math.max(G.topSpeed, G.speed); G.speedSum += Math.abs(G.fwd) * dt; G.speedN += dt; driveEffects(dt); }
+  cloakStep(dt, playing);
   if (G.dist < -1500) G.dist = -1500;
   if (playing) { G.distScore += Math.max(0, G.dist - prevDist); while (G.distScore >= T.score.distancePer) { G.distScore -= T.score.distancePer; G.score += 1; } }
   // jump (Stop 5): ballistic. On the ground the car follows the road's height; where the road curves away faster than gravity pulls (speed^2 x curvature
@@ -112,7 +114,7 @@ export function physics(dt, playing) {
   mineStep(dt, live);
   // bullets
   for (const b of G.bullets) { b.py = b.y; b.y += (b.vy === undefined ? T.bulletSpeed : b.vy) * dt; b.x += (b.vx || 0) * dt; b.life = (b.life || 0) + dt; }   // road space: the round keeps the car's own speed, so it closes on traffic at the muzzle speed
-  compact(G.bullets, b => { if (b.y > G.dist + 900 || b.y < G.dist - 1100 || b.life > 0.62 || Math.abs(b.x - REF) > 700) return false; for (const c of live) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck') continue; if (Math.abs(b.x - c.x) < c.w / 2 && Math.abs(b.y - c.y) < c.l / 2) { gunHit(c, b); return false; } } for (const br of G.barrels) if (br.alive && Math.abs(b.x - br.x) < 12 && Math.abs(b.y - br.y) < 14) { explodeBarrel(br, true); return false; } return true; });
+  compact(G.bullets, b => { if (b.y > G.dist + 900 || b.y < G.dist - 1100 || b.life > 0.62 || Math.abs(b.x - REF) > 700) return false; { const dxw = b.x - REF; if (Math.abs(dxw) > G.road.at(b.y).width / 2 + 40) { const side = dxw > 0 ? 1 : -1; const fa = facadeOf(side, b.y); if (fa && Math.abs(dxw) > Math.abs(fa.faceX - REF)) { addChip(side, b.y, b.x); return false; } } } for (const c of live) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck') continue; if (Math.abs(b.x - c.x) < c.w / 2 && Math.abs(b.y - c.y) < c.l / 2) { gunHit(c, b); return false; } } for (const br of G.barrels) if (br.alive && Math.abs(b.x - br.x) < 12 && Math.abs(b.y - br.y) < 14) { explodeBarrel(br, true); return false; } return true; });
   // missiles: arc, smoke, splash 40 pt
   for (const m of G.missiles) { let target = null, best = 1e9; for (const c of live) { if (!c.alive || c.wrecked || c.kind === 'civ' || c.kind === 'truck' || (m.dir < 0 ? c.y >= m.y + 20 : c.y <= m.y - 20)) continue; const d = Math.hypot(c.x - m.x, c.y - m.y); if (d < best) { best = d; target = c; } } m.t += dt; m.py = m.y; if (target) m.x += (target.x - m.x) * Math.min(1, dt * 5); m.y += (700 + 400 * Math.min(1, m.t * 2)) * dt * (m.dir < 0 ? -1 : 1); if (G.rng() < 0.7) addDebris(m.x + (G.rng() - 0.5) * 6, m.y - 10, 0, G.speed * 0.5, 0.5, 'rgba(200,200,200,0.5)', 6, true); if (target && Math.abs(m.x - target.x) < 22 && Math.abs(m.y - target.y) < target.l / 2 + 10) { m.dead = true; G.fx.push({ x: m.x, y: m.y, t: 0, life: 0.5, big: true }); for (const c of live) if (c.alive && !c.wrecked && c.kind !== 'civ' && c.kind !== 'truck' && Math.abs(c.x - m.x) < 40 + c.w / 2 && Math.abs(c.y - m.y) < 40 + c.l / 2) wreck(c, 'missile', true); } if (m.y > G.dist + 1200 || m.y < G.dist - 1500) m.dead = true; }
   compact(G.missiles, m => !m.dead);
@@ -129,6 +131,7 @@ export function physics(dt, playing) {
   for (const d of G.debris) { d.t -= dt; d.x += d.vx * dt; d.y += d.speed * dt; d.vx *= Math.exp(-dt * 2); } compact(G.debris, d => { if (d.t > 0) return true; pool.debris.push(d); return false; });
   for (const m of G.marks) m.t -= dt; compact(G.marks, m => { if (m.t > 0 && m.y > G.dist - 400) return true; pool.marks.push(m); return false; });
   for (const f of G.fx) f.t += dt; compact(G.fx, f => f.t < f.life);
+  facadeStep(dt);
   for (const p of G.pops) p.t += dt; compact(G.pops, p => p.t < 1.0);
   for (const s of G.sparks) { s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; } compact(G.sparks, s => { if (s.t < 0.4) return true; pool.sparks.push(s); return false; });
   if (G.smoke > 0) G.smoke -= dt; if (G.comboT > 0) { G.comboT -= dt; if (G.comboT <= 0) G.combo = 0; }
@@ -170,20 +173,21 @@ export function driveSpeed(dt, playing) {
   if (G.bo > 0) { if (G.bo >= E.burnMin && thr > 0.2) { const k = G.bo / E.burnMax; G.speed = E.launch; G.turbo = Math.max(G.turboT > 0 ? G.turbo : 0, E.burnTurbo * (0.5 + 0.5 * k)); G.turboT = Math.max(G.turboT, E.burnFor); G.speedLines = Math.max(G.speedLines, 0.8); G.punch = 0.2; sfx.turbo(2); hap([10, 20, 40]); addScore(Math.round(T.score.burnout * (0.5 + k)), G.x, G.dist + 40, false, 'BURNOUT'); } G.bo = 0; }
   if (G.flip) { G.speed *= Math.exp(-dt * E.flipDrag); G.braking = false; return; }   // the 180: the car slides round, scrubbing speed; steering takes over at the end
   // the top speed for the throttle: the flat-out speed plus whatever is lifting it (a held drift builds speed, turbos, the slipstream, BOOST)
-  if (G.drifting && thr > 0.3 && !eb) G.driftBuild = Math.min(T.drift.buildMax, G.driftBuild + T.drift.build * dt); else G.driftBuild *= Math.exp(-dt * 2.5);
+  if (G.drifting && thr > 0.3) G.driftBuild = Math.min(T.drift.buildMax, G.driftBuild + T.drift.build * dt); else G.driftBuild *= Math.exp(-dt * 2.5);
   let vmax = D.vmax + G.driftBuild + (G.turboT > 0 ? G.turbo : 0) + (G.slipBoostT > 0 ? D.slipBoost : 0);
   if (G.detour > 0) vmax *= 0.8; if (G.limp) vmax = Math.min(vmax, G.cruise * T.limp.speedK);
   let braking = false;
   if (G.nitro > 0 || G.bstT > 0) { const tgt = G.nitro > 0 ? D.nitro : vmax + T.boost.speed; if (G.speed < tgt) G.speed = Math.min(tgt, G.speed + T.boost.accel * dt); }   // a burst forward whatever the throttle says
   else if (G.wallT > 0) { G.wallT -= dt; G.speed += (Math.sign(G.speed) * Math.min(Math.abs(G.speed), D.minSpeed) - G.speed) * Math.min(1, dt * 4); G.turboT = 0; G.slipBoostT = 0; }   // grinding the rail after a barrier hit
-  else if (thr > D.dead && !eb) {   // the e-brake locks the rear wheels: gas does not drive the car while it is held (a burnout at a stop is above)
+  else if (thr > D.dead && (!eb || G.drifting)) {   // Stop 6: the e-brake never cancels the gas: in a drift the gas drives the car on (a burnout at a stop is above)
     if (G.speed < -D.stopV) { G.speed = Math.min(0, G.speed + D.brakeRate * thr * dt); braking = true; }   // rolling backwards: gas brakes it first
     else { const tgt = vmax * Math.min(1, (thr - D.dead) / (1 - D.dead) * 1.05); if (G.speed < tgt) G.speed = Math.min(tgt, G.speed + D.accel * (0.45 + 0.55 * thr) * (G.speed < 300 ? 1.35 : 1) * dt); else G.speed = Math.max(tgt, G.speed - D.coastDecel * 2 * dt); }
-  } else if (thr < -D.dead) {
+  } else if (thr > D.dead) { /* gas with the e-brake held on the straight: the wheels slide and the car holds its speed, it is neither driven nor slowed */ }
+  else if (thr < -D.dead) {
     if (G.speed > D.stopV) { G.speed = Math.max(0, G.speed - D.brakeRate * Math.min(1, -thr * 1.2) * dt); braking = true; }
     else { const tgt = -D.reverse * Math.min(1, (-thr - D.dead) / (1 - D.dead)); if (G.speed > tgt) G.speed = Math.max(tgt, G.speed - D.reverseAccel * dt); else G.speed = Math.min(tgt, G.speed + D.coastDecel * dt); }
   } else { const c = D.coastDecel * dt; G.speed = Math.abs(G.speed) <= c ? 0 : G.speed - Math.sign(G.speed) * c; }   // coasting: it rolls to a stop
-  if (eb && !G.drifting && Math.abs(G.speed) > 0) { const c = E.decel * dt; G.speed = Math.abs(G.speed) <= c ? 0 : G.speed - Math.sign(G.speed) * c; braking = true; }   // the e-brake alone: the rear wheels lock
+  if (eb && !G.drifting && thr <= D.dead && Math.abs(G.speed) > 0) { const c = E.decel * dt; G.speed = Math.abs(G.speed) <= c ? 0 : G.speed - Math.sign(G.speed) * c; braking = true; }   // the e-brake alone: the rear wheels lock
   if (braking && !G.brakeOn && Math.abs(G.speed) > 200) sfx.brake(); G.brakeOn = braking; G.braking = braking; G.autoLift = false;
   G.reversing = G.speed < -D.stopV; if (G.reversing && G.drifting) endDrift(false);
   if (G.spinning) G.speed -= G.speed * T.spin.loss * dt;
@@ -327,16 +331,32 @@ export function driveEffects(dt) {
   for (const r of G.ribbons) if (r.done) r.t += dt;
   compact(G.ribbons, r => { if (!(r.done && r.t > 6) && !(r.pts.length && r.pts[r.pts.length - 2] < G.dist - 500)) return true; pool.ribbons.push(r); return false; });
 }
+// Stop 6: the smoke cloak (see T.smoke). Burnouts, long drifts, the 180 and a skidding e-brake pour smoke in; it thins with time and with speed.
+export function cloakStep(dt, playing) {
+  const S = T.smoke; let gain = 0;
+  if (playing && G.air <= 0) {
+    if (G.bo > 0) gain = S.burn; else if (G.flip) gain = S.flip;
+    else if (G.drifting) gain = lerp(S.drift[0], S.drift[1], clamp((G.driftT - S.driftAfter) / S.driftRamp, 0, 1)) * clamp(0.55 + Math.abs(G.slip) * 180 / Math.PI / 40, 0.55, 1);
+    else if (G.in.ebrake && Math.abs(G.speed) > 150) gain = S.skid;
+  }
+  G.cloak = clamp(G.cloak + (gain - (S.decay + S.speedDecay * clamp(Math.abs(G.speed) / 1000, 0, 1.3))) * dt, 0, 1);
+  if (!G.cloakOn && G.cloak >= S.on) { G.cloakOn = true; G.cloaks++; G.offX = G.offY = G.offTX = G.offTY = 0; G.offT = 0; G.pops.push({ x: G.x, y: G.dist + 70, text: 'CLOAKED', t: 0 }); }
+  else if (G.cloakOn && G.cloak < S.off) { G.cloakOn = false; for (const c of G.cars) c.lost = false; }
+  if (G.cloakOn) { G.offT -= dt; if (G.offT <= 0) { G.offT = 0.6 + G.rng() * 0.6; G.offTX = (G.rng() * 2 - 1) * S.offX; G.offTY = (G.rng() * 2 - 1) * S.offY; } const k = Math.min(1, dt * S.wander * 2); G.offX += (G.offTX - G.offX) * k; G.offY += (G.offTY - G.offY) * k; }
+  else { G.seenX = G.x; G.seenY = G.dist; G.seenFwd = G.fwd; }
+}
 export function enemyAI(c, dt, playing) {
-  const py = G.dist, px = G.x; const P = c.kind === 'weak' ? T.dart : T.bruiser; const closeCap = P.closeCap, dropCap = P.dropCap; const soft = c.soft ? 1.5 : 1;   // soft: the finale's enemies are slower to strike
+  // Stop 6: with the hero hidden in thick smoke (G.cloakOn) the enemy steers for where it last saw it, plus a wander: it loses track
+  const lost = G.cloakOn && Math.abs(c.y - G.dist) < T.smoke.range; if (lost !== !!c.lost) { c.lost = lost; if (lost) { G.lostSeen++; G.pops.push({ x: c.x, y: c.y, text: '?', t: 0, small: true }); } }
+  const py = lost ? G.seenY + G.offY : G.dist, px = lost ? G.seenX + G.offX : G.x, pf = lost ? G.seenFwd * 0.4 : G.fwd, plane = () => G.road.laneOf(py, px); const P = c.kind === 'weak' ? T.dart : T.bruiser; const closeCap = P.closeCap, dropCap = P.dropCap; const soft = c.soft ? 1.5 : 1;   // soft: the finale's enemies are slower to strike
   if (c.slotOff === undefined) c.slotOff = c.kind === 'weak' ? (G.rng() * 2 - 1) * 60 : 0;
   if (c.gs === undefined) c.gs = G.rng() < 0.6 ? -1 : 1;
   // a Gunner sits behind the car's travel (behind it going forward, ahead of it reversing); with the car slow or stopped it may take either end of it
   if (c.cs === undefined) c.cs = G.rng() < 0.55 ? 1 : -1;
-  const slow = Math.abs(G.fwd) < T.enemy.slow, charger = slow && c.kind !== 'gunner';
+  const slow = Math.abs(pf) < T.enemy.slow, charger = slow && c.kind !== 'gunner';
   // with the car slow or stopped a Ram or Dart lines up at one end of it (c.cs: ahead or behind) and charges it head-on; at speed it rides alongside and lunges
-  const slotY = () => charger && c.state !== 'hold' ? py + c.cs * T.enemy.chargeFrom : c.kind === 'gunner' ? py + 230 * (Math.abs(G.fwd) < T.enemy.slow ? c.gs : -Math.sign(G.fwd)) : py + 6 + c.slotOff;
-  const slotLane = () => { const pl = playerLane(); const n = G.road.laneCount(c.y); let l = pl + c.side; if (l < 0 || l >= n) { c.side = -c.side; l = pl + c.side; } return clamp(l, 0, n - 1); };
+  const slotY = () => charger && c.state !== 'hold' ? py + c.cs * T.enemy.chargeFrom : c.kind === 'gunner' ? py + 230 * (Math.abs(pf) < T.enemy.slow ? c.gs : -Math.sign(pf)) : py + 6 + c.slotOff;
+  const slotLane = () => { const pl = plane(); const n = G.road.laneCount(c.y); let l = pl + c.side; if (l < 0 || l >= n) { c.side = -c.side; l = pl + c.side; } return clamp(l, 0, n - 1); };
   // chase speed: player speed plus a closing term toward the slot, capped
   // an enemy that arrived from beyond the fog must reach the car in a few seconds: far ahead it may brake much harder (down to 0.3 x cruise),
   // and far behind it may take corners faster than grip (up to 2x), so a fast player does not simply leave it behind
@@ -346,7 +366,7 @@ export function enemyAI(c, dt, playing) {
   if (c.face === undefined) c.face = c.speed < 0 ? -1 : 1;
   const far = Math.abs(c.y - py) > 1500; const target = slotY(); const closing = clamp((target - c.y) * 1.6, far ? -900 : -dropCap, far ? 900 : closeCap);
   const kc = Math.abs(G.road.at(c.y).k); const gripMax = kc > 1e-5 ? Math.sqrt(T.drive.grip * 1.1 / kc) * (1 + clamp(Math.abs(py - c.y) / 400 - 0.5, 0, 1)) : 1e9;   // chasers stay in grip through corners
-  let wanted = clamp(G.fwd + closing, -gripMax, gripMax); const EN = T.enemy;
+  let wanted = clamp(pf + closing, -gripMax, gripMax); const EN = T.enemy;
   if (c.state === 'charge') wanted = c.chDir * (c.kind === 'weak' ? EN.chargeV : EN.chargeV * 0.82);
   if (c.ut > 0) { c.ut -= dt; const u = 1 - c.ut / EN.uturn; c.turnA = c.utDir * Math.PI * u * u * (3 - 2 * u); wanted = 0; c.speed += (0 - c.speed) * Math.min(1, dt * 5); if (c.ut <= 0) { c.ut = 0; c.face = -c.face; c.turnA = 0; c.uturns = (c.uturns || 0) + 1; } }
   else { const want = Math.abs(wanted) > EN.uturnV ? Math.sign(wanted) : (c.kind === 'gunner' || Math.abs(py - c.y) > 60 ? Math.sign(py - c.y) || c.face : c.face);
@@ -356,12 +376,12 @@ export function enemyAI(c, dt, playing) {
   if (c.spinOut > 0) { c.spinOut -= dt; c.spin += 8 * dt; return; } else c.spin *= Math.exp(-dt * 6);
   if (!playing) return;
   if (c.kind === 'bruiser' || c.kind === 'weak') {
-    if (charger && (c.state === 'approach' || c.state === 'hold')) { c.lane = playerLane(); const tx = G.road.laneX(c.y, c.lane); c.x += (tx - c.x) * Math.min(1, dt * 3); const d = (c.y - py) * c.cs;
+    if (charger && (c.state === 'approach' || c.state === 'hold')) { c.lane = plane(); const tx = G.road.laneX(c.y, c.lane); c.x += (tx - c.x) * Math.min(1, dt * 3); const d = (c.y - py) * c.cs;
       // in range at either end of the car and lined up with it: a charge (a queue of them each gets its turn)
-      if (c.state === 'approach' && Math.abs(py - c.y) > 110 && Math.abs(py - c.y) < EN.chargeFrom + 220 && Math.abs(c.x - G.x) < 46 && (py - c.y) * c.face > 0 && !c.ut && G.mercyT <= 0 && (c.t > 0.6 || Math.abs(d - EN.chargeFrom) < 70)) { c.state = 'tell'; c.t = 0; c.lean = 0; sfx.sight(); }
+      if (c.state === 'approach' && Math.abs(py - c.y) > 110 && Math.abs(py - c.y) < EN.chargeFrom + 220 && Math.abs(c.x - px) < 46 && (py - c.y) * c.face > 0 && !c.ut && G.mercyT <= 0 && (c.t > 0.6 || Math.abs(d - EN.chargeFrom) < 70)) { c.state = 'tell'; c.t = 0; c.lean = 0; sfx.sight(); }
       if (c.state === 'hold') c.state = 'approach'; }
-    else if (charger && c.state === 'tell') { c.x += (G.x - c.x) * Math.min(1, dt * 2); if (c.t >= P.tell * soft) { c.state = 'charge'; c.t = 0; c.chDir = Math.sign(py - c.y) || 1; event(); } }
-    else if (c.state === 'charge') { c.x += (G.x - c.x) * Math.min(1, dt * 1.5); if (c.t > 1.4 || (c.y - py) * c.chDir > 80) { c.state = 'recover'; c.t = 0; c.cs = -c.cs; } }
+    else if (charger && c.state === 'tell') { c.x += (px - c.x) * Math.min(1, dt * 2); if (c.t >= P.tell * soft) { c.state = 'charge'; c.t = 0; c.chDir = Math.sign(py - c.y) || 1; event(); } }
+    else if (c.state === 'charge') { c.x += (px - c.x) * Math.min(1, dt * 1.5); if (c.t > 1.4 || (c.y - py) * c.chDir > 80) { c.state = 'recover'; c.t = 0; c.cs = -c.cs; } }
     else if (c.state === 'approach') { c.lane = slotLane(); const tx = G.road.laneX(c.y, c.lane); c.x += (tx - c.x) * Math.min(1, dt * 4); if ((Math.abs(c.y - target) < 40 && Math.abs(c.x - tx) < 8) || (c.t > 2.5 && Math.abs(c.y - target) < 120)) { c.state = 'hold'; c.t = 0; c.holdFor = (P.hold[0] + G.rng() * (P.hold[1] - P.hold[0])) * soft; } }
     else if (c.state === 'hold') { const tx = G.road.laneX(c.y, c.lane) + G.vx * 0.05; c.x += (tx - c.x) * Math.min(1, dt * 4); if (c.t >= c.holdFor && G.mercyT <= 0) { c.state = 'tell'; c.t = 0; c.lean = 0; sfx.sight(); } }
     else if (c.state === 'tell') { c.lean = Math.min(1, c.t / (P.tell * soft)) * (px < c.x ? -1 : 1) * 8; if (c.t >= P.tell * soft) { c.state = 'swerve'; c.t = 0; c.dir = px < c.x ? -1 : 1; c.swerveLeft = P.lunge; event(); } }
@@ -369,10 +389,10 @@ export function enemyAI(c, dt, playing) {
     else if (c.state === 'recover') { const tx = G.road.laneX(c.y, c.lane); c.x += (tx - c.x) * Math.min(1, dt * 3); if (c.t >= P.recover) { c.state = 'approach'; c.t = 0; c.side = G.rng() < 0.3 ? -c.side : c.side; } }
   } else if (c.kind === 'gunner') {
     // sits behind, red sight line for 0.8 s, fires along it, then repositions
-    c.lane = c.lane === undefined ? playerLane() : c.lane; const tx = G.road.laneX(c.y, c.lane); c.x += (tx - c.x) * Math.min(1, dt * 3);
+    c.lane = c.lane === undefined ? plane() : c.lane; const tx = G.road.laneX(c.y, c.lane); c.x += (tx - c.x) * Math.min(1, dt * 3);
     if (c.cd > 0) c.cd -= dt;
-    if (c.state !== 'sight' && c.cd <= 0 && G.mercyT <= 0 && Math.abs(c.y - target) < 120 && (py - c.y) * c.face > 0 && !c.ut) { c.state = 'sight'; c.sight = 0; c.sightX = c.x; sfx.sight(); event(); }
-    if (c.state === 'sight') { c.sight += dt; if (c.sight >= T.gunner.sight * (c.soft ? 1.4 : 1)) { c.state = 'approach'; c.cd = T.gunner.cooldown * soft; c.lane = playerLane(); G.fx.push({ x: c.sightX, y: c.y + 300 * c.face, t: 0, life: 0.25, line: true, x0: c.sightX, y0: c.y }); sfx.cannon(); if (G.air <= 0 && Math.abs(G.x - c.sightX) < 22 && (G.dist - c.y) * c.face > 0) damage(1, c, 'Shot by a Gunner'); } }
+    if (c.state !== 'sight' && c.cd <= 0 && G.mercyT <= 0 && Math.abs(c.y - target) < 120 && (py - c.y) * c.face > 0 && !c.ut) { c.state = 'sight'; c.sight = 0; c.sightX = c.x; if (lost) { const W = T.smoke.wide; c.sightX = px + (px >= G.x ? 1 : -1) * (W[0] + G.rng() * (W[1] - W[0])); G.wideShots++; } sfx.sight(); event(); }
+    if (c.state === 'sight') { c.sight += dt; if (c.sight >= T.gunner.sight * (c.soft ? 1.4 : 1)) { c.state = 'approach'; c.cd = T.gunner.cooldown * soft; c.lane = plane(); G.fx.push({ x: c.sightX, y: c.y + 300 * c.face, t: 0, life: 0.25, line: true, x0: c.sightX, y0: c.y }); sfx.cannon(); if (G.air <= 0 && Math.abs(G.x - c.sightX) < 22 && (G.dist - c.y) * c.face > 0) damage(1, c, 'Shot by a Gunner'); } }
   }
 }
 export function carPair(a, b) {
@@ -654,6 +674,7 @@ export function breakUp(c, how) { const B = BREAK[how] || [2, 0.8]; const n = B[
 // a flying piece hits something: a live enemy hard enough is flipped (a pile-up), softer it spins out; a civilian is knocked about; the hero only feels a knock
 export function chunkHit(ch, o) {
   if (!ch.rb || ch.hitCd > 0) return; const v = ch.rb.linvel(); const Ch = T.chunk;
+  if (o.type === 'wall') { const sp = Math.max(Math.hypot(v.x, v.y, v.z), ch.pv || 0); if (sp > 6) { ch.hitCd = 0.5; addScar(o.side, ch.y, Math.max(0.6, ch.h || 1), 0); addHeat(ch.y, o.side, T.facade.pieceHeat, ch.h || 1); spark(ch.x + o.side * 12, ch.y, 4); if (Math.abs(ch.y - G.dist) < 900) sfx.ping(false); } return; }
   if (o.type === 'car' && o.car && o.car.alive && !o.car.wrecked) { const d = o.car; const rel = Math.hypot(v.x - (d.vx || 0) * CM, v.y, v.z + (d.speed || 0) * CM); if (rel < Ch.knockV) return; ch.hitCd = 0.3;
     if (d.kind === 'civ') { if (rel > T.crash.civCrash) civCrash(d, { vx: v.x / CM, vs: -v.z / CM, vy: v.y }, rel); else { d.honk = 0.5; d.vx += Math.sign(v.x || 1) * 160; } return; }
     if (d.kind === 'truck' || d.kind === 'armored') return;
@@ -671,6 +692,8 @@ export function crashHit(c, o) {
     // a wreck slamming into a building: sparks, glass, parts off the car (the renderer reads the fx); into the rail: sparks
     G.fx.push({ x: c.x, y: c.y, t: 0, life: 1.2, slam: true, side: o.side, glass: wall && v > C.wallFx + 3, parts: v > C.wallFx + 5 ? (v > 18 ? 3 : 2) : 0, k: Math.min(1, v / 25), h: c.h || 1 });
     spark(c.x + o.side * 10, c.y, wall ? 14 : 8); if (Math.abs(c.y - G.dist) < 1000) { sfx.crunch(true); if (wall && v > 12) kickShake(0, 0, 0.25); } if (wall) G.wallSlams++;
+    // Stop 6: a wreck hitting a building hard blows up against it (once per car): a fireball on the wall, glass, and the facade catches fire
+    if (wall) { addScar(o.side, c.y, c.h || 1.2, 1); if (v > C.wallBoom && !c.walled) { c.walled = true; G.wallBooms++; addHeat(c.y, o.side, T.facade.boomHeat, c.h || 1.2); G.fx.push({ x: c.x, y: c.y, t: 0, life: 0.7, wallBoom: true, side: o.side, k: Math.min(1, v / 26), h: c.h || 1.2 }); sfx.wreck(); if (Math.abs(c.y - G.dist) < 1000) kickShake(o.side * 2, 2, 0.5); if (c.credit && !c.civCrash) addScore(T.score.wallSmash, c.x, c.y, false, 'WALL SMASH'); } else addHeat(c.y, o.side, 2, c.h || 1.2); }
     return;
   }
   if (o.type === 'hero') {

@@ -15,6 +15,7 @@ import GZ from 'virtual:rapier-wasm';
 import { gunzipSync } from 'fflate';
 import { REF, T } from './constants.js';
 import { G } from './state.js';
+import { layoutChunk, LAYOUT_CHUNK } from '../render/three/layout.js';
 export const M = 4.5 / 60;   // metres per pt (render/three/scale.js has the same number)
 export const CRASH = { ready: false, error: null, stepMs: 0, steps: 0, bodies: 0, kin: 0, walls: 0, events: 0, chunks: 0 };
 // car heights (m) for the boxes; the renderer's models stand on y = 0, the box centre is half this above the road
@@ -36,6 +37,7 @@ export function initCrash() {
 export function crashLine() { return CRASH.ready ? `physics rapier ${CRASH.bodies}/${T.crash.cap} wrecks, ${CRASH.chunks}/${T.chunk.cap} pieces, ${CRASH.kin} cars, ${CRASH.stepMs.toFixed(3)} ms/step` : CRASH.error ? 'physics FAILED ' + CRASH.error : 'physics loading'; }
 
 // ---- the world (module state, rebuilt per run; never serialised) ----
+let bwalls = new Map();
 let W = null, EQ = null, dormant = true; const tags = new Map(); let dyn = [], kin = [], walls = new Map(); let hero = null; let chunkBodies = [];
 // collision groups (membership << 16 | filter): a car's flying pieces (CHUNK) hit the ground, walls, live cars and the hero, never their own wreck or each other
 const GR = { WRECK: 0x10, CHUNK: 0x20 }; const WRECK_GROUPS = (GR.WRECK << 16) | (0xffff & ~GR.CHUNK), CHUNK_GROUPS = (GR.CHUNK << 16) | 0x0f;
@@ -43,7 +45,7 @@ const SEG = 200;   // wall segment length along the road (pt)
 export function crashReset() {
   if (!CRASH.ready) return;
   if (W) { W.free(); W = null; } if (EQ) { EQ.free(); EQ = null; }
-  tags.clear(); dyn = []; kin = []; walls = new Map(); hero = null; chunkBodies = [];
+  tags.clear(); dyn = []; kin = []; walls = new Map(); bwalls = new Map(); hero = null; chunkBodies = [];
   W = new RAPIER.World({ x: 0, y: -T.crash.gravity, z: 0 }); W.timestep = 1 / 60; dormant = true; W.numSolverIterations = 4;
   EQ = new RAPIER.EventQueue(true);
 }
@@ -53,7 +55,7 @@ function drop(b) { for (let i = 0, n = b.numColliders(); i < n; i++) tags.delete
 const yawQ = (a, q) => { q.x = 0; q.y = Math.sin(a / 2); q.z = 0; q.w = Math.cos(a / 2); return q; };
 const QT = { x: 0, y: 0, z: 0, w: 1 }, VT = { x: 0, y: 0, z: 0 };
 // ---- walls: the rail (kerb height in the physics, so wrecks trip over it) and the building faces T.city.setback pt past the road edge, in 200 pt segments ----
-function buildingSide(s, side) {
+export function buildingSide(s, side) {
   // round a hard corner the city leaves the inside of the bend open (city.js): no facade there
   const a = G.road.at(s); const cn = a.corner; if (!cn) { for (const c of G.road.corners) { if (c.s0 > s + 700) break; if (c.hard && s > c.s0 - 1300 && s < c.s1 + 700) return side !== c.dir; } return true; }
   return !(cn.hard && side === cn.dir);
@@ -74,11 +76,19 @@ function syncWalls() {
     for (const side of [-1, 1]) {
       const rx = side * ((w / 2 + 2) * M + 0.35);   // rail: inner face at the road edge plus 2 pt, kerb height, so a tumbling wreck trips over it into the buildings
       tags.set(W.createCollider(RAPIER.ColliderDesc.cuboid(0.35, 0.18, half).setTranslation(rx, 0.18, 0).setFriction(0.5).setRestitution(0.3), b).handle, { type: 'rail', side });
-      if (buildingSide(s, side)) { const fx = side * ((w / 2 + T.city.setback) * M + 2); tags.set(W.createCollider(RAPIER.ColliderDesc.cuboid(2, 5, half).setTranslation(fx, 5, 0).setFriction(0.6).setRestitution(0.25), b).handle, { type: 'wall', side }); }
     }
     walls.set(k, { b, g });
   }
-  CRASH.walls = walls.size;
+  // Stop 6: the buildings are the real ones: one static box per plot from the street layout (layout.js, the same records the city is built from, with the default
+  // options so the sim never depends on what the renderer loaded), standing where the facade stands. Gaps between plots, dropped plots and the open inside of a
+  // hard corner have nothing: a wreck flies on into the plaza instead of bouncing off a wall that is not there. Towers stand back where they are drawn.
+  const c0 = Math.floor((G.dist - 900) / LAYOUT_CHUNK), c1 = Math.floor((G.dist + 1700) / LAYOUT_CHUNK);
+  for (const [key, e] of bwalls) if (e.ck < c0 || e.ck > c1) { drop(e.b); bwalls.delete(key); }
+  for (let ck = Math.max(-1, c0); ck <= c1; ck++) { const lay = layoutChunk(G.road, ck).buildings;
+    for (let i = 0; i < lay.length; i++) { const key = ck * 1000 + i; if (bwalls.has(key)) continue; const r = lay[i]; const hh = r.height / 2, hd = r.depth / 2, hl = r.L / 2;
+      const b = W.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation((r.x - REF) * M, hh, -r.sc * M));
+      tags.set(W.createCollider(RAPIER.ColliderDesc.cuboid(hd, hh, hl).setFriction(0.6).setRestitution(0.25), b).handle, { type: 'wall', side: r.side, h: r.height }); bwalls.set(key, { b, ck }); } }
+  CRASH.walls = walls.size + bwalls.size;
 }
 // ---- kinematic stand-ins for the hero and live cars ----
 function boxDesc(kind, w, l) { const h = HEIGHT[kind] || 1.3; return RAPIER.ColliderDesc.roundCuboid(Math.max(0.3, w * M / 2 - 0.12), h / 2 - 0.12, Math.max(0.5, l * M / 2 - 0.12), 0.12); }
@@ -152,6 +162,8 @@ export function crashStep(dt) {
   const h = 2 * dt;
   // the corner throws a sliding wreck outward, as the arcade model did (v^2 k, road-space)
   for (const c of dyn) { const b = c.rb; const v = b.linvel(); const s = -b.translation().z / M; const kk = G.road.at(s).k; const fwd = -v.z / M; if (Math.abs(kk) > 1e-6 && Math.abs(fwd) > 20) { const ax = -kk * fwd * fwd * M; b.setLinvel({ x: v.x + ax * h, y: v.y, z: v.z }, true); } }
+  // the speed going into the step: a hit is read after the solver has already taken most of it off the body, and a building must be judged by what hit it
+  for (const c of dyn) { const v = c.rb.linvel(); c.pv = Math.hypot(v.x, v.y, v.z); } for (const ch of chunkBodies) { const v = ch.rb.linvel(); ch.pv = Math.hypot(v.x, v.y, v.z); }
   W.step(EQ);
   for (const ch of chunkBodies) poseOf(ch);
   for (const c of dyn) { const b = c.rb; const p = b.translation(), q = b.rotation(), v = b.linvel(); c.x = REF + p.x / M; c.y = -p.z / M; c.h = p.y - G.road.at(c.y).elev * M; c.qx = q.x; c.qy = q.y; c.qz = q.z; c.qw = q.w; c.vx = v.x / M; c.speed = -v.z / M; c.vy = v.y; }
@@ -170,7 +182,7 @@ export function impactSpeed(c, o) {
   else if (o.type === 'wreck' && o.car && o.car.rb) { const v = o.car.rb.linvel(); ox = v.x; oy = v.y; oz = v.z; }
   else if (o.type === 'hero') { ox = G.vx * M; oz = -G.fwd * M; }
   const v = c.rb ? c.rb.linvel() : { x: (c.vx || 0) * M, y: 0, z: -(c.speed || 0) * M };
-  return Math.hypot(v.x - ox, v.y - oy, v.z - oz);
+  const post = Math.hypot(v.x - ox, v.y - oy, v.z - oz); return (o.type === 'wall' || o.type === 'rail') ? Math.max(post, c.pv || 0) : post;
 }
 // push a live (kinematic) car's sim velocity by what hit it, in pt/s
 export function wreckVelocity(c) { if (!c.rb) return { vx: c.vx || 0, vs: c.speed || 0, vy: 0 }; const v = c.rb.linvel(); return { vx: v.x / M, vs: -v.z / M, vy: v.y }; }

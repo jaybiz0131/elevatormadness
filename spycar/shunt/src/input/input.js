@@ -85,10 +85,14 @@ ui.ebrake.addEventListener('pointerup', ebUp); ui.ebrake.addEventListener('point
 // the puck: the thumb's offset from the puck's centre, over 40% of its size, is the stick. Vertical: gas up (analog), coast in the middle, brake and then
 // reverse down. Horizontal: past 38% right the gatling fires, past 38% left the e-brake holds; both combine with the throttle (gas plus guns up-right,
 // standing fire down-right). The dot follows the thumb; a short buzz marks entering FIRE, E-BRAKE or crossing from gas to brake.
-const PZ = 0.38;
+const PZ = 0.38, BRK = [0.3, 0.62, 0.3];   // where the pull down starts to lift (centre, fire and e-brake zones) and how far it runs to full brake
 function puckMove(e) { const r = ui.puck.getBoundingClientRect(); const R = r.width * 0.4; let vx = (e.clientX - (r.left + r.width / 2)) / R, vy = (e.clientY - (r.top + r.height / 2)) / R; const m = Math.hypot(vx, vy); if (m > 1) { vx /= m; vy /= m; }
-  const fire = vx > PZ, eb = vx < -PZ, thr = -vy; const zone = (fire ? 'f' : eb ? 'e' : '') + (thr > 0.15 ? 'g' : thr < -0.15 ? 'b' : '');
-  if (fire && !input.puckFire || eb && !input.puckEb || (thr < -0.15 && input.puckThr >= -0.15 && input.puckThr > 0.15)) buzz(8);
+  // Stop 6: touching the puck anywhere is GAS, so the car keeps moving; the thumb only lifts for a deliberate pull down (BRAKE, and then reverse once stopped).
+  // The FIRE and E-BRAKE zones never cancel the gas: sliding sideways keeps it, and there the pull down has to be harder (`BRK`) so a thumb that drifts low
+  // on its way across does not brake. Lifting the thumb off is the only coast.
+  const fire = vx > PZ, eb = vx < -PZ, side = fire || eb, d = Math.max(0, vy), b0 = side ? BRK[1] : BRK[0], thr = d <= b0 ? 1 : 1 - 2 * Math.min(1, (d - b0) / BRK[2]);
+  const zone = (fire ? 'f' : eb ? 'e' : '') + (thr > 0.15 ? 'g' : thr < -0.15 ? 'b' : '');
+  if (fire && !input.puckFire || eb && !input.puckEb || (thr < -0.15 && input.puckThr >= -0.15)) buzz(8);
   input.puckThr = thr; input.puckFire = fire; input.puckEb = eb; setPuck(vx * R / r.width * ui.puck.offsetWidth, vy * R / r.height * ui.puck.offsetHeight, true, zone); }
 ui.puck.addEventListener('pointerdown', e => { e.preventDefault(); app.onTouch(); if (input.puckId !== null) return; input.puckId = e.pointerId; try { ui.puck.setPointerCapture(e.pointerId); } catch (err) {} puckMove(e); });
 ui.puck.addEventListener('pointermove', e => { if (e.pointerId === input.puckId) puckMove(e); });

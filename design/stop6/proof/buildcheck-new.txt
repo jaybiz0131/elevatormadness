@@ -1,0 +1,106 @@
+seed          1 models    placed 1111 removed {landmark:9,clash:87,road:70,open:14} shortened  17 pushed 10 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 20  OFFENDERS 0  345 ms
+seed          1 no-models placed 1118 removed {open:16,clash:87,road:70} shortened  19 pushed 7 min clearance   52.3 pt (chunk 96 side - s 38616 body) within 60: 22  OFFENDERS 0  346 ms
+seed          2 models    placed 1083 removed {landmark:9,road:52,open:23,clash:112} shortened  23 pushed 2 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 16  OFFENDERS 0  309 ms
+seed          2 no-models placed 1088 removed {road:53,open:23,clash:115} shortened  24 pushed 1 min clearance   52.6 pt (chunk 253 side - s 101530 body) within 60: 16  OFFENDERS 0  337 ms
+seed          3 models    placed 1124 removed {landmark:10,open:11,clash:105,road:38} shortened  16 pushed 1 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 10  OFFENDERS 0  306 ms
+seed          3 no-models placed 1132 removed {open:13,clash:105,road:38} shortened  16 pushed 2 min clearance   53.7 pt (chunk 235 side + s 94054 body) within 60: 14  OFFENDERS 0  316 ms
+seed          4 models    placed 1088 removed {road:66,landmark:10,clash:98,open:17} shortened  18 pushed 4 min clearance   52.3 pt (chunk 45 side + s 18065 body) within 60: 10  OFFENDERS 0  276 ms
+seed          4 no-models placed 1093 removed {road:69,open:19,clash:98} shortened  21 pushed 5 min clearance   52.3 pt (chunk 45 side + s 18065 body) within 60: 13  OFFENDERS 0  325 ms
+seed          5 models    placed 1147 removed {landmark:10,road:32,open:15,clash:75} shortened  19 pushed 0 min clearance   48.8 pt (landmark radio_tower landmark) within 60: 7  OFFENDERS 0  275 ms
+seed          5 no-models placed 1157 removed {road:32,open:15,clash:75} shortened  19 pushed 0 min clearance   52.3 pt (chunk 97 side - s 39066 body) within 60: 7  OFFENDERS 0  338 ms
+seed          6 models    placed 1185 removed {landmark:10,open:15,clash:69,road:16} shortened  13 pushed 0 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 14  OFFENDERS 0  310 ms
+seed          6 no-models placed 1194 removed {open:15,road:17,clash:69} shortened  14 pushed 0 min clearance   52.1 pt (chunk 28 side + s 11330 body) within 60: 16  OFFENDERS 0  339 ms
+seed          7 models    placed 1052 removed {landmark:10,road:81,open:20,clash:111} shortened  20 pushed 0 min clearance   53.4 pt (chunk 30 side - s 12093 awning) within 60: 17  OFFENDERS 0  239 ms
+seed          7 no-models placed 1061 removed {road:82,open:20,clash:111} shortened  21 pushed 2 min clearance   52.4 pt (chunk 303 side - s 121471 awning) within 60: 16  OFFENDERS 0  304 ms
+seed          8 models    placed 1121 removed {landmark:10,road:75,open:10,clash:70} shortened  19 pushed 3 min clearance   45.9 pt (landmark radio_tower (pushed back 20 pt) landmark) within 60: 13  OFFENDERS 0  285 ms
+seed          8 no-models placed 1131 removed {road:75,open:10,clash:70} shortened  19 pushed 6 min clearance   52.3 pt (chunk 167 side + s 67276 body) within 60: 12  OFFENDERS 0  317 ms
+seed          9 models    placed 1145 removed {landmark:12,road:37,open:12,clash:82} shortened  15 pushed 4 min clearance   45.7 pt (landmark parking_garage (pushed back 80 pt) landmark) within 60: 11  OFFENDERS 0  260 ms
+seed          9 no-models placed 1159 removed {road:35,open:12,clash:82} shortened  17 pushed 6 min clearance   52.0 pt (chunk 104 side + s 41762 body) within 60: 12  OFFENDERS 0  313 ms
+seed         10 models    placed 1127 removed {landmark:9,road:36,open:18,clash:92} shortened  14 pushed 2 min clearance   48.2 pt (landmark radio_tower (pushed back 20 pt) landmark) within 60: 11  OFFENDERS 0  290 ms
+seed         10 no-models placed 1136 removed {road:36,open:18,clash:92} shortened  14 pushed 3 min clearance   52.3 pt (chunk 16 side + s 6720 body) within 60: 11  OFFENDERS 0  339 ms
+seed         11 models    placed 1049 removed {landmark:10,road:58,clash:140,open:21} shortened  21 pushed 8 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 20  OFFENDERS 0  261 ms
+seed         11 no-models placed 1057 removed {open:23,road:58,clash:140} shortened  21 pushed 8 min clearance   52.1 pt (chunk 33 side - s 13252 body) within 60: 20  OFFENDERS 0  330 ms
+seed         12 models    placed 1013 removed {road:133,landmark:11,open:26,clash:94} shortened  16 pushed 2 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 15  OFFENDERS 0  278 ms
+seed         12 no-models placed 1019 removed {road:134,open:26,clash:98} shortened  19 pushed 4 min clearance   52.2 pt (chunk 296 side - s 118716 body) within 60: 14  OFFENDERS 0  284 ms
+seed         13 models    placed 1089 removed {landmark:11,road:49,open:19,clash:119} shortened  11 pushed 1 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 6  OFFENDERS 0  236 ms
+seed         13 no-models placed 1100 removed {road:49,open:19,clash:119} shortened  11 pushed 1 min clearance   54.3 pt (chunk 24 side + s 9843 body) within 60: 6  OFFENDERS 0  283 ms
+seed         14 models    placed 1131 removed {landmark:10,clash:109,road:8,open:18} shortened   8 pushed 0 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 3  OFFENDERS 0  252 ms
+seed         14 no-models placed 1138 removed {road:10,open:19,clash:109} shortened   8 pushed 0 min clearance   56.4 pt (chunk 310 side - s 124071 body) within 60: 4  OFFENDERS 0  288 ms
+seed         15 models    placed 1142 removed {landmark:12,road:32,open:14,clash:84} shortened  14 pushed 2 min clearance   45.9 pt (landmark radio_tower (pushed back 20 pt) landmark) within 60: 8  OFFENDERS 0  375 ms
+seed         15 no-models placed 1151 removed {road:35,open:14,clash:84} shortened  14 pushed 4 min clearance   55.5 pt (chunk 103 side + s 41471 body) within 60: 8  OFFENDERS 0  271 ms
+seed         16 models    placed 1086 removed {landmark:12,road:59,open:22,clash:97} shortened  23 pushed 0 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 14  OFFENDERS 0  249 ms
+seed         16 no-models placed 1096 removed {road:61,open:22,clash:97} shortened  24 pushed 1 min clearance   52.2 pt (chunk 143 side + s 57494 awning) within 60: 15  OFFENDERS 0  295 ms
+seed         17 models    placed 1093 removed {landmark:11,road:76,open:23,clash:77} shortened  11 pushed 3 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 12  OFFENDERS 0  266 ms
+seed         17 no-models placed 1104 removed {road:76,open:23,clash:77} shortened  12 pushed 4 min clearance   53.2 pt (chunk 38 side + s 15356 awning) within 60: 11  OFFENDERS 0  289 ms
+seed         18 models    placed 1084 removed {landmark:10,open:15,clash:115,road:63} shortened  26 pushed 5 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 12  OFFENDERS 0  277 ms
+seed         18 no-models placed 1094 removed {open:15,clash:115,road:63} shortened  26 pushed 4 min clearance   52.4 pt (chunk 157 side - s 63148 awning) within 60: 18  OFFENDERS 0  285 ms
+seed         19 models    placed 1092 removed {landmark:10,open:20,clash:115,road:45} shortened  11 pushed 4 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 9  OFFENDERS 0  233 ms
+seed         19 no-models placed 1100 removed {open:21,clash:115,road:46} shortened  11 pushed 3 min clearance   52.8 pt (chunk 232 side - s 93078 awning) within 60: 10  OFFENDERS 0  308 ms
+seed         20 models    placed 1093 removed {road:43,landmark:11,open:21,clash:121} shortened  19 pushed 3 min clearance   52.4 pt (chunk 202 side + s 81020 body) within 60: 10  OFFENDERS 0  247 ms
+seed         20 no-models placed 1102 removed {road:45,open:21,clash:121} shortened  19 pushed 4 min clearance   52.4 pt (chunk 202 side + s 81020 body) within 60: 12  OFFENDERS 0  291 ms
+seed         21 models    placed 1007 removed {landmark:11,road:101,open:20,clash:148} shortened  20 pushed 10 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 17  OFFENDERS 0  249 ms
+seed         21 no-models placed 1017 removed {road:102,open:20,clash:148} shortened  22 pushed 11 min clearance   52.2 pt (chunk 37 side - s 14964 awning) within 60: 20  OFFENDERS 0  267 ms
+seed         22 models    placed 1080 removed {road:85,landmark:10,open:10,clash:98} shortened  18 pushed 4 min clearance   48.3 pt (landmark radio_tower (pushed back 20 pt) landmark) within 60: 14  OFFENDERS 0  252 ms
+seed         22 no-models placed 1090 removed {road:85,open:10,clash:98} shortened  18 pushed 4 min clearance   52.7 pt (chunk 149 side - s 59681 body) within 60: 15  OFFENDERS 0  295 ms
+seed         23 models    placed 1056 removed {landmark:12,open:18,clash:135,road:59} shortened  20 pushed 8 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 16  OFFENDERS 0  236 ms
+seed         23 no-models placed 1068 removed {open:18,clash:135,road:59} shortened  22 pushed 6 min clearance   52.2 pt (chunk 101 side + s 40827 body) within 60: 10  OFFENDERS 0  290 ms
+seed         24 models    placed 1066 removed {landmark:9,road:86,open:19,clash:106} shortened  27 pushed 4 min clearance   45.6 pt (landmark radio_tower (pushed back 20 pt) landmark) within 60: 12  OFFENDERS 0  256 ms
+seed         24 no-models placed 1075 removed {road:86,open:19,clash:106} shortened  28 pushed 3 min clearance   52.7 pt (chunk 33 side - s 13561 body) within 60: 18  OFFENDERS 0  293 ms
+seed         25 models    placed 1093 removed {road:66,landmark:10,clash:105,open:11} shortened  16 pushed 2 min clearance   52.4 pt (chunk 133 side - s 53346 body) within 60: 11  OFFENDERS 0  254 ms
+seed         25 no-models placed 1101 removed {road:67,open:12,clash:105} shortened  19 pushed 2 min clearance   52.4 pt (chunk 133 side - s 53346 body) within 60: 12  OFFENDERS 0  281 ms
+seed         26 models    placed 1127 removed {landmark:10,road:40,clash:88,open:15} shortened  18 pushed 0 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 10  OFFENDERS 0  277 ms
+seed         26 no-models placed 1136 removed {road:40,open:16,clash:88} shortened  19 pushed 0 min clearance   52.9 pt (chunk 168 side + s 67483 body) within 60: 11  OFFENDERS 0  308 ms
+seed         27 models    placed 1104 removed {landmark:9,road:52,clash:102,open:13} shortened  10 pushed 4 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 19  OFFENDERS 0  270 ms
+seed         27 no-models placed 1111 removed {road:52,open:15,clash:102} shortened  10 pushed 5 min clearance   53.0 pt (chunk 177 side + s 71155 awning) within 60: 19  OFFENDERS 0  330 ms
+seed         28 models    placed 1033 removed {landmark:10,open:13,clash:113,road:108} shortened  33 pushed 5 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 19  OFFENDERS 0  230 ms
+seed         28 no-models placed 1042 removed {open:13,clash:113,road:109} shortened  35 pushed 7 min clearance   52.0 pt (chunk 193 side + s 77676 body) within 60: 18  OFFENDERS 0  269 ms
+seed         29 models    placed 1119 removed {landmark:9,open:22,clash:74,road:67} shortened  17 pushed 4 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 16  OFFENDERS 0  262 ms
+seed         29 no-models placed 1128 removed {open:22,clash:74,road:67} shortened  19 pushed 7 min clearance   53.0 pt (chunk 258 side + s 103327 awning) within 60: 15  OFFENDERS 0  305 ms
+seed         30 models    placed 1056 removed {landmark:13,open:12,clash:112,road:92} shortened  22 pushed 5 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 14  OFFENDERS 0  268 ms
+seed         30 no-models placed 1068 removed {open:12,clash:113,road:92} shortened  23 pushed 5 min clearance   52.3 pt (chunk 242 side + s 96892 body) within 60: 13  OFFENDERS 0  286 ms
+seed         31 models    placed 1120 removed {landmark:9,road:48,open:21,clash:87} shortened  21 pushed 4 min clearance   52.1 pt (chunk 278 side + s 111502 body) within 60: 7  OFFENDERS 0  269 ms
+seed         31 no-models placed 1129 removed {road:48,open:21,clash:87} shortened  21 pushed 4 min clearance   52.1 pt (chunk 278 side + s 111502 body) within 60: 8  OFFENDERS 0  296 ms
+seed         32 models    placed 1111 removed {landmark:9,open:16,clash:119,road:26} shortened  12 pushed 4 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 13  OFFENDERS 0  248 ms
+seed         32 no-models placed 1120 removed {open:16,clash:119,road:26} shortened  13 pushed 5 min clearance   52.5 pt (chunk 212 side + s 85136 body) within 60: 9  OFFENDERS 0  277 ms
+seed         33 models    placed 1078 removed {road:75,landmark:11,open:15,clash:101} shortened  12 pushed 9 min clearance   52.0 pt (chunk 213 side + s 85265 body) within 60: 7  OFFENDERS 0  244 ms
+seed         33 no-models placed 1087 removed {road:77,open:15,clash:101} shortened  12 pushed 9 min clearance   52.0 pt (chunk 213 side + s 85265 body) within 60: 10  OFFENDERS 0  346 ms
+seed         34 models    placed 1059 removed {landmark:9,open:19,road:95,clash:101} shortened  22 pushed 2 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 11  OFFENDERS 0  234 ms
+seed         34 no-models placed 1068 removed {open:19,road:95,clash:101} shortened  21 pushed 2 min clearance   52.5 pt (chunk 215 side + s 86374 body) within 60: 12  OFFENDERS 0  285 ms
+seed         35 models    placed 1091 removed {landmark:10,clash:131,road:32,open:18} shortened  12 pushed 3 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 16  OFFENDERS 0  228 ms
+seed         35 no-models placed 1095 removed {road:33,open:20,clash:134} shortened  12 pushed 4 min clearance   53.1 pt (chunk 93 side + s 37246 body) within 60: 11  OFFENDERS 0  253 ms
+seed         36 models    placed 1077 removed {landmark:9,road:51,open:19,clash:117} shortened  16 pushed 1 min clearance   48.6 pt (landmark radio_tower landmark) within 60: 7  OFFENDERS 0  249 ms
+seed         36 no-models placed 1085 removed {road:49,open:19,clash:120} shortened  19 pushed 1 min clearance   52.3 pt (chunk 38 side + s 15522 awning) within 60: 9  OFFENDERS 0  312 ms
+seed         37 models    placed 1165 removed {landmark:9,road:45,open:8,clash:58} shortened   9 pushed 0 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 7  OFFENDERS 0  250 ms
+seed         37 no-models placed 1172 removed {road:46,open:9,clash:58} shortened  10 pushed 1 min clearance   53.3 pt (chunk 219 side - s 87673 body) within 60: 8  OFFENDERS 0  326 ms
+seed         38 models    placed 1092 removed {road:81,landmark:11,open:17,clash:83} shortened  12 pushed 2 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 6  OFFENDERS 0  257 ms
+seed         38 no-models placed 1103 removed {road:81,open:17,clash:83} shortened  12 pushed 2 min clearance   55.6 pt (chunk 46 side + s 18486 body) within 60: 9  OFFENDERS 0  275 ms
+seed         39 models    placed 1096 removed {road:91,landmark:10,open:10,clash:74} shortened  13 pushed 9 min clearance   45.5 pt (landmark radio_tower (pushed back 140 pt) landmark) within 60: 11  OFFENDERS 0  315 ms
+seed         39 no-models placed 1105 removed {road:92,open:10,clash:74} shortened  16 pushed 9 min clearance   52.1 pt (chunk 147 side + s 58866 awning) within 60: 12  OFFENDERS 0  347 ms
+seed         40 models    placed 1125 removed {landmark:8,open:16,clash:91,road:39} shortened  18 pushed 4 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 11  OFFENDERS 0  289 ms
+seed         40 no-models placed 1133 removed {open:16,clash:91,road:39} shortened  18 pushed 4 min clearance   53.3 pt (chunk 293 side + s 117442 awning) within 60: 10  OFFENDERS 0  344 ms
+seed 1602037259 models    placed 1107 removed {landmark:10,open:14,clash:96,road:51} shortened  16 pushed 6 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 11  OFFENDERS 0  252 ms
+seed 1602037259 no-models placed 1117 removed {open:14,clash:96,road:51} shortened  16 pushed 5 min clearance   53.4 pt (chunk 179 side + s 71917 awning) within 60: 10  OFFENDERS 0  292 ms
+seed 1551704402 models    placed 1101 removed {landmark:10,road:67,open:13,clash:89} shortened  14 pushed 2 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 8  OFFENDERS 0  292 ms
+seed 1551704402 no-models placed 1110 removed {road:68,open:13,clash:89} shortened  15 pushed 1 min clearance   52.8 pt (chunk 100 side + s 40113 body) within 60: 11  OFFENDERS 0  323 ms
+seed 1294219629 models    placed 1146 removed {landmark:10,open:15,clash:97,road:23} shortened  14 pushed 0 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 3  OFFENDERS 0  261 ms
+seed 1294219629 no-models placed 1156 removed {open:15,clash:97,road:23} shortened  14 pushed 0 min clearance   54.8 pt (chunk 22 side - s 8851 body) within 60: 5  OFFENDERS 0  314 ms
+seed 1431789288 models    placed 1131 removed {landmark:10,road:54,open:13,clash:72} shortened  14 pushed 2 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 11  OFFENDERS 0  254 ms
+seed 1431789288 no-models placed 1138 removed {road:57,open:13,clash:72} shortened  13 pushed 3 min clearance   53.1 pt (chunk 293 side - s 117550 body) within 60: 15  OFFENDERS 0  274 ms
+seed 3312580430 models    placed 1106 removed {landmark:10,road:56,open:15,clash:99} shortened  26 pushed 8 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 21  OFFENDERS 0  248 ms
+seed 3312580430 no-models placed 1112 removed {road:56,open:15,clash:103} shortened  26 pushed 7 min clearance   52.2 pt (chunk 235 side - s 94063 body) within 60: 24  OFFENDERS 0  353 ms
+seed 3625598983 models    placed 1057 removed {landmark:10,road:82,clash:118,open:16} shortened   8 pushed 5 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 12  OFFENDERS 0  239 ms
+seed 3625598983 no-models placed 1062 removed {road:83,open:18,clash:120} shortened  10 pushed 5 min clearance   52.3 pt (chunk 66 side - s 26534 awning) within 60: 12  OFFENDERS 0  266 ms
+seed 1189745718 models    placed 1030 removed {landmark:9,road:96,clash:136,open:17} shortened  25 pushed 4 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 19  OFFENDERS 0  242 ms
+seed 1189745718 no-models placed 1038 removed {road:96,open:18,clash:136} shortened  27 pushed 6 min clearance   52.7 pt (chunk 196 side + s 78474 body) within 60: 17  OFFENDERS 0  262 ms
+seed 1832015102 models    placed 1181 removed {landmark:11,road:12,open:8,clash:64} shortened   2 pushed 0 min clearance   58.3 pt (chunk 162 side + s 64868 front) within 60: 4  OFFENDERS 0  241 ms
+seed 1832015102 no-models placed 1192 removed {road:12,open:8,clash:64} shortened   2 pushed 1 min clearance   52.5 pt (chunk 109 side - s 44003 awning) within 60: 3  OFFENDERS 0  268 ms
+seed 2747797734 models    placed 1075 removed {landmark:9,road:87,open:11,clash:99} shortened  10 pushed 7 min clearance   52.2 pt (chunk 36 side + s 14560 body) within 60: 11  OFFENDERS 0  225 ms
+seed 2747797734 no-models placed 1079 removed {road:89,open:11,clash:102} shortened  10 pushed 7 min clearance   52.5 pt (chunk 101 side + s 40774 awning) within 60: 13  OFFENDERS 0  251 ms
+seed 4275044659 models    placed 1151 removed {landmark:10,road:39,open:12,clash:78} shortened  11 pushed 3 min clearance   49.1 pt (landmark radio_tower landmark) within 60: 8  OFFENDERS 0  222 ms
+seed 4275044659 no-models placed 1158 removed {road:39,open:12,clash:81} shortened  11 pushed 4 min clearance   52.3 pt (chunk 187 side + s 74925 awning) within 60: 9  OFFENDERS 0  268 ms
+
+buildcheck (new generator): 50 seeds x 2 configs, road to 125000 pt, 110220 buildings, 441378 parts measured (110298 re-measured by brute force, 0 mismatches); 5 model files match MODEL_SIZE
+  removed {landmark:504,clash:9952,road:5978,open:1620}; shortened 1684; pushed back 370; landmarks (models loaded): 78 placed, 15 pushed back, 7 left out for lack of room, 65 skipped beside a hard corner (old rule)
+  minimum clearance 45.5 pt at seed 39 landmark radio_tower (pushed back 140 pt) (landmark); within 60 pt: 1215; closer than 40 pt (OFFENDERS): 0; 28.7 s
+build check passed: every building at least 40 pt from the road (smallest 45.5 pt)
+exit 0

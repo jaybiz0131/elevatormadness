@@ -7,6 +7,7 @@ import { T, lerp, clamp } from '../../sim/constants.js';
 import { PUFF_LIFE } from '../../sim/physics.js';
 import { M, toWorld } from './scale.js';
 import { Q } from '../../quality.js';
+import { Chaos } from './chaos.js';
 const V = new Vector3(), V2 = new Vector3(), D = new Object3D(), COL = new Color();
 function softTexture(size, falloff) { const d = new Uint8Array(size * size * 4); for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) { const dx = (x + 0.5) / size - 0.5, dy = (y + 0.5) / size - 0.5; const r = Math.min(1, Math.hypot(dx, dy) * 2); const a = Math.pow(1 - r, falloff); const i = (y * size + x) * 4; d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = Math.round(255 * a); } const t = new DataTexture(d, size, size, RGBAFormat); t.needsUpdate = true; t.minFilter = LinearFilter; t.magFilter = LinearFilter; t.colorSpace = NoColorSpace; return t; }
 // tyre smoke: a 2x2 atlas of billowy puffs (overlapping soft lobes under a round falloff), alpha only; seeded so it never changes
@@ -15,6 +16,14 @@ function smokeTexture() { const S = 256, H = 128, d = new Uint8Array(S * S * 4);
     for (let y = 0; y < H; y++) for (let x = 0; x < H; x++) { const u = (x + 0.5) / H, v = (y + 0.5) / H; let acc = 0; for (const [cx, cy, cr, w] of lobes) { const q = Math.hypot(u - cx, v - cy) / cr; if (q < 1) acc += w * (1 - q * q) * (1 - q * q); }
       const edge = Math.max(0, 1 - Math.hypot(u - 0.5, v - 0.5) * 2); const al = Math.min(1, acc * 1.35) * Math.min(1, edge * 2.6); const i = ((oy + y) * S + ox + x) * 4; d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = Math.round(255 * al); } }
   const t = new DataTexture(d, S, S, RGBAFormat); t.needsUpdate = true; t.minFilter = LinearFilter; t.magFilter = LinearFilter; t.colorSpace = NoColorSpace; return t; }
+// a flame tongue (Stop 6): a teardrop that is wide and bright at the foot, leans and narrows to a wavering tip, with ragged edges; alpha only, tinted per instance
+function flameTexture() { const W = 64, H = 128, d = new Uint8Array(W * H * 4);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const u = (x + 0.5) / W - 0.5, v = (y + 0.5) / H;   // v: 0 at the foot, 1 at the tip
+    const sway = 0.09 * Math.sin(v * 7.5) * v, half = 0.46 * Math.pow(Math.max(0, 1 - v), 0.8) * (0.55 + 0.45 * Math.min(1, v * 6)) ;
+    const e = (Math.abs(u - sway) / Math.max(half, 0.001)); const rag = 1 + 0.10 * Math.sin(v * 31 + u * 17) + 0.08 * Math.sin(v * 53);
+    const core = Math.max(0, 1 - e * rag); const al = Math.pow(core, 0.75) * Math.min(1, (1 - v) * 3.2 + 0.1) * (v < 0.04 ? v / 0.04 : 1);
+    const i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = Math.round(255 * Math.min(1, al)); }
+  const t = new DataTexture(d, W, H, RGBAFormat); t.needsUpdate = true; t.minFilter = LinearFilter; t.magFilter = LinearFilter; t.colorSpace = NoColorSpace; return t; }
 export function arrowTexture(size) { const d = new Uint8Array(size * size * 4); for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) { const u = x / size, v = y / size; const head = u > 0.55 && Math.abs(v - 0.5) < (1 - u) * 1.1; const shaft = u > 0.1 && u <= 0.55 && Math.abs(v - 0.5) < 0.16; const i = (y * size + x) * 4; d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = (head || shaft) ? 255 : 0; } const t = new DataTexture(d, size, size, RGBAFormat); t.needsUpdate = true; t.colorSpace = NoColorSpace; return t; }
 const VERT_BILLBOARD = `attribute float instanceAlpha; attribute float instanceParam; attribute float instanceGround; uniform vec3 sunDir; varying vec2 vUv; varying vec3 vColor; varying float vAlpha; varying float vParam; varying float vH; varying vec2 vSun;
 void main() { vUv = uv; vColor = instanceColor; vAlpha = instanceAlpha; vParam = instanceParam; vec3 c = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; float sx = length(instanceMatrix[0].xyz), sy = length(instanceMatrix[1].xyz);
@@ -71,6 +80,7 @@ export class FX {
     // fake lights on the road: round pools under lamps and headlights, and stretched reflection streaks under signs and neon
     this.pools = new Batch(scene, 384, { map: soft, flat: true, additive: true, renderOrder: 2 });
     this.cones = new Batch(scene, 64, { map: softHard, additive: true, renderOrder: 9 });
+    this.flames = new Batch(scene, 96, { map: flameTexture(), additive: true, depthTest: true, renderOrder: 10 });   // Stop 6: building fires
     // sparks: points
     const sg = new BufferGeometry(); this.sparkPos = new BufferAttribute(new Float32Array(1024 * 3), 3); this.sparkCol = new BufferAttribute(new Float32Array(1024 * 3), 3); this.sparkPos.setUsage(DynamicDrawUsage); this.sparkCol.setUsage(DynamicDrawUsage); sg.setAttribute('position', this.sparkPos); sg.setAttribute('color', this.sparkCol); sg.setDrawRange(0, 0);
     this.sparks = new Points(sg, new PointsMaterial({ size: 0.42, vertexColors: true, sizeAttenuation: true, transparent: true, depthWrite: false, blending: AdditiveBlending, map: soft })); this.sparks.frustumCulled = false; this.sparks.renderOrder = 11; scene.add(this.sparks); this.sparkN = 0;
@@ -90,7 +100,8 @@ export class FX {
     const lg = new BufferGeometry(); this.linePos = new BufferAttribute(new Float32Array(16 * 2 * 3), 3); this.linePos.setUsage(DynamicDrawUsage); lg.setAttribute('position', this.linePos); lg.setDrawRange(0, 0);
     this.lines = new LineSegments(lg, new LineBasicMaterial({ color: new Color('#ff3030'), transparent: true, opacity: 0.9, depthWrite: false })); this.lines.frustumCulled = false; this.lines.renderOrder = 12; scene.add(this.lines); this.lineN = 0;
     this.puffOrder = new Int32Array(800); this.puffKey = new Float32Array(800); this.puffSeq = new Int32Array(800);
-    this.batches = [this.glows, this.puffs, this.shadows, this.markers, this.rings, this.stamps, this.pools, this.cones];
+    this.chaos = new Chaos(scene); this.boomHook = null;   // Stop 6: the smoke cloak and the damaged street (chaos.js)
+    this.batches = [this.glows, this.puffs, this.shadows, this.markers, this.rings, this.stamps, this.pools, this.cones, this.flames];
   }
   // the effect pools are fixed arrays (Batch capacity, 1,024 sparks, 256 debris); a quality level only lowers how many of them are used, and when a pool is full new effects are dropped, never allocated
   begin() { this.glows.cap = Math.min(this.glows.mesh.instanceMatrix.count, Q.glows); this.puffs.cap = Math.min(this.puffs.mesh.instanceMatrix.count, Q.puffTotal); for (const b of this.batches) b.begin(); this.debris.count = 0; this.bullets.count = 0; this.missiles.count = 0; this.lineN = 0; this.sparkN = 0; }
@@ -132,6 +143,7 @@ export class FX {
       const i = this.puffs.add(V.x, V.y + r * 0.45 + k * 0.6, V.z, r * 2, r * 2, 0.92, 0.92, 0.95, 0.9 * cut * (1 - k) * (1 - k * 0.3) * Math.min(1, p.t * 12), Math.min(6.2, rot) + 10 * (Math.floor(sd * 0.64) & 3), 0, 1, V.y); if (i >= 0) { this.puffOrder[n] = i; this.puffKey[n] = -((V.x - cam.x) ** 2 + (V.y - cam.y) ** 2 + (V.z - cam.z) ** 2); n++; } }
     for (const d of G.debris) { toWorld(G.road, d.x, d.y, V); if (d.smoke) {   // missile exhaust: grows 1 m to 2.6 m as it fades (its life is 0.5 s), each puff its own shape and turn, ground-faded
         const k = clamp(1 - d.t / 0.5, 0, 1), sz = 1 + 1.6 * k, hh = (d.x * 12.9898 + d.y * 78.233) % 6.2832; const i = this.puffs.add(V.x, V.y + sz * 0.4, V.z, sz, sz, 0.8, 0.8, 0.82, clamp(d.t, 0, 1) * 0.9, Math.abs(hh) % 6.2 + 10 * (Math.floor(Math.abs(hh) * 3) & 3), 0, 1, V.y); if (i >= 0 && n < 800) { this.puffOrder[n] = i; this.puffKey[n] = -((V.x - cam.x) ** 2 + (V.y - cam.y) ** 2 + (V.z - cam.z) ** 2); n++; } } else { const j = this.debris.count; if (j < Q.debris) { D.position.set(V.x, V.y + 0.3 + Math.abs(Math.sin(d.t * 7)) * 0.8, V.z); D.rotation.set(d.t * 5, d.t * 3, 0); D.scale.set(d.s / 8, d.s / 8, d.s / 8); D.updateMatrix(); this.debris.setMatrixAt(j, D.matrix); COL.set(d.col.startsWith('#') ? d.col : '#777777'); this.debris.instanceColor.setXYZ(j, COL.r, COL.g, COL.b); this.debris.count = j + 1; } } }
+    n = this.chaos.draw(this, G, elapsed, cam, car, n);   // Stop 6: the cloak's smoke, building chips, scars and fires
     // rounds: every third is a tracer, a long hot streak along its own direction; the rest are short dim slugs
     for (const b of G.bullets) { const by = lerp(b.py === undefined ? b.y : b.py, b.y, alpha); toWorld(G.road, b.x, by, V); const j = this.bullets.count; if (j < 160) { const tr = !!b.tr, ang = Math.atan2(b.vx || 0, b.vy === undefined ? 1 : b.vy); D.position.set(V.x, V.y + 0.8, V.z); D.rotation.set(0, -(G.road.frame(by).psi + ang), 0); D.scale.set(tr ? 1.3 : 1, tr ? 1.3 : 1, tr ? 6 : 1.2); D.updateMatrix(); this.bullets.setMatrixAt(j, D.matrix); if (tr) this.bullets.instanceColor.setXYZ(j, 4.0, 2.6, 0.9); else this.bullets.instanceColor.setXYZ(j, 1.4, 1.1, 0.5); this.bullets.count = j + 1; if (tr) this.glow(V.x, V.y + 0.8, V.z, 0.5, 1, 0.65, 0.2, 0.5); } }
     { const dt = this.brassT < 0 ? 0 : Math.min(0.05, elapsed - this.brassT); this.brassT = elapsed; const a = this.brassA;
@@ -179,5 +191,5 @@ export class FX {
   setSun(dir) { this.puffs.mat.uniforms.sunDir.value.copy(dir); }
   // the smoke's light: the key light's colour (damped) and an ambient from the look's sky and fog, so it sits in each look
   setLook(P) { this.wet = P.wet; const u = this.puffs.mat.uniforms; u.sunCol.value.set(P.sunColor).multiplyScalar(Math.min(1, P.sunIntensity * 0.3) * (P.sunElevation > 0 ? 1 : 0.5)); u.ambCol.value.set(P.hemiSky).multiplyScalar(0.35 * P.hemiIntensity).add(COL.set(P.fog).multiplyScalar(0.4)).addScalar(0.26); }
-  reset() { this.ribbonState = new WeakMap(); this.skidCol.array.fill(-1e9); this.skidCol.needsUpdate = true; this.skidHead = 0; }
+  reset() { this.chaos.reset(); this.ribbonState = new WeakMap(); this.skidCol.array.fill(-1e9); this.skidCol.needsUpdate = true; this.skidHead = 0; }
 }

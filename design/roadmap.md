@@ -128,3 +128,8 @@ See the master plan at the top and `design/stop3/stop3-report.md`.
 Jack's v18 verdict was "not fun yet": nothing happening, no goal, weak hits. Before any new level content this stop adds a pacing
 director, the hood gatling with heavy hit and kill feedback, and a three minute run with a progress bar, combos and a finale. See
 `design/fun/stop1-report.md`. Handbrake 180, the intro and the levels have not been started.
+
+## Update (2026-10-07): Sprint D, Stop 6, feel and chaos
+Jack's v27 verdict: awesome, much more fun. This stop fixed the puck (touching it is gas; fire and e-brake never cancel it), gave the tyres a voice (screech, a heavier gatling), added the smoke
+cloak (burnouts and long drifts hide the hero, enemies lose track), stopped buildings standing in the road (a layout module and a build gate) and made the street take damage (chips, facade fires,
+wrecks that blow up against buildings). See `design/stop6/stop6-report.md`. Next stop (not started): heat, roadblocks, the drone, enemy weapons, audio loaded as separate files.

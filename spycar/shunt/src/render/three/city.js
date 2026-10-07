@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { REF, T, hashI } from '../../sim/constants.js';
 import { M, toWorld } from './scale.js';
 import { CHUNK, AHEAD } from './road.js';
+import { layoutChunk, landmarkLayout, LAYOUT_CHUNK } from './layout.js';   // where everything stands: pure, tested against the road by tools/buildcheck.mjs
 import { KIT, kitMaterial, kitGlow } from './kit.js';
 import { PROP_BLINK } from './propModels.js';
 import { Q } from '../../quality.js';
@@ -29,12 +30,6 @@ function facadeTexture() {
 const SIGN_COLS = 8, SIGN_ROWS = 13, SIGN_W = 256, SIGN_H = 64;
 function drawSign(x, text, col, ox, oy) { x.save(); x.beginPath(); x.rect(ox, oy, SIGN_W, SIGN_H); x.clip(); x.fillStyle = '#000'; x.fillRect(ox, oy, SIGN_W, SIGN_H); x.font = '700 ' + (text.length > 10 ? 27 : 36) + 'px Rajdhani, "Avenir Next Condensed", Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.shadowColor = col; x.shadowBlur = 9; x.fillStyle = col; x.fillText(text, ox + SIGN_W / 2, oy + SIGN_H / 2 + 2); x.shadowBlur = 0; x.fillStyle = '#fff'; x.globalAlpha = 0.55; x.fillText(text, ox + SIGN_W / 2, oy + SIGN_H / 2 + 2); x.restore(); }
 function signAtlas() { const c = document.createElement('canvas'); c.width = SIGN_COLS * SIGN_W; c.height = SIGN_ROWS * SIGN_H; const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, c.width, c.height); const t = new CanvasTexture(c); t.colorSpace = SRGBColorSpace; t.generateMipmaps = false; t.minFilter = LinearFilter; t.userData = { ctx: x, cells: new Map() }; return t; }
-// the centre of a corner's arc in world metres: of the two points R either side of the apex, the one that is R from the road a little way along it
-function cornerCenter(road, c) {
-  if (c._rcenter) return c._rcenter; const a = c.apex, A = new Vector3(), B = new Vector3(), Q = new Vector3();
-  toWorld(road, REF - c.R, a, A); toWorld(road, REF + c.R, a, B); toWorld(road, REF, a + c.R * 0.5, Q);
-  const inside = Math.abs(A.distanceTo(Q) - c.R * M) < Math.abs(B.distanceTo(Q) - c.R * M) ? A : B; return (c._rcenter = { x: inside.x, z: inside.z });
-}
 // a building box with per-face UVs sized so a window is 2.5 m wide and 3 m tall; colour tint per building
 function building(w, h, d, x, y, z, tint, uOff) {
   const g = new BoxGeometry(w, h, d); g.translate(x, y + h / 2, z); const uv = g.attributes.uv; const pos = g.attributes.position; const n = pos.count; const col = new Float32Array(n * 3);
@@ -95,44 +90,28 @@ export class City {
     if (this.glb.storefront) { this.glb.storefront.geometry.computeBoundingBox(); const b = this.glb.storefront.geometry.boundingBox; this.sfDepth = b.max.z - b.min.z; } this.reset(); }
   buildChunk(G, k) {
     const road = G.road, seed = road.seed; const s0 = k * CHUNK; const parts = []; const tubes = []; const signs = []; const fronts = [], roofs = []; const tint = new Color();
-    for (const side of [-1, 1]) {
-      let s = s0; let i = 0;
-      while (s < s0 + CHUNK - 40) {
-        const h1 = hash(seed, Math.round(s) + side * 7, 1), h2 = hash(seed, Math.round(s) + side * 7, 2), h3 = hash(seed, Math.round(s) + side * 7, 3);
-        const len = 120 + h1 * 160;
-        // a landmark's plot stays clear of street buildings on its side
-        if (LANDMARKS.some(lm => this.glb[lm.name] && lm.side === side && Math.abs(s + len / 2 - lm.s) < lm.clear)) { s += len + 20 + h2 * 40; i++; continue; }
-        const a = road.at(s + len / 2); const w = a.width;
-        // no towers round a hard corner (1,300 pt before to 700 pt after it): the chase camera swings across the inside of the bend and
-        // used to end up inside a 40 m block; here every building is 7 m or less, well under the camera's height
-        const tight = road.corners.some(c => c.hard && s + len / 2 > c.s0 - 1300 && s + len / 2 < c.s1 + 700);
-        // round a tight bend a building on the inside lands on the road's other arc (the offset is wider than the radius): leave that plot empty
-        if (tight) { toWorld(road, REF + side * (w / 2 + T.city.setback + 8 / M), s + len / 2, V); let clash = false; for (let s2 = Math.max(0, s - 1400); s2 <= s + 1400 && !clash; s2 += 40) { if (s2 > road.end - 3100) break; if (Math.abs(s2 - (s + len / 2)) < 250) continue; const w2 = road.at(s2).width; toWorld(road, REF, s2, V2); if (Math.hypot(V.x - V2.x, V.z - V2.z) < (w2 / 2 + 230) * M) clash = true; }
-          // another stretch of road within 230 pt of the plot (a block is up to 200 pt deep): it sits in the nook of a bend
-          if (!clash) for (const c of road.corners) { if (!c.hard || s + len / 2 < c.s0 - 300 || s + len / 2 > c.s1 + 300) continue; const ctr = cornerCenter(road, c); if (Math.hypot(V.x - ctr.x, V.z - ctr.z) < (c.R + 150) * M) { clash = true; break; } }   // and nothing stands inside the bend itself: the camera looks across it, and a rooftop in the middle of a hairpin hid the road
-          if (clash) { s += len + 20 + h2 * 40; i++; continue; } }
-        const tower = h3 > 0.72 && !tight; const depth = tower ? 16 + h2 * 12 : 8 + h2 * 6; const height = tower ? 24 + (h3 - 0.72) * 70 : tight ? Math.min(7, 3 + h3 * 5) : 5 + h3 * 12; const x = REF + side * (w / 2 + (tower ? 330 + 120 * h2 : T.city.setback) + depth / 2 / M);
-        toWorld(road, x, s + len / 2, V); const yaw = -(road.frame(s + len / 2).psi);
-        tint.setHSL(0.6 + h2 * 0.15, 0.25, 0.09 + h1 * 0.06);
-        // the box runs along the road (z) with its depth across (x); the road-facing facade is at x = -side * depth / 2
-        const L = len * M * 0.92, fx = -side * depth / 2; const local = [building(depth, height, L, 0, 0, 0, tint, Math.floor(h3 * 8) / 8)];
-        const glbFront = !tower && this.glb.storefront && L >= 7, glbRoof = !tower && this.glb.rooftop_ac;
-        if (glbFront) fronts.push({ x: x - side * (depth / 2 + this.sfDepth / 2 - 1.5) / M, s: s + len / 2, yaw: side * Math.PI / 2 });   // shopfront model, its back 1.5 m into the facade
-        if (glbRoof) for (let r = 0; r < 1; r++) { const hr = hash(seed, Math.round(s) + side * 7 + r * 13, 5); roofs.push({ x: x + side * (hr - 0.5) * depth * 0.4 / M, s: s + len / 2 + (r - 0.5) * L * 0.5 / M, y: height + 0.6, yaw: hr * 6.283 }); }
-        if (!tower && !glbFront) { const sw = h1 > 0.5 ? SWATCH.warm : SWATCH.cool; local.push(detail(0.25, 2.6, L * 0.86, fx - side * 0.1, 1.5, 0, sw, WHITE), detail(1.4, 0.18, L * 0.9, fx - side * 0.7, 3.1, 0, SWATCH.roof, tint)); }   // lit shopfront and an awning over it
-        local.push(detail(depth + 0.3, 0.6, L + 0.3, 0, height + 0.3, 0, SWATCH.roof, tint));   // parapet
-        for (let r = 0; r < (tower ? 3 : glbRoof ? 0 : 2); r++) { const hr = hash(seed, Math.round(s) + side * 7 + r * 13, 5); local.push(detail(1.6 + hr * 1.6, 1.0 + hr, 2 + hr * 2, (hr - 0.5) * depth * 0.5, height + 0.6 + (0.5 + hr / 2), (r - 1) * L * 0.28, SWATCH.roof, tint.clone().multiplyScalar(1.5))); }   // roof units
-        const g = mergeGeometries(local, false); for (const q of local) q.dispose(); g.rotateY(yaw); g.translate(V.x, 0, V.z); parts.push(g);
-        // neon tube along the roof edge facing the road, and a sign on the facade for some buildings
-        const nc = new Color(NEON[Math.floor(h1 * NEON.length)]); const inner = x - side * depth / 2 / M;
-        tubes.push({ x: inner, s: s + len / 2, len: len * M * 0.9, y: height - 0.3, col: nc }); if (h2 > 0.5) tubes.push({ x: inner, s: s + len / 2, len: len * M * 0.9, y: 4.0, col: new Color(NEON[Math.floor(h3 * NEON.length)]) });
-        if (h3 > 0.35 && len > 160) signs.push({ x: inner - side * 0.1 / M, s: s + len / 2, y: Math.min(height - 3, 7 + h1 * 6), w: Math.min(len * M * 0.7, 9), text: BRANDS[Math.floor(hash(seed, Math.round(s), 4) * BRANDS.length)], col: NEON[Math.floor(h2 * NEON.length)], side });
-        s += len + 20 + h2 * 40; i++;
-      }
+    if (CHUNK !== LAYOUT_CHUNK) throw new Error('layout.js and road.js disagree about the chunk length');
+    // layout.js decides every plot (and shortens, pushes back or drops any that would come within 52 pt of the road, however far along the road the
+    // other stretch is); this turns its records into boxes. tower, tight and glb front/roof choices live there too
+    const lay = layoutChunk(road, k, { glb: this.glb, sfDepth: this.sfDepth });
+    for (const b of lay.buildings) {
+      const { side, s, sc, len, x, depth, height, L, h1, h2, h3 } = b;
+      toWorld(road, x, sc, V); const yaw = -(road.frame(sc).psi);
+      tint.setHSL(0.6 + h2 * 0.15, 0.25, 0.09 + h1 * 0.06);
+      // the box runs along the road (z) with its depth across (x); the road-facing facade is at x = -side * depth / 2
+      const local = [building(depth, height, L, 0, 0, 0, tint, Math.floor(h3 * 8) / 8)];
+      if (b.front) fronts.push({ x: b.front.x, s: b.front.s, yaw: b.front.yaw });
+      for (const r of b.roofs) roofs.push({ x: r.x, s: r.s, y: r.y, yaw: r.yaw });
+      for (const d of b.details) local.push(detail(d.w, d.h, d.d, d.x, d.y, d.z, SWATCH[d.sw], d.white ? WHITE : d.bright ? tint.clone().multiplyScalar(1.5) : tint));   // shopfront, awning, parapet, roof units
+      const g = mergeGeometries(local, false); for (const q of local) q.dispose(); g.rotateY(yaw); g.translate(V.x, 0, V.z); parts.push(g);
+      // neon tube along the roof edge facing the road, and a sign on the facade for some buildings
+      const nc = new Color(NEON[Math.floor(h1 * NEON.length)]); const inner = x - side * depth / 2 / M;
+      tubes.push({ x: inner, s: sc, len: len * M * 0.9, y: height - 0.3, col: nc }); if (h2 > 0.5) tubes.push({ x: inner, s: sc, len: len * M * 0.9, y: 4.0, col: new Color(NEON[Math.floor(h3 * NEON.length)]) });
+      if (h3 > 0.35 && len > 160) signs.push({ x: inner - side * 0.1 / M, s: sc, y: Math.min(height - 3, 7 + h1 * 6), w: Math.min(len * M * 0.7, 9), text: BRANDS[Math.floor(hash(seed, Math.round(s), 4) * BRANDS.length)], col: NEON[Math.floor(h2 * NEON.length)], side });
     }
     if (!parts.length) parts.push(new BoxGeometry(0.01, 0.01, 0.01));   // a chunk round a bend can have no building at all
     const merged = mergeGeometries(parts, false); for (const p of parts) p.dispose(); merged.computeBoundingSphere();
-    const mesh = new Mesh(merged, this.mat); mesh.castShadow = Q.castCity; mesh.receiveShadow = true; mesh.userData = { tubes, signs, fronts, roofs, s0 }; return mesh;
+    const mesh = new Mesh(merged, this.mat); mesh.castShadow = Q.castCity; mesh.receiveShadow = true; mesh.userData = { tubes, signs, fronts, roofs, s0, lay: lay.buildings }; return mesh;   // lay: the layout records (facades, heights) for the damage effects
   }
   update(G, rdist, elapsed, look) {
     const road = G.road; if (this.seed !== road.seed) { this.reset(); this.seed = road.seed; }
@@ -166,11 +145,9 @@ export class City {
       // driver control: no overpass (nothing over the road)
       if (s % 1200 === 600) { const side = h < 0.5 ? -1 : 1; const x = REF + side * (w / 2 + 24); this.put(this.vent, road, x, s, 0); const n = 6; for (let j = 0; j < n; j++) { const ph = ((elapsed * 0.35 + j / n + h) % 1); toWorld(road, x + (ph * 10 - 2) * side, s + 10, V); this.fx.puff(V.x, V.y + 0.3 + ph * 4.5, V.z, 0.5 + ph * 1.6, (1 - ph) * 0.35 * this.steam, 0.75, 0.78, 0.84); } }
     }
-    for (const lm of LANDMARKS) { const im = this.glb[lm.name]; if (!im || lm.s < rdist - 600 || lm.s > rdist + 2600) continue;
-      // a tower beside a hard corner would stand between the camera and the road: it stays out of the way
-      if (road.corners.some(c => c.hard && lm.s > c.s0 - 1300 && lm.s < c.s1 + 900)) continue;
-      const w = road.at(lm.s).width; this.put(im, road, REF + lm.side * (w / 2 + lm.off), lm.s, lm.yaw);
-      if (lm.name === 'radio_tower') { toWorld(road, REF + lm.side * (w / 2 + lm.off), lm.s, V); for (const k of [1, 0.72, 0.48, 0.24]) this.fx.glow(V.x, V.y + 80 * k, V.z, 3.2, 1, 0.1, 0.06, 0.9 * PROP_BLINK.value); } }   // set pieces; the radio tower's red warning lights bloom
+    for (const lm of landmarkLayout(road, { glb: this.glb, sfDepth: this.sfDepth })) { const im = this.glb[lm.name]; if (!im || lm.s < rdist - 600 || lm.s > rdist + 2600) continue;   // layout.js leaves out a tower beside a hard corner and pushes one back if it would stand within 45 pt of the road
+      this.put(im, road, lm.x, lm.s, lm.yaw);
+      if (lm.name === 'radio_tower') { toWorld(road, lm.x, lm.s, V); for (const k of [1, 0.72, 0.48, 0.24]) this.fx.glow(V.x, V.y + 80 * k, V.z, 3.2, 1, 0.1, 0.06, 0.9 * PROP_BLINK.value); } }   // set pieces; the radio tower's red warning lights bloom
     PROP_BLINK.value = Math.sin(elapsed * 3.2) > -0.2 ? 1 : 0.15;   // aircraft-warning blink
     for (const p of this.props) { p.visible = p.count > 0; if (p.count) p.instanceMatrix.needsUpdate = true; } this.tubes.visible = this.tubes.count > 0;
   }
@@ -180,10 +157,3 @@ export class City {
   reset() { for (const [, m] of this.chunks) { this.group.remove(m); m.geometry.dispose(); } this.chunks.clear(); this.warm = true; }
 }
 const LAMP_COL = new Color('#ffd9a0');
-// the three landmarks: one each, at fixed distances along every road (pt), on one side, set back `off` pt from the road edge, turned to
-// face the road; `clear` is the half-length of the plot kept free of street buildings
-const LANDMARKS = [
-  { name: 'radio_tower', s: 4200, side: -1, off: 330, clear: 340, yaw: 0 },
-  { name: 'hotel_tower', s: 9000, side: 1, off: 300, clear: 280, yaw: Math.PI / 2 },
-  { name: 'parking_garage', s: 15000, side: -1, off: 160, clear: 300, yaw: -Math.PI / 2 },
-];
