@@ -122,3 +122,17 @@ hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mo
   ground, ramps over a pile of wrecks, airtime as an earned hero shot), BOOST (meter on the button, flame, lens kick), shock mines (hold MISSILE, pursuer tumbles into the
   others, crates refill), regrade on time, score, takedowns, pile-ups and best combo. The swipe turn-around was built, then removed (replaced by the e-brake 180 in the next stop).
   Sim changed: baselines `replays/hill-s{1,2,3}-{active,idle}.json` and `beauty.json` (rev D5, replay format 3). The `ctrl-*` D4 baselines are retired.
+- Driver control and carnage (Jack's change of plan after v26, in the same session as the Stop 5 checkpoint). Sim changed: replay format 4 (an analog throttle in
+  sixteenths, plus the e-brake), rev `D6`, baselines `replays/drive-s{1,2,3}-{active,idle}.json` and `beauty.json`; the `hill-*` D5 baselines are retired.
+  - Player-set pace (`sim/physics.js` driveSpeed and driveSteer): analog gas, coast, brake to a stop, reverse; the e-brake drifts in a bend, spins a 180 with full steer
+    (`startFlip`/`flipStep`, `G.face` is the nose's direction down the road, `bodyA()` the hero's yaw), and gas plus e-brake at a stop is a burnout (`G.bo`, a fishtail spring, a launch on release).
+  - Enemies adapt (enemyAI): U-turns (`c.face`, `c.ut`), Rams and Darts charge from either end when the player is slow, gunners face the player from either end; civilians follow and change lanes.
+    The director paces on max(distance, time / 240 s); civilians spawn behind a slow player.
+  - Puck (`input/input.js`, `#puck` in index.html): up gas, down brake and reverse, right fire, left e-brake; MISSILE (tap missile, hold mine) and BOOST above; Settings > Simple buttons;
+    after a 180 the steering is mirrored (`input.onFace`). Bots set `inp.raw` and drive the throttle through `tools/pace.js`.
+  - Carnage: `render/three/carChunks.js` splits each car model into eight parts at load; `sim/crash.js` runs them as Rapier bodies (cap 16, groups WRECK and CHUNK); a piece can flip an enemy.
+    `render/three/explosions.js` is fire first (fireball, base flames, embers, black smoke; no white flash or rings).
+  - World and camera: street front set back 96 pt behind the pavement, no overpasses or gantries; camera C is the default and follows the car 70% across the road; no hero shot during or
+    2.5 s after a 180 or a burnout; tyre smoke thins on the camera-to-car line.
+  - Tools: `tools/dctest.mjs` (reverse, 180, burnout and a 50 s stand-off), `tools/dcscen.mjs <out>` (showcase replays for clips), `tools/puck.mjs`.
+  - Report and clips: design/stop5/stop5-report.md. Build v27 https://claude.ai/artifact/Ae94og4nbVyk46LuFhsYPn. Next: Jack's hands on the puck, then the next stop.

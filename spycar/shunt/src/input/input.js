@@ -12,10 +12,16 @@ export const input = {
   // one snapshot per fixed step: everything the simulation may read from the player. The keyboard moves the anchor here, in step time.
   // a frozen (hit-stop) step could not use these requests: hold them for the next live step
   relatch(i) { if (i.slam) this.slamReq = i.slam; if (i.special) this.specialReq = true; if (i.boost) this.boostReq = true; if (i.mine) this.mineReq = true; this.flickN += i.flicks; },
-  snapshot(out, playing) { if (this.keys.left || this.keys.right) this.carAnchor += ((this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0)) * T.maxLateral * S.sens * STEP; let off = this.carAnchor; if (this.anchor && !(this.keys.left || this.keys.right)) { let dx = this.cur.x - this.anchor.x; if (Math.abs(dx) < T.deadZone) dx = 0; else dx -= Math.sign(dx) * T.deadZone; off += dx * T.thumbRatio * S.sens; } if (!Number.isFinite(off)) { off = 0; this.carAnchor = 0; }   // a NaN here would make a replay (JSON turns NaN into null) differ from the run
+  snapshot(out, playing) { const fs = this.mirror(); if (this.keys.left || this.keys.right) this.carAnchor += fs * ((this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0)) * T.maxLateral * S.sens * STEP; let off = this.carAnchor; if (this.anchor && !(this.keys.left || this.keys.right)) off += fs * this.thumbOff(); if (!Number.isFinite(off)) { off = 0; this.carAnchor = 0; }   // a NaN here would make a replay (JSON turns NaN into null) differ from the run
     // driver control: the throttle comes from the puck while a thumb is on it, else from GAS and BRAKE (buttons or keys); quantised so the replay sees the same number
     let thr = this.puckId !== null ? this.puckThr : ((this.gas || this.keys.gas) ? 1 : 0) - ((this.brake || this.keys.brake) ? 1 : 0); thr = Math.round(Math.max(-1, Math.min(1, thr)) * THR_Q) / THR_Q;
     out.off = off; out.thr = thr; out.ebrake = this.ebHeld || this.puckEb || !!this.keys.ebrake; deriveInput(out); out.fire = this.fireHeld || this.puckFire || !!this.keys.fire; out.special = this.specialReq; out.slam = this.slamReq; out.flicks = this.flickN; out.p = playing ? 1 : 0; out.boost = this.boostReq; out.mine = this.mineReq; this.slamReq = 0; this.specialReq = false; this.flickN = 0; this.boostReq = false; this.mineReq = false; return out; },
+  // driver control: with the car turned round (G.face < 0) the camera looks back down the road, so the thumb and the keys are mirrored to keep "right on the
+  // screen" meaning right; a bot (raw) steers in road space. thumbOff: the thumb's pull from where it touched down, in road pt
+  mirror() { return G && !this.raw && G.face < 0 ? -1 : 1; },
+  thumbOff() { if (!this.anchor || !this.cur) return 0; let dx = this.cur.x - this.anchor.x; if (Math.abs(dx) < T.deadZone) dx = 0; else dx -= Math.sign(dx) * T.deadZone; return dx * T.thumbRatio * S.sens; },
+  // the nose just turned: keep the car's target where it was (the thumb's pull changes sign, so the anchor takes twice the old pull)
+  onFace() { if (this.raw) return; this.carAnchor += 2 * (-this.mirror()) * this.thumbOff(); },
   push(x, t, y) { if (this.trail.length < TRAIL) this.trail.push({ x, y, t }); const i = this.trailN % TRAIL; this.trail[i].x = x; this.trail[i].y = y; this.trail[i].t = t; this.trailN++; },
   sample(back) { return this.trail[(this.trailN - 1 - back + TRAIL * 2) % TRAIL]; },   // back = 0 is the newest
   // carAnchor is the car's target as an offset from the road centre, so no input means holding the lane while the road wanders

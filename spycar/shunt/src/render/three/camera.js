@@ -11,10 +11,11 @@ export const CAM = { fov: 42, pitch: 47, dist: 76, pitchHi: 56, distHi: 92, fovS
 // 25 degrees down cannot see the horizon at all, so B sits at 22 degrees with a slightly wider lens)
 // Stop 2: B is the default and closer (66 m slant, 44 degrees, the car 38% up the screen), with a higher lift (38 degrees, 84 m) for corners
 export const CAM_PRESETS = {
-  A: { pitch: 47, dist: 76, fov: 42, pitchHi: 56, distHi: 92, lowerThird: 1 / 3, fovSpeed: 12, distSpeed: 26, leadCap: 0.44, lean: 5, blend: 0.7 },
-  B: { pitch: 21, dist: 66, fov: 44, pitchHi: 36, distHi: 84, lowerThird: 0.38, fovSpeed: 8, distSpeed: 14, leadCap: 0.36, lean: 5, blend: 0.7 },
+  A: { pitch: 47, dist: 76, fov: 42, pitchHi: 56, distHi: 92, lowerThird: 1 / 3, fovSpeed: 12, distSpeed: 26, leadCap: 0.44, lean: 5, blend: 0.7, follow: 0 },
+  B: { pitch: 21, dist: 66, fov: 44, pitchHi: 36, distHi: 84, lowerThird: 0.38, fovSpeed: 8, distSpeed: 14, leadCap: 0.36, lean: 5, blend: 0.7, follow: 0 },
   // Stop 4: C sits close behind the car, low and tight, to show the hero's detail (the hairpin lift still raises it a little)
-  C: { pitch: 9, dist: 19, fov: 60, pitchHi: 20, distHi: 30, lowerThird: 0.30, fovSpeed: 6, distSpeed: 3, leadCap: 0.30, lean: 6, blend: 0.6 },
+  // driver control: C is the default and only about 10 m wide at the car, so it follows the car most of the way across the road (a car at the kerb stays in frame)
+  C: { pitch: 9, dist: 19, fov: 60, pitchHi: 20, distHi: 30, lowerThird: 0.30, fovSpeed: 6, distSpeed: 3, leadCap: 0.30, lean: 6, blend: 0.6, follow: 0.7 },
 };
 let baseName = 'B';
 export function setCamPreset(name) { const p = CAM_PRESETS[name] || CAM_PRESETS.B; baseName = CAM_PRESETS[name] ? name : 'B'; Object.assign(CAM, p); return baseName; }
@@ -40,7 +41,8 @@ export class RoadCamera {
   update(G, rs, rx, dt, elapsed, shakeOn, fovKick, carX = 195) {
     const road = G.road;
     road.world(carX, rs, this.WP); this.carPos.set(this.WP.X * M, road.at(rs).elev * M + 1, -this.WP.Y * M);   // the car itself, for the occlusion test
-    const here = road.frame(rs).psi; const lead = road.frame(rs + CAM.leadS * Math.max(0, G.speed)).psi; const target = here + clamp(lead - here, -CAM.leadCap, CAM.leadCap);
+    // driver control: the camera sits behind the car's nose, so after an e-brake 180 it swings round (the spring) and looks back down the road
+    const backA = G.face < 0 ? Math.PI : 0; const here = road.frame(rs).psi; const lead = road.frame(rs + CAM.leadS * (G.fwd || 0)).psi; const target = here + clamp(lead - here, -CAM.leadCap, CAM.leadCap) + backA;
     if (!this.psiInit) { this.psi = target; this.psiInit = true; }
     // critically damped spring on the heading
     const w = CAM.spring; const a = -2 * w * this.psiV - w * w * (this.psi - target); this.psiV += a * dt; this.psi += this.psiV * dt;
@@ -72,7 +74,7 @@ export class RoadCamera {
     const below = Math.atan(Math.tan(fov / 2 * Math.PI / 180) * (1 - 2 * Pp.lower)) * 180 / Math.PI;
     const pitchDeg = Pp.pitch; const pitch = (pitchDeg + below) * Math.PI / 180;
     const back = dist * Math.cos(pitch), height = dist * Math.sin(pitch);
-    road.world(CAM.fixed ? carX : 195 + rx + (carX - 195) * 0.65 * clamp(this.lift / 0.55, 0, 1), rs, this.WP);   // in a corner the camera follows the car across the road (on a bend the car otherwise drifts to the corner of the screen, under the buttons)
+    road.world(CAM.fixed ? carX : 195 + rx + (carX - 195) * Math.max(CAM.follow || 0, 0.65 * clamp(this.lift / 0.55, 0, 1)), rs, this.WP);   // in a corner the camera follows the car across the road (on a bend the car otherwise drifts to the corner of the screen, under the buttons)
     this.anchor.set(this.WP.X * M, road.at(rs).elev * M, -this.WP.Y * M);
     // yaw: an orbit offset round the car (a tracking shot, the corner cam's outside swing); aim turns the view itself toward the corner exit or a crash
     const psiO = this.psi + Pp.yaw * Math.PI / 180; const psiC = psiO + Pp.aim * Math.PI / 180; const s = Math.sin(psiO), c = Math.cos(psiO); this.fwd.set(s, 0, -c); this.right.set(c, 0, s);

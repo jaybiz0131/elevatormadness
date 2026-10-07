@@ -11,4 +11,4 @@ export const PACE = `window.__pace = (g, inp, style) => {
   if (g.cars.some(c => c.alive && !c.wrecked && c.kind === 'civ' && Math.abs(c.x - g.x) < 34 && c.y - g.dist > 30 && c.y - g.dist < 90 + v * 0.12) && v > 300 && style !== 'weak') thr = Math.min(thr, -0.6);
   // turned round by accident (a 180): pull the e-brake with the thumb hard over to swing back, then drive on
   if (g.face < 0 && !g.flip) { thr = Math.abs(v) < 200 ? 1 : 0.3; eb = Math.abs(v) > 180; inp.cur = { x: 200 + 130, y: inp.cur ? inp.cur.y : 700 }; }
-  inp.puckId = 77; inp.puckThr = thr; inp.puckEb = eb; inp.puckFire = false; inp.gas = false; inp.brake = false; inp.ebHeld = false; };`;
+  inp.raw = true; inp.puckId = 77; inp.puckThr = thr; inp.puckEb = eb; inp.puckFire = false; inp.gas = false; inp.brake = false; inp.ebHeld = false; };`;

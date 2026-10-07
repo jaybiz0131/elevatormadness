@@ -76,6 +76,7 @@ setSink((ev) => {
     else if (e.k === 'special') { if (e.show) { const first = ui.special.hidden; ui.special.hidden = false; if (first) pulseSpecial(); } updateSpecial(G); ui.special.classList.toggle('armed', !!e.armed && !!(G.special && G.special.ammo > 0)); }
     else if (e.k === 'pulse') pulseSpecial();
     else if (e.k === 'mines') updateBoost(G);
+    else if (e.k === 'face') input.onFace();
   }
 });
 function simulate(dt, playing) {

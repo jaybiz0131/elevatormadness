@@ -123,7 +123,7 @@ export function createThreeRenderer(canvas, opts = {}) {
     if (!frame) for (const cr of G.crates) { const ahead = cr.y - G.dist; if (ahead < -100 || ahead > 1700) continue; const rep = cr.kind === 'repair', arm = cr.kind === 'armor'; toWorld(G.road, cr.x, cr.y, V); const k = Math.min(1, (1700 - ahead) / 400) * (0.75 + 0.25 * Math.sin(st.elapsed * 6)); fx.glow(V.x, V.y + 1.2, V.z, rep ? 4.5 : 3, rep ? 0.3 : arm ? 0.3 : 1, rep ? 1 : arm ? 0.85 : 0.75, rep ? 0.5 : arm ? 1 : 0.2, 0.7 * k); if (rep || arm) fx.glow(V.x, V.y + 6, V.z, 1.2, rep ? 0.5 : 0.5, 1, rep ? 0.7 : 1, 0.6 * k); }   // a beacon on every crate (the repair one has a second, higher light)
     if (frame) { cars.update({ road: G.road, cars: frame.cars.slice(0, frame.n).map(c => Object.assign(c, { alive: true, px: c.x, py: c.y })), x: G.x }, 1, fx, st.elapsed); cars.updatePlayer(G, rx, rdist, fx, { phase: 'over', lean: frame.lean }, st.elapsed); }
     else { cars.update(G, alpha, fx, st.elapsed); cars.updatePlayer(G, rx, rdist, fx, st, st.elapsed); }
-    fx.update(G, alpha, st.elapsed, roadCam.pos); fx.end();
+    fx.update(G, alpha, st.elapsed, roadCam.pos, roadCam.carPos); fx.end();
     const topK = clamp((G.speed - 0.85 * T.drive.top) / (0.15 * T.drive.top), 0, 1); state.chroma += (topK - state.chroma) * Math.min(1, dt * 4); post.setChroma(state.chroma);
     if (P.rain > 0) rain.material.map.offset.y -= dt * 2.2;
     renderer.info.reset();

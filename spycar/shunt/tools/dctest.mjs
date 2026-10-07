@@ -13,7 +13,7 @@ const errors = []; page.on('pageerror', e => errors.push(e.message.slice(0, 200)
 await page.goto('file://' + path.join(here, '..', 'dist', 'shunt.html') + '?lite=1&seed=' + (opt.seed || 3)); await page.waitForFunction(() => window.__shunt && window.__shunt.G); await page.waitForTimeout(400);
 const r = await page.evaluate(() => {
   const sh = window.__shunt; const out = {};
-  const run = (secs, f) => { const G = sh.G, inp = sh.input; const t1 = G.t + secs; while (G.t < t1) { if (inp.id === null) inp.down(1, 200, 700, 0); inp.anchor = { x: 200, y: 700 }; inp.carAnchor = G.targetX - G.road.at(G.dist).center; inp.cur = { x: 200, y: 700 }; inp.gas = false; inp.brake = false; inp.fireHeld = false; inp.ebHeld = false; f(G, inp); sh.runSteps(1); } };
+  const run = (secs, f) => { const G = sh.G, inp = sh.input; const t1 = G.t + secs; while (G.t < t1) { inp.raw = true; if (inp.id === null) inp.down(1, 200, 700, 0); inp.anchor = { x: 200, y: 700 }; inp.carAnchor = G.targetX - G.road.at(G.dist).center; inp.cur = { x: 200, y: 700 }; inp.gas = false; inp.brake = false; inp.fireHeld = false; inp.ebHeld = false; f(G, inp); sh.runSteps(1); } };
   const steer = (G, inp, x) => { inp.cur = { x: 200 + Math.max(-90, Math.min(90, (x - G.targetX) / 1.4)), y: 700 }; };
   // reverse
   sh.startPlaying(); run(1, () => {}); run(2, (G, i) => { i.brake = true; }); out.reverse = { speed: Math.round(sh.G.speed), fwd: Math.round(sh.G.fwd), dist: Math.round(sh.G.dist) };

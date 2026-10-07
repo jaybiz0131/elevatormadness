@@ -25,7 +25,7 @@ const HERO_BY_EVENT = { takedown: ['tracking', 'crane', 'closeChase'], pileup: [
 const ENEMY = new Set(['weak', 'bruiser', 'gunner', 'armored']);
 export class ShotDirector {
   constructor() { this.force = null; this.reset(); }
-  reset() { this.heroLeft = 0; this.heroName = null; this.heroT = 0; this.heroDur = 0; this.last = null; this.lastEnd = -99; this.count = 0; this.kills = 0; this.pileups = 0; this.near = 0; this.pending = null; this.name = 'base'; this.autoName = null; this.autoUntil = 0; this.side = 1; this.aimPt = null; this.log = []; this.civ = 0; this.mines = 0; this.airShot = false; }
+  reset() { this.heroLeft = 0; this.heroName = null; this.heroT = 0; this.heroDur = 0; this.last = null; this.lastEnd = -99; this.count = 0; this.kills = 0; this.pileups = 0; this.near = 0; this.pending = null; this.name = 'base'; this.autoName = null; this.autoUntil = 0; this.side = 1; this.aimPt = null; this.log = []; this.civ = 0; this.mines = 0; this.airShot = false; this.flips = 0; this.calm = -99; }
   skip() { if (this.heroName) { this.heroLeft = 0; this.endHero(this.t); } }
   get budget() { return S.fewShots ? 5 : 12; }
   get gap() { return S.fewShots ? 16 : 8; }
@@ -57,6 +57,8 @@ export class ShotDirector {
     if (G.nearMisses > this.near) { if (!this.pending) this.pending = { kind: 'near', t }; } this.near = G.nearMisses;
     if ((G.launches || 0) > this.civ) { this.pending = { kind: 'pileup', t }; } this.civ = G.launches || 0;
     if ((G.mineHits || 0) > this.mines) { this.pending = { kind: 'mine', t }; } this.mines = G.mineHits || 0;   // a mine takes the shot even when its pile-up lands the same moment
+    // driver control: an e-brake 180 or a burnout is the player turning the car round: no hero shot cuts in during it or for 2.5 s after it, and what was pending is dropped
+    if ((G.flipDone || 0) !== this.flips || G.flip || G.bo > 0) { this.flips = G.flipDone || 0; this.calm = t + 2.5; this.pending = null; if (this.heroName && this.heroName !== 'airtime') this.endHero(t); }
     // Stop 5: airtime is earned: a jump long enough (the time in the air so far plus what the arc has left) takes the camera at take-off, danger or not (nothing can touch the car up there)
     if (G.air <= 0) this.airShot = false;
     else if (!this.airShot && !this.heroName && G.hang > 0.05 && (G.hang + G.air >= 0.45 || (G.crestAir && G.fvz > 20 && G.speed > 900)) && t - this.lastEnd >= 3 && this.count < this.budget + 3 && G.playing) { this.airShot = true; this.heroName = 'airtime'; this.heroT = 0; this.heroDur = Math.min(2.4, G.hang + G.air + 0.7); this.last = 'airtime'; this.count++; this.side = -this.side; this.pending = null; this.log.push([+t.toFixed(1), 'airtime']); }
@@ -64,7 +66,7 @@ export class ShotDirector {
     if (this.heroName) { this.heroT += dt; if (this.heroT >= this.heroDur || (this.danger(G) && this.heroName !== 'airtime')) { this.endHero(t); } else { this.name = this.heroName; return this.name; } }
     // start one: an event is pending (fresh), a quarter second has passed (the hit lands first), the gap is kept, the budget is not spent, no danger
     if (this.pending && t - this.pending.t > 3.5) this.pending = null;
-    if (this.pending && t - this.pending.t >= 0.25 && t - this.lastEnd >= this.gap && this.count < this.budget && G.playing && !this.danger(G) && G.air <= 0) {
+    if (this.pending && t >= this.calm && t - this.pending.t >= 0.25 && t - this.lastEnd >= this.gap && this.count < this.budget && G.playing && !this.danger(G) && G.air <= 0) {
       const opts = HERO_BY_EVENT[this.pending.kind].filter(n => n !== this.last); const name = opts[Math.floor((G.t * 7.31 + this.count * 3.7) % opts.length)] || opts[0];
       const spec = SHOTS[name]; this.heroName = name; this.heroT = 0; this.heroDur = Math.min(3, Math.max(1, (spec.hold || 2) * (S.fewShots ? 0.8 : 1))); this.last = name; this.count++; this.pending = null; this.side = -this.side; this.log.push([+t.toFixed(1), name]);
       this.name = name; return name;

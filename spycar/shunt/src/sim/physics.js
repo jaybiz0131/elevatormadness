@@ -176,7 +176,7 @@ export function driveSpeed(dt, playing) {
   let braking = false;
   if (G.nitro > 0 || G.bstT > 0) { const tgt = G.nitro > 0 ? D.nitro : vmax + T.boost.speed; if (G.speed < tgt) G.speed = Math.min(tgt, G.speed + T.boost.accel * dt); }   // a burst forward whatever the throttle says
   else if (G.wallT > 0) { G.wallT -= dt; G.speed += (Math.sign(G.speed) * Math.min(Math.abs(G.speed), D.minSpeed) - G.speed) * Math.min(1, dt * 4); G.turboT = 0; G.slipBoostT = 0; }   // grinding the rail after a barrier hit
-  else if (thr > D.dead) {
+  else if (thr > D.dead && !eb) {   // the e-brake locks the rear wheels: gas does not drive the car while it is held (a burnout at a stop is above)
     if (G.speed < -D.stopV) { G.speed = Math.min(0, G.speed + D.brakeRate * thr * dt); braking = true; }   // rolling backwards: gas brakes it first
     else { const tgt = vmax * Math.min(1, (thr - D.dead) / (1 - D.dead) * 1.05); if (G.speed < tgt) G.speed = Math.min(tgt, G.speed + D.accel * (0.45 + 0.55 * thr) * (G.speed < 300 ? 1.35 : 1) * dt); else G.speed = Math.max(tgt, G.speed - D.coastDecel * 2 * dt); }
   } else if (thr < -D.dead) {
@@ -200,7 +200,7 @@ export function startFlip(dir) { G.flip = { t: 0, dir }; G.flipLock = true; G.fl
 function flipStep(dt) {
   const F = G.flip, E = T.ebrake; F.t += dt; const u = Math.min(1, F.t / E.flipT); G.flipA = F.dir * Math.PI * (u * u * (3 - 2 * u));
   G.slideVx *= Math.exp(-dt / 0.3); G.vx = G.face * G.speed * Math.sin(G.phi) * (1 - u) + G.slideVx; G.x += G.vx * dt;
-  if (u >= 1) { G.face = -G.face; G.speed = -G.speed; G.heading = G.phi = G.slip = 0; G.flipA = 0; G.flip = null; G.flipDone++; const sc = Math.round(T.score.flip); addScore(sc, G.x, G.dist + 40, false, '180'); say('180', '', 500, true); }
+  if (u >= 1) { G.face = -G.face; G.speed = -G.speed; emit({ k: 'face' }); G.heading = G.phi = G.slip = 0; G.flipA = 0; G.flip = null; G.flipDone++; const sc = Math.round(T.score.flip); addScore(sc, G.x, G.dist + 40, false, '180'); say('180', '', 500, true); }
 }
 // the burnout fishtail: a damped spring on the body's yaw, kicked at random while the wheels spin, settling once the car is away
 function fishStep(dt, thr) {
@@ -303,11 +303,13 @@ export function driveEffects(dt) {
   const slipDeg = Math.abs(G.slip) * 180 / Math.PI; const onGround = G.air <= 0;
   // tyre smoke per rear wheel: 0 puffs/s in grip, 40/s at 20° of slip, 90/s at 45°; burnouts and hard braking smoke too
   let rate = slipDeg < 8 ? 0 : slipDeg < 20 ? lerp(10, 40, (slipDeg - 8) / 12) : lerp(40, 90, clamp((slipDeg - 20) / 25, 0, 1));
-  if (G.burnout > 0 || G.bo > 0) rate = 90; if (G.flip) rate = Math.max(rate, 70); if (G.braking && G.speed > 420) rate = Math.max(rate, 30);
-  if (onGround && rate > 0) { G.puffAcc += rate * 2 * dt; const ca = Math.cos(bodyA()), sa = Math.sin(bodyA()); while (G.puffAcc >= 1) { G.puffAcc -= 1; const side = G.rng() < 0.5 ? -1 : 1; addPuff(G.x + side * 12 * ca - (-24) * sa, G.dist - 24 * ca + side * 12 * sa, (G.rng() * 2 - 1) * 40 + G.vx * 0.2, G.fwd * 0.3 + (G.rng() - 0.5) * 40); } }
+  rate *= clamp(Math.abs(G.speed) / 250, 0, 1);   // slip smoke needs the tyres to be moving: a car turned on the spot does not smoke
+  if (G.burnout > 0) rate = 30; if (G.bo > 0) rate = 22; if (G.flip) rate = Math.max(rate, 60); if (G.braking && G.speed > 420) rate = Math.max(rate, 30);
+  if (onGround && rate > 0) { G.puffAcc += rate * 2 * dt; const ca = Math.cos(bodyA()), sa = Math.sin(bodyA()); while (G.puffAcc >= 1) { G.puffAcc -= 1; const side = G.rng() < 0.5 ? -1 : 1; const back = G.bo > 0 ? 110 : 0, out = G.bo > 0 ? 130 * side : 0; addPuff(G.x + side * 12 * ca - (-24) * sa, G.dist - 24 * ca + side * 12 * sa, (G.rng() * 2 - 1) * 40 + G.vx * 0.2 + sa * back + ca * out, G.fwd * 0.3 + (G.rng() - 0.5) * 40 - ca * back + sa * out); } }
+  // (a burnout throws its smoke back and out to each side off the spinning wheels, so the car stays in view through it)
   else if (rate === 0) G.puffAcc = 0;
   // skid ribbons: a continuous line under each rear wheel while slipping, drifting or braking hard; darker with more slip
-  const skidding = onGround && (slipDeg > 8 || (G.braking && Math.abs(G.speed) > 420) || G.burnout > 0 || G.bo > 0 || !!G.flip);
+  const skidding = onGround && ((slipDeg > 8 && Math.abs(G.speed) > 60) || (G.braking && Math.abs(G.speed) > 420) || G.burnout > 0 || G.bo > 0 || !!G.flip);
   if (skidding) { const dark = G.braking && slipDeg <= 8 ? 0.55 : clamp(0.35 + slipDeg / 60, 0.35, 0.9); const ca = Math.cos(bodyA()), sa = Math.sin(bodyA());
     for (const side of [-1, 1]) { const key = side < 0 ? 'ribL' : 'ribR'; let r = G[key]; if (!r) { r = pool.ribbons.pop() || { pts: [] }; r.pts.length = 0; r.t = 0; r.done = false; r.brake = G.braking && slipDeg <= 8; G[key] = r; G.ribbons.push(r); }
       const wx = G.x + side * 12 * ca + 24 * sa, wy = G.dist - 24 * ca + side * 12 * sa; const n = r.pts.length; if (n < 3 || Math.hypot(wx - r.pts[n - 3], wy - r.pts[n - 2]) >= 6) { r.pts.push(wx, wy, dark); if (r.pts.length > 360) { r.pts.splice(0, 3); } } } }
