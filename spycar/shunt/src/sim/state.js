@@ -10,8 +10,8 @@ export function makeCar(kind, x, y, extra) {
 // in-place compaction: keeps the elements that pass, in order, without allocating a new array (audit, "Smooth movement" 3)
 export function compact(arr, keep) { let n = 0; for (let i = 0; i < arr.length; i++) { const v = arr[i]; if (keep(v)) arr[n++] = v; } arr.length = n; return arr; }
 // replay ring buffer: 1.5 s at 30 Hz, every frame and car slot pre-allocated so recording allocates nothing
-export const REPLAY_FRAMES = 45, REPLAY_SLOTS = 24, REPLAY_FIELDS = ['kind', 'x', 'y', 'w', 'l', 'wrecked', 'tint', 'spin', 'flip', 'lean', 'state', 'blink', 'blinkDir', 'honk', 'debrisT', 'loaded', 'hitFlash', 't', 'sightX', 'h', 'qx', 'qy', 'qz', 'qw', 'crush', 'boom', 'civCrash', 'bodyH'];
-export function makeReplay() { const frames = []; for (let i = 0; i < REPLAY_FRAMES; i++) { const cars = []; for (let j = 0; j < REPLAY_SLOTS; j++) cars.push({ kind: 'civ', x: 0, y: 0, w: 34, l: 58, wrecked: false, tint: null, spin: 0, flip: 0, lean: 0, state: '', blink: 0, blinkDir: 0, honk: 0, debrisT: 0, loaded: false, hitFlash: 0, t: 0, sightX: 0, h: 0, qx: 0, qy: 0, qz: 0, qw: 1, crush: 0, boom: true, civCrash: false, bodyH: 0 }); frames.push({ x: REF, y: 0, jumpZ: 0, lean: 0, n: 0, cars, district: 0 }); } return { frames, head: 0, count: 0, acc: 0 }; }
+export const REPLAY_FRAMES = 45, REPLAY_SLOTS = 24, REPLAY_FIELDS = ['kind', 'x', 'y', 'w', 'l', 'wrecked', 'tint', 'spin', 'flip', 'lean', 'state', 'blink', 'blinkDir', 'honk', 'debrisT', 'loaded', 'hitFlash', 't', 'sightX', 'h', 'qx', 'qy', 'qz', 'qw', 'crush', 'boom', 'civCrash', 'bodyH', 'face', 'turnA'];
+export function makeReplay() { const frames = []; for (let i = 0; i < REPLAY_FRAMES; i++) { const cars = []; for (let j = 0; j < REPLAY_SLOTS; j++) cars.push({ kind: 'civ', x: 0, y: 0, w: 34, l: 58, wrecked: false, tint: null, spin: 0, flip: 0, lean: 0, state: '', blink: 0, blinkDir: 0, honk: 0, debrisT: 0, loaded: false, hitFlash: 0, t: 0, sightX: 0, h: 0, qx: 0, qy: 0, qz: 0, qw: 1, crush: 0, boom: true, civCrash: false, bodyH: 0, face: 1, turnA: 0 }); frames.push({ x: REF, y: 0, jumpZ: 0, lean: 0, n: 0, cars, district: 0 }); } return { frames, head: 0, count: 0, acc: 0 }; }
 export function recordReplay(dt) {
   const R = G.replay; R.acc += dt; if (R.acc < 1 / 30) return; R.acc = 0;
   const f = R.frames[R.head]; R.head = (R.head + 1) % REPLAY_FRAMES; R.count = Math.min(REPLAY_FRAMES, R.count + 1);
@@ -23,7 +23,7 @@ export let G = null;
 // A fresh run from a seed and the settings the sim is allowed to read. The caller owns the seed (random, daily or replayed).
 export function newRun(seed, cfg) {
   const road = new Road(seed);
-  G = { road, rng: mulberry32(seed ^ 0x5bd1e995), seed, cfg: { sens: cfg.sens, autoDrift: cfg.autoDrift, hairpinWall: !!cfg.hairpinWall }, ticks: 0, steps: 0, ev: [], hashes: [], rec: null, rep: null, in: { off: 0, brake: false, gas: false, fire: false, special: false, slam: 0, flicks: 0, p: 0, turn: 0, boost: false, mine: false }, playing: false, dead: false, t: 0, acc: 0, dist: 0, pdist: 0, speed: 0, cruise: T.drive.cruise, fwd: 0, x: REF, px: REF, vx: 0, targetX: REF, rawTargetX: REF, lean: 0, sq: 1,
+  G = { road, rng: mulberry32(seed ^ 0x5bd1e995), seed, cfg: { sens: cfg.sens, autoDrift: cfg.autoDrift, hairpinWall: !!cfg.hairpinWall }, ticks: 0, steps: 0, ev: [], hashes: [], rec: null, rep: null, in: { off: 0, brake: false, gas: false, fire: false, special: false, slam: 0, flicks: 0, p: 0, thr: 0, ebrake: false, boost: false, mine: false }, playing: false, dead: false, t: 0, acc: 0, dist: 0, pdist: 0, speed: 0, cruise: T.drive.cruise, fwd: 0, x: REF, px: REF, vx: 0, targetX: REF, rawTargetX: REF, lean: 0, sq: 1,
         heading: 0, phi: 0, slip: 0, slipping: false, drifting: false, easyDrift: false, brakeOn: false, driftDir: 0, driftT: 0, driftTier: 0, driftCharge: 0, driftBank: 0, driftDirty: false, driftExitT: 0, wobble: 0,
         turbo: 0, turboT: 0, slipT: 0, slipBoostT: 0, braking: false, burnout: 0, popT: 0, puffAcc: 0, sparkAcc: 0, puffs: [], ribbons: [], ribL: null, ribR: null, slideVx: 0, rumbleT: 0, cornerCalls: 0, hairpins: 0, cornerLog: [], teach: null, teachT: 0, pulsed: false,
         wallHits: 0, wideT: 0, wallT: 0, drifts: 0, driftSlams: 0, turbos: 0, driftPoints: 0, driftTierMax: 0, topSpeed: 0, speedSum: 0, speedN: 0, districtsPassed: 0,
@@ -36,7 +36,9 @@ export function newRun(seed, cfg) {
         // Stop 3: crash physics hits waiting for the sim, counters, the hero rollover and the hero's body (roll, pitch, two wheels)
         crashHits: [], pileups: 0, civCrashes: 0, wallSlams: 0, rolls: 0, twoWheels: 0, roll: null, body: { roll: 0, rollV: 0, pitch: 0, pitchV: 0, tilt: 0, two: false, twoT: 0, twoDir: 1, twoHeld: 0 }, autoLift: false, driftBuild: 0, prevPhi: 0, prevSpeed: 0, steerT: 0,
         // Stop 5: the airborne state (height above the datum, vertical speed, time in the air), BOOST and the shock mines
-        fz: 0, fvz: 0, hang: 0, hop: false, crestAir: false, airs: 0, airBest: 0, airEvt: 0, bst: T.boost.start, bstT: 0, bstDur: 1, boosts: 0, mines: [], mineAmmo: T.mine.ammo, minesDropped: 0, mineHits: 0, mineWrecks: 0 };
+        fz: 0, fvz: 0, hang: 0, hop: false, crestAir: false, airs: 0, airBest: 0, airEvt: 0, bst: T.boost.start, bstT: 0, bstDur: 1, boosts: 0, mines: [], mineAmmo: T.mine.ammo, minesDropped: 0, mineHits: 0, mineWrecks: 0,
+        // driver control: which way the nose points down the road, the e-brake 180 in progress, the burnout charge and the fishtail
+        face: 1, flip: null, flipLock: false, flipA: 0, flips: 0, flipDone: 0, bo: 0, burnouts: 0, fish: 0, fishV: 0, uturns: 0, chunks: [], chunkHits: [], chunkFlips: 0, broken: 0 };
   crashReset();   // a fresh physics world for every run (replays rebuild it from the same start)
   G.x = REF; G.special = { kind: 'missiles', ammo: 3, level: 1 };   // Sprint 4: start armed, the supply truck tops it up
   return G;

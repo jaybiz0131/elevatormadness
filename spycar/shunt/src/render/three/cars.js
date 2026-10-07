@@ -11,7 +11,7 @@ import { HEAD_K } from './heroModel.js';
 import { loadGatling } from './gatling.js';
 import { Explosions } from './explosions.js';
 const FADE_FAR = 2300, FADE_SPAN = 600;   // enemy lights fade out between 1,700 and 2,300 pt ahead
-const V3 = new Vector3(), UP = new Vector3(0, 1, 0), QY = new Quaternion(), QB = new Quaternion(), OFF = new Vector3();
+const V3 = new Vector3(), UP = new Vector3(0, 1, 0), QY = new Quaternion(), QB = new Quaternion(), OFF = new Vector3(), M4 = new Matrix4(), M5 = new Matrix4();
 const KIND_COL = { player: '#37e6ff', civ: '#cfe6ff', weak: '#3a3d46', bruiser: '#1a1b1f', gunner: '#1a1b1f', armored: '#20242b', truck: '#2fd36a', wreck: '#3a2a2a' };
 const CIV_TINTS = ['#cfe6ff', '#fff1c9', '#cdebdc', '#e9d9ff'];
 // the traffic model's body colours, one per sim tint (silver, dark red, white, navy); never cyan, that is the hero's
@@ -53,7 +53,11 @@ export class CarSystem {
   setHeroModel(mesh, useCode = false) { if (this.heroGlb) this.player.remove(this.heroGlb); this.heroGlb = mesh; if (mesh) this.player.add(mesh); this.codeHero.visible = useCode || !mesh; if (mesh) mesh.visible = !useCode; this.player.userData.pods = this.codeHero.visible ? this.codeHero.userData.pods : [];
     const glb = mesh && !useCode; this.outline.geometry = glb ? mesh.userData.body.geometry : this.geo.player; this.outline.position.y = glb ? 0 : -0.35; this.outline.scale.setScalar(glb ? 1.015 : 1); }
   // the imported enemy types (enemyModels.js): one InstancedMesh per type
-  setEnemyModels(map) { for (const [k, v] of Object.entries(map)) if (v.mesh) this.inst[k] = v.mesh; }
+  setEnemyModels(map) { this.parts = this.parts || {}; for (const [k, v] of Object.entries(map)) { if (v.mesh) this.inst[k] = v.mesh; if (v.parts) this.parts[k] = v.parts; } }
+  // driver control: one instance of a car piece (carChunks.js) at matrix `mat`, tinted like the car
+  emitPart(pm, mat, tint, body) { const im = pm.mesh; if (im.count >= im.instanceMatrix.count) return; im.setMatrixAt(im.count, mat); if (im.userData.aTint) { const c = body || CIV_BODY[0]; im.userData.aTint.setXYZW(im.count, c.r, c.g, c.b, tint); } else im.instanceColor.setXYZ(im.count, tint, tint, tint); im.count++; }
+  // a broken wreck: its shell plus the pieces it still has, each at the car's pose times the piece's own offset
+  emitBroken(parts, o, broken, tint, body) { o.updateMatrix(); for (const [name, pm] of Object.entries(parts)) { if (broken.indexOf(name) >= 0) continue; M4.copy(o.matrix).multiply(M5.makeTranslation(pm.off.x, pm.off.y, pm.off.z)); this.emitPart(pm, M4, tint, body); } }
   emit(im, o, tint, body) { if (im.count >= im.instanceMatrix.count) return; o.updateMatrix(); im.setMatrixAt(im.count, o.matrix);
     if (im.userData.aTint) { const c = body || CIV_BODY[0]; im.userData.aTint.setXYZW(im.count, c.r, c.g, c.b, tint); } else im.instanceColor.setXYZ(im.count, tint, tint, tint); im.count++;
     const at = im.userData.attach; if (at && at.mesh.count < at.mesh.instanceMatrix.count) { this.attachM.multiplyMatrices(o.matrix, at.local); at.mesh.setMatrixAt(at.mesh.count, this.attachM); at.mesh.instanceColor.setXYZ(at.mesh.count, tint, tint, tint); at.mesh.count++; } }   // an attached part (the Mule's arm)
@@ -68,7 +72,7 @@ export class CarSystem {
   // cars that exist this frame get a mesh; the rest go back to the pool. c.mesh is render-side only (the hash never reads it).
   update(G, alpha, fx, elapsed) {
     const stamp = ++this.stamp;   // no per-frame allocation: meshes seen this frame carry the stamp
-    this.dmgBudget = 10; for (const k in this.inst) { this.inst[k].count = 0; if (this.inst[k].userData.attach) this.inst[k].userData.attach.mesh.count = 0; } tickEnemyLights(elapsed);
+    this.dmgBudget = 10; if (this.parts) for (const k in this.parts) for (const pn in this.parts[k]) this.parts[k][pn].mesh.count = 0; for (const k in this.inst) { this.inst[k].count = 0; if (this.inst[k].userData.attach) this.inst[k].userData.attach.mesh.count = 0; } tickEnemyLights(elapsed);
     for (const c of G.cars) {
       // a type with an imported model is placed through a proxy and written into its InstancedMesh; the rest use pooled meshes
       if (!c.alive) continue; const inst = this.inst[c.kind]; let m; if (inst) m = this.proxy; else { m = this.meshOf.get(c); if (!m) { m = this.acquire(c.kind); m.userData.kind = c.kind; this.meshOf.set(c, m); } }
@@ -76,12 +80,12 @@ export class CarSystem {
       if (c.wrecked) { const civ = c.civCrash && !c.boom; m.material = civ ? this.mat['civ' + Math.max(0, CIV_TINTS.indexOf(c.tint))] : this.mat.wreck;
         if (c.qw !== undefined && c.bodyH) this.placeBody(m, G, cx, cy, c); else { this.place(m, G, cx, cy, c.spin, 0); m.rotation.z = Math.sin(c.flip * Math.PI * 2) * 0.5; m.rotation.x = Math.sin(c.flip * Math.PI) * 0.2; }
         // Stop 3 brightness: a wreck is scorched, not black (0.55 and lit up by the fire), a spun-out civilian keeps its paint
-        const lit = 1 + this.boom.boost(m.position.x, m.position.z); if (inst) this.emit(inst, m, (civ ? 0.85 : 0.55) * lit, c.kind === 'civ' ? CIV_BODY[Math.max(0, CIV_TINTS.indexOf(c.tint))] : null);
+        const lit = 1 + this.boom.boost(m.position.x, m.position.z); const pts = this.parts && this.parts[c.kind]; if (inst) { const tnt = (civ ? 0.85 : 0.55) * lit, bod = c.kind === 'civ' ? CIV_BODY[Math.max(0, CIV_TINTS.indexOf(c.tint))] : null; if (c.broken && c.broken.length && pts) this.emitBroken(pts, m, c.broken, tnt, bod); else this.emit(inst, m, tnt, bod); }
         if (!c.boomed) { c.boomed = true; if (c.boom !== false && c.debrisT > 2.3 && Math.abs(c.y - G.dist) < 1800) this.boom.spawn(m.position.x, m.position.y, m.position.z, c.kind, c.id || 0.5); }   // once, at the moment it becomes a wreck (render-side flag, never read by the sim)
       this.wreckFx(c, m.position, fx, elapsed); fx.shadow(this.pos, w, l, this.pos.y); if (!c.civCrash || c.boom) { const e = clamp((c.debrisT + 1.5) / 4, 0, 1); if (e > 0) fx.glow(m.position.x, m.position.y + 0.7, m.position.z, Math.max(w, l) * 0.55, 1, 0.35, 0.08, 0.35 * e); }   // the hot shell glows: a wreck reads on the night road
       continue; }
       m.material = c.kind === 'civ' ? this.mat['civ' + Math.max(0, CIV_TINTS.indexOf(c.tint))] : this.mat[c.kind]; m.rotation.z = 0; m.rotation.x = 0;
-      this.place(m, G, cx, cy, (c.lean || 0) * Math.PI / 180 + (c.spin || 0), 0); fx.shadow(m.position, w, l); if (inst) this.emit(inst, m, 1 + this.boom.boost(m.position.x, m.position.z), c.kind === 'civ' ? CIV_BODY[Math.max(0, CIV_TINTS.indexOf(c.tint))] : null);
+      this.place(m, G, cx, cy, (c.lean || 0) * Math.PI / 180 + (c.spin || 0) + (c.face < 0 ? Math.PI : 0) + (c.turnA || 0), 0); fx.shadow(m.position, w, l); if (inst) this.emit(inst, m, 1 + this.boom.boost(m.position.x, m.position.z), c.kind === 'civ' ? CIV_BODY[Math.max(0, CIV_TINTS.indexOf(c.tint))] : null);
       const p = m.position;
       const fx_ = Math.sin(-m.rotation.y), fz_ = -Math.cos(-m.rotation.y); const rx = Math.cos(-m.rotation.y), rz = Math.sin(-m.rotation.y);
       if (c.kind === 'truck') { if (!c.loaded) fx.glow(p.x - fx_ * l * 0.5, p.y + 2.6, p.z - fz_ * l * 0.5, 1.2, 0.24, 1, 0.48, 0.4 + 0.4 * Math.sin(elapsed * 6)); continue; }   // friendly green
@@ -94,8 +98,14 @@ export class CarSystem {
       if (c.hitFlash > 0) fx.glow(p.x, p.y + 1, p.z, w * 1.2, 1, 1, 1, 0.8);
       if (c.state === 'tell' || c.state === 'swerve' || c.state === 'sight') { const pulse = 0.55 + 0.45 * Math.sin(elapsed * 18); fx.ring(p.x, p.y + 0.04, p.z, Math.max(w, l) * 0.6, 0xff3b3b, pulse, 1); fx.glow(p.x, p.y + 0.8, p.z, l * 0.8, 1, 0.23, 0.23, 0.35 * pulse); }
       if (c.state === 'tell') { const dir = G.x < c.x ? -1 : 1; fx.marker(G, cx + dir * 36, cy, 'arrow', dir, 0.5 + 0.5 * Math.sin(elapsed * 20)); }
-      if (c.kind === 'gunner' && c.state === 'sight') fx.sightLine(G, c.sightX, c.y, c.sightX, c.y + 700, 0.5 + 0.5 * Math.sin(elapsed * 30));
+      if (c.kind === 'gunner' && c.state === 'sight') fx.sightLine(G, c.sightX, c.y, c.sightX, c.y + 700 * (c.face || 1), 0.5 + 0.5 * Math.sin(elapsed * 30));
     }
+    // the flying pieces (sim bodies in G.chunks): placed like a wreck body, at their own centre; a fresh piece glows hot for a second and trails a little smoke
+    if (this.parts && G.chunks) for (const ch of G.chunks) { const pts = this.parts[ch.kind]; const pm = pts && pts[ch.part]; if (!pm) continue; toWorld(G.road, ch.x, ch.y, this.pos);
+      QY.setFromAxisAngle(UP, -G.road.frame(ch.y).psi); QB.set(ch.qx, ch.qy, ch.qz, ch.qw); this.proxy.quaternion.copy(QY).multiply(QB); this.proxy.position.set(this.pos.x, this.pos.y + ch.h, this.pos.z); this.proxy.scale.set(ch.mir || 1, 1, 1); this.proxy.updateMatrix();
+      const civ = ch.civ, fade = ch.t > 8 ? Math.max(0, 1 - (ch.t - 8)) : 1; this.emitPart(pm, this.proxy.matrix, (civ ? 0.85 : 0.5) * fade + 0.02, ch.kind === 'civ' ? CIV_BODY[Math.max(0, CIV_TINTS.indexOf(ch.tint))] : null);
+      if (ch.t < 1.4 && !civ) { const h = 1 - ch.t / 1.4; fx.glow(this.proxy.position.x, this.proxy.position.y + 0.2, this.proxy.position.z, 0.7 * h + 0.2, 1, 0.45, 0.12, 0.8 * h); if (ch.t < 1 && Math.floor(elapsed * 20 + ch.id * 9) % 3 === 0) fx.puff(this.proxy.position.x, this.proxy.position.y + 0.3, this.proxy.position.z, 0.6 + ch.t, 0.35 * h, 0.15, 0.15, 0.16, ch.id * 31 + ch.t); } }
+    if (this.parts) for (const k in this.parts) for (const pn in this.parts[k]) { const im = this.parts[k][pn].mesh; im.visible = im.count > 0; if (im.count) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; if (im.userData.aTint) im.userData.aTint.needsUpdate = true; } }
     { const dtB = this.lastBoomE === null ? 0 : Math.min(0.1, Math.max(0, elapsed - this.lastBoomE)); this.lastBoomE = elapsed; this.boom.update(fx, dtB); }
     for (const [c, m] of this.meshOf) if (m.userData.stamp !== stamp) { this.release(m); this.meshOf.delete(c); }
     for (const k in this.inst) { const im = this.inst[k]; for (const m of im.userData.attach ? [im, im.userData.attach.mesh] : [im]) { m.visible = m.count > 0; if (m.count) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; if (m.userData.aTint) m.userData.aTint.needsUpdate = true; } } }
@@ -121,7 +131,7 @@ export class CarSystem {
     // the imported hero turns its wheels with the road speed and lights its tail bar under braking
     const dtE = Math.min(0.1, Math.max(0, elapsed - (this.lastE ?? elapsed))); this.lastE = elapsed;
     if (this.heroGlb && this.heroGlb.visible) this.heroGlb.userData.tick(dtE, (st.phase === 'over' ? 0 : G.speed) * M, !!(G.in && G.in.brake) || !!G.braking);
-    const m = this.player; const spin = G.gunSpin || 0; const z = G.jumpZ; const lift = z * 3.5; const lean = (st.lean !== undefined ? st.lean : G.lean) * Math.PI / 180;
+    const m = this.player; const spin = G.gunSpin || 0; const z = G.jumpZ; const lift = z * 3.5; const lean = (st.lean !== undefined ? st.lean : G.lean) * Math.PI / 180 + (st.phase === 'over' ? 0 : (G.face < 0 ? Math.PI : 0) + G.flipA + G.fish);   // driver control: the nose can point back down the road, the 180 and the fishtail
     this.place(m, G, rx, rdist, lean, lift); m.scale.set((2 - G.sq), G.sq, 1 + z * 0.1);
     // Stop 3: the body. Roll with the lateral load and squat or dive with the speed change (G.body, stepped in the sim); in a hard turn the
     // inside wheels lift and the car pivots on its outside wheels (two wheels); a big hit throws it once round its long axis (G.roll)

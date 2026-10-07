@@ -13,6 +13,7 @@
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { PACE } from './pace.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const out = process.argv[2] || path.join(here, 'out');
 const seconds = parseFloat(process.argv[3] || '120');
@@ -31,6 +32,7 @@ const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error' && !/ERR_CERT|net::/.test(m.text())) errors.push('console: ' + m.text()); });
 await page.addInitScript(() => { if (new URLSearchParams(location.search).get('fine')) globalThis.__fineHash = true; });
+await page.addInitScript(PACE);
 await page.goto(pageUrl + '?' + [seed !== null ? 'seed=' + seed : '', opt.query || ''].filter(Boolean).join('&'));   // --query=r=canvas&wall=1 adds page options
 await page.waitForTimeout(600);
 if (shots) try { await page.screenshot({ path: path.join(out, 'shunt-title.png'), timeout: 10000 }); } catch (e) { console.log('title screenshot skipped'); }
@@ -87,6 +89,8 @@ for (let i = 0; i < seconds * 10; i++) {
   else if (mode === 'drift') { driftTimer += 0.1; await page.evaluate(({ phaseT }) => { const inp = window.__shunt.input; const g = window.__shunt.G; if (inp.id === null) inp.down(1, 200, 700, performance.now()); inp.anchor = { x: 200, y: 700 }; inp.carAnchor = g.targetX - g.road.at(g.dist).center; const dir = Math.floor(phaseT / 4) % 2 ? -1 : 1; const k = phaseT % 4; if (k < 2.2 && g.speed > 400) { inp.brake = true; inp.cur = { x: 200 + dir * 60, y: 700 }; } else { inp.brake = false; inp.cur = { x: 200, y: 700 }; } }, { phaseT: driftTimer }); }
   else if (mode !== 'idle') await page.evaluate(({ want, slam, drift, brake, gas, fire, mode }) => { const inp = window.__shunt.input; const g = window.__shunt.G; if (inp.id === null) inp.down(1, 200, 700, performance.now()); inp.anchor = { x: 200, y: 700 }; inp.carAnchor = g.targetX - g.road.at(g.dist).center; inp.gas = !!gas; inp.fireHeld = !!fire; if (mode === 'passive') { inp.cur = { x: 200, y: 700 }; inp.brake = false; inp.gas = false; inp.fireHeld = false; return; } if (drift) { inp.brake = !g.drifting; inp.cur = { x: 200 + drift * 60, y: 700 }; return; }   /* a brake TAP starts the drift; steering holds it */ inp.brake = brake; let dx = Math.max(-70, Math.min(70, (want - g.targetX) / 1.4)); if (mode === 'casual') { const last = window.__co || 0; dx = last + Math.max(-22, Math.min(22, dx - last)); window.__co = dx; }   /* casual: the thumb moves at most 220 pt/s (22 pt per 0.1 s tick) */ inp.cur = { x: 200 + dx, y: 700 }; if (slam) window.__shunt.trySlam(slam); if (g.special && g.special.ammo > 0 && (g.special.kind !== 'missiles' || g.cars.some(c => c.alive && !c.wrecked && (c.kind === 'armored' || c.kind === 'bruiser') && c.y > g.dist))) window.__shunt.fireSpecial(); }, { want: s.want, slam: s.slam, drift: s.drift, brake: s.brake, gas: s.gas, fire: s.fire, mode });
   // Stop 5 abilities: the skilled bot boosts on free straights, drops a mine for a pursuer close behind; the casual bot only boosts (late); the weak bot uses none
+  // driver control: the throttle (and the skilled bot's e-brake drift) for every bot that drives
+  if (mode !== 'idle' && mode !== 'sweep' && s.phase === 'playing') await page.evaluate((mode) => window.__pace(window.__shunt.G, window.__shunt.input, mode === 'active' ? 'skilled' : mode === 'casual' ? 'casual' : 'weak'), mode);
   if ((mode === 'active' || mode === 'casual') && s.phase === 'playing') await page.evaluate((mode) => { const sh = window.__shunt, g = sh.G, inp = sh.input; const cn5 = g.road.cornerAhead(g.dist, 900);
     if (g.bst >= (mode === 'active' ? 0.85 : 0.99) && !cn5 && g.bstT <= 0 && g.air <= 0) inp.boostReq = true;
     if (mode !== 'active') return;
@@ -99,7 +103,7 @@ for (let i = 0; i < seconds * 10; i++) {
   if (shots && mode === 'active' && !cornerShot && s.t > 19 && s.t < 40) { const inHairpin = await page.evaluate(() => { const g = window.__shunt.G; const c = g.road.at(g.dist).corner; return !!(c && c.type === 'hairpin'); }); if (inHairpin) { cornerShot = true; await page.screenshot({ path: path.join(out, 'shunt-hairpin.png') }); } }
   if (i % 100 === 0) console.log('t', s.t.toFixed(1), 'spd', Math.round(s.speed), s.drifting ? 'DRIFT T' + s.tier : '', 'score', s.score, 'armor', s.armor, 'kills', s.kills, '(car', s.carKills, 'gun', s.gunKills, 'passive', s.passive + ')', 'slams', s.slams, 'flicks', s.flicks, 'misses', s.misses, 'special', s.special ? s.special.kind + ':' + s.special.ammo : '-', 'near', s.near, s.wave);
 }
-const f = await page.evaluate(() => { const g = window.__shunt.G; return { pileups: g.pileups, comboPeak: g.comboPeak, airs: g.airs, boosts: g.boosts, mines: g.minesDropped, mineWrecks: g.mineWrecks, nearMisses: g.nearMisses, timeScore: g.timeScore, scoreScore: g.scoreScore, t: g.t, kills: g.kills, passive: g.passiveWrecks, carKills: g.carKills, gunKills: g.gunKills, slams: g.slams, flicks: g.flicks, misses: g.flickMisses, armorLost: g.armorLost, score: g.score, drifts: g.drifts, driftSlams: g.driftSlams, turbos: g.turbos, driftPoints: g.driftPoints, tierMax: g.driftTierMax, topSpeed: g.topSpeed, avgSpeed: g.speedSum / Math.max(1, g.speedN), limp: g.limpCount, repaired: g.repaired, speedLoss: g.speedLoss, bursts: g.killBursts, grade: g.grade, rating: g.rating, won: g.won, prog: g.prog }; });
+const f = await page.evaluate(() => { const g = window.__shunt.G; return { flips: g.flipDone, face: g.face, dist: Math.round(g.dist), burnouts: g.burnouts, uturns: g.uturns, pileups: g.pileups, comboPeak: g.comboPeak, airs: g.airs, boosts: g.boosts, mines: g.minesDropped, mineWrecks: g.mineWrecks, nearMisses: g.nearMisses, timeScore: g.timeScore, scoreScore: g.scoreScore, t: g.t, kills: g.kills, passive: g.passiveWrecks, carKills: g.carKills, gunKills: g.gunKills, slams: g.slams, flicks: g.flicks, misses: g.flickMisses, armorLost: g.armorLost, score: g.score, drifts: g.drifts, driftSlams: g.driftSlams, turbos: g.turbos, driftPoints: g.driftPoints, tierMax: g.driftTierMax, topSpeed: g.topSpeed, avgSpeed: g.speedSum / Math.max(1, g.speedN), limp: g.limpCount, repaired: g.repaired, speedLoss: g.speedLoss, bursts: g.killBursts, grade: g.grade, rating: g.rating, won: g.won, prog: g.prog }; });
 const min = f.t / 60;
 console.log('--- metrics (' + mode + ') ---');
 console.log('run length:', f.t.toFixed(1), 's   score', f.score);
@@ -108,7 +112,7 @@ console.log('passive wrecks per minute (no credit):', (f.passive / min).toFixed(
 console.log('slams landed:', f.slams, ' flicks seen:', f.flicks, ' flicks with no target:', f.misses, '  (sweep target: < 1 Slam per 10 min)');
 if (mode === 'sweep') { console.log('lane changes made:', sweepN, ' slams fired:', f.slams, '=> Slams per minute', (f.slams / min).toFixed(2)); for (const sp of SPEEDS) console.log('  at', sp, 'pt/s:', bySpeed[sp].n, 'changes,', bySpeed[sp].flicks, 'flicks seen,', bySpeed[sp].slams, 'slams fired'); }
 console.log('limp', f.limp, 'repaired', f.repaired, 'speed lost to hits', Math.round(f.speedLoss), 'kill bursts', f.bursts, 'finish', f.won ? f.grade + ' (' + f.rating.toFixed(2) + ')' : 'no (' + (100 * f.prog).toFixed(0) + '%)');
-console.log('STATS', JSON.stringify({ mode, seed, t: +f.t.toFixed(1), won: f.won, score: f.score, kills: f.kills, pileups: f.pileups, comboPeak: f.comboPeak, nearMisses: f.nearMisses, airs: f.airs, boosts: f.boosts, mines: f.mines, mineWrecks: f.mineWrecks, armorLost: f.armorLost, grade: f.grade, rating: +f.rating.toFixed(2) }));
+console.log('STATS', JSON.stringify({ mode, seed, t: +f.t.toFixed(1), won: f.won, flips: f.flips, face: f.face, dist: f.dist, uturns: f.uturns, avgSpeed: Math.round(f.avgSpeed), score: f.score, kills: f.kills, pileups: f.pileups, comboPeak: f.comboPeak, nearMisses: f.nearMisses, airs: f.airs, boosts: f.boosts, mines: f.mines, mineWrecks: f.mineWrecks, armorLost: f.armorLost, grade: f.grade, rating: +f.rating.toFixed(2) }));
 console.log('armor lost per minute:', (f.armorLost / min).toFixed(2));
 console.log('corners:', await page.evaluate(() => window.__shunt.G.cornerLog.map(c => c.type + ' vmax ' + c.vmax + ' apex ' + c.apexSpeed + (c.drift ? ' drift' : '') + (c.scraped ? ' SCRAPED' : '')).join(' ; ')));
 console.log('driving: drifts', f.drifts, ' drift slams', f.driftSlams, ' mini-turbos', f.turbos, ' best tier', f.tierMax, ' drift points', f.driftPoints, ' top speed', Math.round(f.topSpeed), ' avg speed', Math.round(f.avgSpeed));

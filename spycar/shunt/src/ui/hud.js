@@ -74,7 +74,7 @@ export function createHud(container, renderer) {
     set('combo', G.combo > 1 ? G.combo : 0, v => { combo.hidden = !v; if (v) { comboN.textContent = '×' + v; combo.classList.remove('bump'); if (!S.motion) { void combo.offsetWidth; combo.classList.add('bump'); } } });
     if (G.combo > 1) { const k = clamp(G.comboT / T.combo.hold, 0, 1); const live = G.comboT > T.combo.hold - T.combo.window; set('comboK', Math.round(k * 60) * 2 + (live ? 1 : 0), v => { comboBar.style.width = (v >> 1) + 'px'; comboBar.style.background = (v & 1) ? '#ffd23f' : '#ff7a3c'; }); }
     set('goal', Math.round(G.prog * 1000) + (G.finale ? 1e6 : 0), v => { goalFill.style.width = (G.prog * 100).toFixed(1) + '%'; goal.classList.toggle('finale', !!G.finale); });
-    set('flash', S.motion ? 0 : Math.round(clamp(G.killFlash / 0.16, 0, 1) * 10), v => flash.style.opacity = v * 0.03);   // no screen flash with Reduce motion
+    set('flash', S.motion ? 0 : Math.round(clamp(G.killFlash / 0.16, 0, 1) * 10), v => flash.style.opacity = v * 0.012);   // driver control: the kill flash cut way back so the crash stays visible   // no screen flash with Reduce motion
     set('replay', phase === 'over', v => replay.hidden = !v);
     set('vig', Math.round(G.vignette * 20) / 20, v => vig.style.opacity = v);
     const la = G.speedLines > 0 ? 0.5 : clamp((G.speed - 0.85 * T.drive.top) / (0.15 * T.drive.top), 0, 1) * 0.5; set('lines', Math.round(la * 20) / 20, v => lines.style.opacity = v);

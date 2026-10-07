@@ -3,7 +3,7 @@ import { say } from './events.js';
 import { G, makeCar } from './state.js';
 // everything that arrives on the road arrives from beyond what the camera shows: ahead of the car by max(T.spawn.min, 1.4 x speed + 900) pt
 // (inside the fog), behind it by T.spawn.behind pt (off the bottom of the screen). Nothing appears mid-road.
-export const farAhead = () => Math.max(T.spawn.min, T.spawn.speedK * G.speed + T.spawn.speedAdd);
+export const farAhead = () => Math.max(T.spawn.min, T.spawn.speedK * Math.abs(G.fwd) + T.spawn.speedAdd);
 export function spawnCar(kind, lane, yAhead, opts = {}) {
   const y = G.dist + yAhead; lane = clamp(lane, 0, G.road.laneCount(y) - 1);
   const c = makeCar(kind, G.road.laneX(y, lane), y, { lane });
@@ -45,7 +45,8 @@ export function spawnOnramp() { const side = G.rng() < 0.5 ? -1 : 1; const ya = 
 export const NAMES = { weak: ['Dart', 'fast and light'], bruiser: ['Ram', 'it lunges: flick to Slam'], gunner: ['Gunner', 'a red line means a shot'], armored: ['Bulwark', 'bullets bounce: missiles or go round'] };
 export const isAttacker = (k) => k === 'weak' || k === 'bruiser' || k === 'gunner' || k === 'armored';
 export function progress() { return clamp(G.dist / T.goal.city, 0, 1); }
-const tierOf = (p) => p < 0.15 ? 0 : p < 0.4 ? 1 : p < 0.7 ? 2 : 3;
+// the tier escalates with the distance driven or, for a car that sits still, with the clock (so stopping never stalls the action)
+const tierOf = (p) => { p = Math.max(p, G.t / T.pace.tierTime); return p < 0.15 ? 0 : p < 0.4 ? 1 : p < 0.7 ? 2 : 3; };
 function attackers(lo, hi) { let n = 0; for (const c of G.cars) if (c.alive && !c.wrecked && isAttacker(c.kind) && c.y > G.dist + lo && c.y < G.dist + hi) n++; return n; }
 // one enemy, ahead (inside the window at once) or behind (it rolls up from the bottom of the screen)
 export function spawnAttacker(kind, behind, soft) {
@@ -54,7 +55,8 @@ export function spawnAttacker(kind, behind, soft) {
   if (kind === 'gunner') behind = true; else if (!behind && kind === 'weak' && G.rng() < 0.85) behind = true; else if (!behind && kind === 'bruiser' && G.rng() < 0.4) behind = true;   // Gunners and most Darts come up from behind; the slow heavies come from ahead
   const y = behind ? -(T.spawn.behind + G.rng() * 60) : farAhead() + G.rng() * 300;
   const c = spawnCar(kind, freeLane(G.dist + y, []), y);
-  c.speed = behind ? G.speed + 200 : Math.max(G.cruise * 0.5, G.speed - 200);   // arrive already moving with the traffic: a chaser spawned at the player's cruise speed would be left behind and culled
+  // arrive already moving: from behind faster than the car; from ahead with the car's pace, or, if the car is slow or stopped, already turned and coming back down the road
+  if (behind) { c.speed = Math.max(G.fwd, 0) + 260; c.face = 1; } else if (G.fwd < T.enemy.slow) { c.speed = -420; c.face = -1; } else { c.speed = G.fwd - 200; c.face = 1; }
   if (kind === 'armored') c.factor = 0.62;
   if (soft) c.soft = true;
   if (!G.shown[kind]) { G.shown[kind] = 1; say(NAMES[kind][0], NAMES[kind][1], 1500); }
@@ -105,16 +107,17 @@ function pickups() {
 function teaching() {
   if (!G.teachSet && G.t >= 8) { G.teachSet = true; G.teach = 'drift'; }
   if (G.teachT > 0) { G.teachT -= STEP; if (G.teachT <= 0) { G.teach = null; G.slowmo = 0; } }
-  if (G.teach === 'drift' && G.teachT <= 0) { const ca = G.road.cornerAhead(G.dist, 500); if (ca && ca.type === 'hairpin' && G.dist >= ca.s0 - 420) { G.teachT = 3; G.slowmo = 3; G.slowmoRate = 0.3; say('Tap BRAKE and steer', ['to drift through the turn', 'steer into the turn to drift'], 2500); } }
+  if (G.teach === 'drift' && G.teachT <= 0) { const ca = G.road.cornerAhead(G.dist, 500); if (ca && ca.type === 'hairpin' && G.dist >= ca.s0 - 420) { G.teachT = 3; G.slowmo = 3; G.slowmoRate = 0.3; say('Pull the E-BRAKE and steer', ['slide the puck left and steer into the turn', 'hold Shift and steer into the turn'], 2500); } }
   if (G.teachT > 0 && G.teach === 'drift' && G.drifting) { G.teach = null; G.teachT = 0; G.slowmo = 0; say(null); }
 }
 export function director() {
   teaching();
   // Stop 5: two one-line hints, once each: BOOST when the meter first holds half, and the shock mines
+  if (!G.hintGas && G.t >= 2.5 && Math.abs(G.fwd) < 60 && G.dist < 300) { G.hintGas = 1; say('You set the pace', ['thumb up on the puck to drive', 'W or Up to drive, S or Down to brake'], 2200); }
   if (!G.hintBoost && G.t >= 12 && G.bst >= 0.5 && G.boosts === 0) { G.hintBoost = 1; say('Boost ready', ['tap BOOST', 'press B'], 1700); }
   else if (!G.hintMine && G.t >= 24 && G.minesDropped === 0 && G.cars.some(c => c.alive && !c.wrecked && isAttacker(c.kind) && c.y < G.dist - 60 && c.y > G.dist - 600)) { G.hintMine = 1; say('Shock mines', ['hold MISSILE to drop one', 'press M to drop one'], 1900); }
   if (G.ticks % 6 !== 0) return;
-  const dt = 6 * STEP, p = progress(); G.prog = p;
+  const dt = 6 * STEP, p = progress(); G.prog = p; const pe = Math.max(p, G.t / T.pace.tierTime);   // pe: how far into the run the action is, by distance or by the clock
   if (!G.opened && G.t >= 0.2) { G.opened = true; spawnRamp(170, playerLane(), 'none');   // the jump off the garage ramp
     for (let i = 0; i < 4; i++) spawnCar('civ', freeLane(G.dist + 600, [playerLane()]), 480 + i * 480 + G.rng() * 160); }   // the street is already full of traffic when the run starts
   const technical = G.road.at(G.dist).sector.kind === 'technical';
@@ -132,15 +135,15 @@ export function director() {
     const bw = spawnAttacker('armored', false, true); bw.y = G.dist + farAhead() + 300; bw.px = bw.x; bw.py = bw.y; bw.factor = 0.55; G.signs.push({ y: T.goal.city - 140, text: 'CITY GATE', big: true });
   }
   // the 5 s rule: no attacker anywhere near the screen for `floor` s (or fewer than the tier's minimum for `floorMore` s) spawns a filler
-  const have = attackers(T.pace.visible[0], T.pace.visible[1]), incoming = attackers(T.pace.window[0], T.pace.window[1]), need = G.finale || p < 0.1 || G.armor <= 1 ? 1 : p < 0.5 || G.armor < 3 ? 2 : 3;   // on one armor pip the road eases off
+  const have = attackers(T.pace.visible[0], T.pace.visible[1]), incoming = attackers(T.pace.window[0], T.pace.window[1]), need = G.finale || pe < 0.1 || G.armor <= 1 ? 1 : pe < 0.5 || G.armor < 3 ? 2 : 3;   // on one armor pip the road eases off
   if (G.fillCool > 0) G.fillCool -= dt;
-  if (have < need) { G.fillT += dt; if (G.fillT >= (have === 0 ? T.pace.floor : T.pace.floorMore) && G.fillCool <= 0 && !(p >= 0.985) && !G.limp) { G.fillT = 0; G.fillCool = T.pace.fillCool; startFiller(p, G.finale === 1); } } else G.fillT = 0;
+  if (have < need) { G.fillT += dt; if (G.fillT >= (have === 0 ? T.pace.floor : T.pace.floorMore) && G.fillCool <= 0 && !(p >= 0.985) && !G.limp) { G.fillT = 0; G.fillCool = T.pace.fillCool; startFiller(pe, G.finale === 1); } } else G.fillT = 0;
   G.wave = have + incoming > 0 ? 'pressure' : 'breather';
   // waves
-  if (!G.finale && !G.limp) { G.waveT -= dt; if (G.waveT <= 0) startWave(p, cap); }
+  if (!G.finale && !G.limp) { G.waveT -= dt; if (G.waveT <= 0) startWave(pe, cap); }
   // civilian traffic: a few cars always about (Stop 4: fewer commuters, because every one is now a loaded gun)
-  { let civs = 0; for (const c of G.cars) if (c.alive && !c.wrecked && c.kind === 'civ' && c.y > G.dist - 300 && c.y < G.dist + farAhead() + 400) civs++;
-    const want = technical ? 1 : 2; if (civs < want && G.t >= G.nextSpawn && !winding) { G.nextSpawn = G.t + 0.8 + G.rng() * 0.8; spawnCar('civ', freeLane(G.dist + 900, [playerLane()]), farAhead() + G.rng() * 300); } }
+  { let civs = 0; for (const c of G.cars) if (c.alive && !c.wrecked && c.kind === 'civ' && c.y > G.dist - 700 && c.y < G.dist + farAhead() + 400) civs++;
+    const want = technical ? 1 : 2; if (civs < want && G.t >= G.nextSpawn && !winding) { G.nextSpawn = G.t + 0.8 + G.rng() * 0.8; const back = G.fwd < 400 && G.rng() < 0.5; spawnCar('civ', freeLane(G.dist + (back ? -650 : 900), [playerLane()]), back ? -T.spawn.behind : farAhead() + G.rng() * 300); } }   // a slow car gets traffic from behind too
   if (technical || winding) return;   // inside a technical sector and in the finale: the corners and the wave are the content
   if (G.t >= G.weaveT) { G.weaveT = G.t + T.pace.weaveEvery[0] + G.rng() * (T.pace.weaveEvery[1] - T.pace.weaveEvery[0]); spawnWeave(p); }
   pickups();

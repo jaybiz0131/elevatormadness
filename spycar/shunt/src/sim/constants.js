@@ -7,7 +7,8 @@ export const T = {
   // after a drift, slipstream behind any car, nitro from the special. Steering is heading based: lateral speed = speed × sin(heading).
   // Sprint 4: gas pedal. Hold gas to pull past cruise toward `top` at `accel`; let go and the car eases back to cruise; brake to
   // `minSpeed`, keep holding and it stops and reverses to `reverse` (back out of what you hit, then go on).
-  drive: { brakeSpeed: 400, brakeRate: 1250, cruise: 480, districtGain: 1.1, top: 1000, nitro: 1800, brake: 1000, minSpeed: 260, throttle: 1.2, accel: 700, coast: 0.5, reverse: 220, reverseAccel: 500, slipFor: 0.8, slipBoost: 120, slipBoostFor: 1.0,
+  // Driver control: `vmax` flat out on full throttle, `dead` the puck's dead zone, `coastDecel` the roll-down with no throttle, `stopV` below which BRAKE turns into reverse (up to `reverse`)
+  drive: { vmax: 1000, dead: 0.12, coastDecel: 160, stopV: 30, brakeSpeed: 400, brakeRate: 1250, cruise: 480, districtGain: 1.1, top: 1000, nitro: 1800, brake: 1000, minSpeed: 260, throttle: 1.2, accel: 700, coast: 0.5, reverse: 340, reverseAccel: 520, slipFor: 0.8, slipBoost: 120, slipBoostFor: 1.0,
            maxHeading: 30, turnRate: 240, tau: 0.07, grip: 1500,
            // Stop 3: no pedals. The car drives itself at `auto` and lifts for a hard corner it would not hold (down to `liftK` x its grip speed,
            // at `liftRate`); a drift skips the lift, so drifting is the fast way round
@@ -48,6 +49,19 @@ export const T = {
   // Stop 5: BOOST. A full meter is `dur` s at +`speed` pt/s over the auto speed; a tap spends the whole meter (at least `min`). Fills: a near miss,
   // each tier of a clean drift, a takedown, a pile-up, and airtime. `start` is the meter at the start of a run.
   boost: { speed: 560, dur: 1.6, accel: 3200, start: 0.5, min: 0.3, near: 0.12, drift: 0.07, air: 0.3, kill: 0.1, pile: 0.08 },
+  // Driver control: the e-brake. Alone it locks the rear wheels (`decel`); in a turn it drifts; with the thumb past `flipU` above `flipSpeed` it swings the car round
+  // half a turn in `flipT` s (scrubbing `flipDrag`); with gas past `burnThr` below `burnStop` pt/s it is a burnout: held at least `burnMin` s (up to `burnMax`), letting go launches
+  // the car at `launch` pt/s with up to `burnTurbo` of turbo for `burnFor` s. The fishtail is a damped spring on the yaw (`fishK`, `fishC`) kicked by `fishKick`.
+  ebrake: { decel: 700, flipU: 1.5, flipSpeed: 160, flipBendV: 400, flipT: 0.5, flipDrag: 1.6, burnThr: 0.4, burnStop: 60, burnMin: 0.4, burnMax: 1.6, launch: 340, burnTurbo: 420, burnFor: 1.0, fishK: 40, fishC: 3.5, fishKick: 90, fishSlide: 40 },
+  // Driver control: enemies turn round. A chaser that wants to go the other way at more than `uturnV` pt/s for `uturnWait` s does a U-turn in `uturn` s;
+  // below `slow` pt/s of road speed a Gunner may sit at either end of the car
+  enemy: { uturn: 0.7, uturnV: 120, uturnWait: 0.35, slow: 300, chargeFrom: 240, chargeV: 560 },
+  // Driver control: cars break into pieces. At most `cap` pieces fly; each flies `life` s (or until it settles), then lies `lie` s. Thrown outward at `kick` m/s
+  // (base, random extra) and up at `up`, spinning up to `spin` rad/s, scaled by the hit's power. A piece hitting a live enemy above `flipV` m/s flips it (a
+  // pile-up with the player's credit when the piece is the player's doing); above `knockV` it spins it out.
+  chunk: { cap: 16, life: 4, lie: 5, kick: [3, 6], up: [3, 5], spin: 9, massK: 0.05, flipV: 9, knockV: 4 },
+  // Driver control: the street. Building faces stand `setback` pt past the road edge (behind the 40 pt sidewalk and a strip of plaza); nothing stands on or over the road
+  city: { setback: 96 },
   // Stop 5: shock mines: `ammo` at the start, `max` carried, `crate` more from every supply crate; armed after `arm` s; a pursuer within `r` pt sideways
   // and `ry` pt along trips it
   mine: { ammo: 3, max: 6, crate: 2, arm: 0.25, r: 30, ry: 24, hold: 0.32, stun: 0.9, shock: 90 },
@@ -62,9 +76,10 @@ export const T = {
   // pt/s per armor pip, as a one-off speed loss), no armor means limp mode (slower, no gas, smoking) until a repair crate is collected, and
   // every kill gives a short speed burst. The finish card grades time plus score: each is turned into 0..1 (time between `fast` and `slow`
   // seconds, score up to `scoreRef`), averaged, and the average gives the letter and the stars.
-  // Stop 5: speed is automatic, so time alone is generous (everyone finishes in about two minutes). The rating is a weighted sum of five 0..1 measures: time (`fast` s = 1, `slow` s = 0),
-  // score (to `scoreRef`), takedowns (to `killRef`), pile-ups (to `pileRef`) and the best combo (x`comboRef`). A weak driver lands on C, a casual one on B, a skilled one on A; S is for a great run.
-  goal: { city: 120000, finale: 0.9, bonus: 1000, bonusArmor: 300, time: { fast: 95, slow: 132 }, scoreRef: 70000, killRef: 50, pileRef: 16, comboRef: 5, weights: { time: 0.50, score: 0.20, kills: 0.12, pile: 0.10, combo: 0.08 }, letters: [[0.88, 'S'], [0.66, 'A'], [0.38, 'B'], [0, 'C']], stars: [0.38, 0.66] },
+  // Driver control: the player sets the pace, so the grade is about what they did with it: score, takedowns and pile-ups, each per minute of the run (a slow run
+  // does not win by lasting longer), the best combo (x`comboRef`), plus a time bonus (`fast` s = full, `slow` s = none). Each measure is 0..1 against its
+  // reference, weighted into the rating, which gives the letter. A weak driver lands on C, a casual one on B, a skilled one on A; S is a great run.
+  goal: { city: 120000, finale: 0.9, bonus: 1000, bonusArmor: 300, time: { fast: 100, slow: 145 }, scoreRef: 45000, killRef: 26, pileRef: 12, comboRef: 5, weights: { score: 0.30, kills: 0.20, pile: 0.10, combo: 0.05, time: 0.35 }, letters: [[0.85, 'S'], [0.64, 'A'], [0.55, 'B'], [0, 'C']], stars: [0.55, 0.64] },
   hurt: { perPip: 380, wall: 0, min: 120 },
   kill: { burst: 240, perCombo: 60, burstFor: 1.1, carStop: 0.07, carSlow: 0.18, carSlowRate: 0.6 },
   limp: { speedK: 0.55, repairAfter: 2.5, repairAt: 1600, armorBack: 2 },
@@ -72,11 +87,11 @@ export const T = {
   // the pacing director: the first wave at `first` s, then a wave every 8 to 15 s (shorter as the run goes on); with no threat in the
   // window for `floor` s (or fewer than the tier's minimum for `floorMore` s) a filler enemy appears at once, so the road is never quiet for long and never for 5 s. Weave lines of slow traffic,
   // pickups when armor or missiles run low, and the near-miss bonus.
-  pace: { first: 3.5, waveMin: 8, waveMax: 15, floor: 0.3, floorMore: 0.8, window: [-700, 3200], visible: [-300, 1800], fillCool: 1.6, weaveEvery: [12, 18], pickupEvery: [12, 20], caps: [3, 4, 5, 6], nearMiss: 16 },
+  pace: { tierTime: 240, first: 3.5, waveMin: 8, waveMax: 15, floor: 0.3, floorMore: 0.8, window: [-700, 3200], visible: [-300, 1800], fillCool: 1.6, weaveEvery: [12, 18], pickupEvery: [12, 20], caps: [3, 4, 5, 6], nearMiss: 16 },
   // score by cause (audit, "Give the kills back to the player"): a wreck the player caused pays base × the cause multiplier;
   // the car is the main weapon, so Slam, shunt, ram, wall and oil kills pay 3× a gun kill; enemy-on-enemy accidents pay nothing
   score: { weak: 100, bruiser: 250, gunner: 250, armored: 400, cause: { gun: 1, missile: 1, mine: 3, slam: 3, shunt: 3, ram: 3, rail: 3, wall: 3, oil: 3, stomp: 3, chain: 2, barrel: 2, pileup: 2 }, pileUp: 150, civPile: 450,
-           civilian: -100, crate: 250, graze: 10, grazeCap: 3, truckLoad: 100, clean: 120, closeCall: 50, shuntEnemy: 100, barrelDouble: 150, distancePer: 100 },
+           civilian: -100, crate: 250, graze: 10, grazeCap: 3, truckLoad: 100, clean: 120, closeCall: 50, shuntEnemy: 100, barrelDouble: 150, distancePer: 100, burnout: 150, flip: 200 },
   mercy: 2.5,   // after the car takes a hit, enemies wait this long before the next lunge or shot (and twice as long on one armor pip)
   graceSeconds: 60,   // damage halved for the first minute; armor comes from pickups and the supply truck
   // the barrier hit (step 6): fires over 1.15x the grip budget, keeps 45% of the speed, costs half an armor pip

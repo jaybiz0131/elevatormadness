@@ -4,7 +4,7 @@
 // Everything is placed from hashes of the road seed and s, so the same seed always builds the same street.
 import { Box3, BoxGeometry, BufferGeometry, Mesh, MeshStandardMaterial, MeshBasicMaterial, Color, Group, CanvasTexture, InstancedMesh, Object3D, PlaneGeometry, DoubleSide, InstancedBufferAttribute, DynamicDrawUsage, LinearFilter, RepeatWrapping, NearestFilter, SRGBColorSpace, Float32BufferAttribute, CylinderGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { REF, hashI } from '../../sim/constants.js';
+import { REF, T, hashI } from '../../sim/constants.js';
 import { M, toWorld } from './scale.js';
 import { CHUNK, AHEAD } from './road.js';
 import { KIT, kitMaterial, kitGlow } from './kit.js';
@@ -107,9 +107,11 @@ export class City {
         // used to end up inside a 40 m block; here every building is 7 m or less, well under the camera's height
         const tight = road.corners.some(c => c.hard && s + len / 2 > c.s0 - 1300 && s + len / 2 < c.s1 + 700);
         // round a tight bend a building on the inside lands on the road's other arc (the offset is wider than the radius): leave that plot empty
-        if (tight) { toWorld(road, REF + side * (w / 2 + 66 + 8 / M), s + len / 2, V); let clash = false; for (let s2 = Math.max(0, s - 1400); s2 <= s + 1400 && !clash; s2 += 40) { if (s2 > road.end - 3100) break; if (Math.abs(s2 - (s + len / 2)) < 250) continue; const w2 = road.at(s2).width; toWorld(road, REF, s2, V2); if (Math.hypot(V.x - V2.x, V.z - V2.z) < (w2 / 2 + 230) * M) clash = true; }   // another stretch of road within 230 pt of the plot (a block is up to 200 pt deep): it sits in the nook of a bend if (!clash) for (const c of road.corners) { if (!c.hard || s + len / 2 < c.s0 - 300 || s + len / 2 > c.s1 + 300) continue; const ctr = cornerCenter(road, c); if (Math.hypot(V.x - ctr.x, V.z - ctr.z) < (c.R + 150) * M) { clash = true; break; } }   // and nothing stands inside the bend itself: the camera looks across it, and a rooftop in the middle of a hairpin hid the road
+        if (tight) { toWorld(road, REF + side * (w / 2 + T.city.setback + 8 / M), s + len / 2, V); let clash = false; for (let s2 = Math.max(0, s - 1400); s2 <= s + 1400 && !clash; s2 += 40) { if (s2 > road.end - 3100) break; if (Math.abs(s2 - (s + len / 2)) < 250) continue; const w2 = road.at(s2).width; toWorld(road, REF, s2, V2); if (Math.hypot(V.x - V2.x, V.z - V2.z) < (w2 / 2 + 230) * M) clash = true; }
+          // another stretch of road within 230 pt of the plot (a block is up to 200 pt deep): it sits in the nook of a bend
+          if (!clash) for (const c of road.corners) { if (!c.hard || s + len / 2 < c.s0 - 300 || s + len / 2 > c.s1 + 300) continue; const ctr = cornerCenter(road, c); if (Math.hypot(V.x - ctr.x, V.z - ctr.z) < (c.R + 150) * M) { clash = true; break; } }   // and nothing stands inside the bend itself: the camera looks across it, and a rooftop in the middle of a hairpin hid the road
           if (clash) { s += len + 20 + h2 * 40; i++; continue; } }
-        const tower = h3 > 0.72 && !tight; const depth = tower ? 16 + h2 * 12 : 8 + h2 * 6; const height = tower ? 24 + (h3 - 0.72) * 70 : tight ? Math.min(7, 3 + h3 * 5) : 5 + h3 * 12; const x = REF + side * (w / 2 + (tower ? 330 + 120 * h2 : 66) + depth / 2 / M);
+        const tower = h3 > 0.72 && !tight; const depth = tower ? 16 + h2 * 12 : 8 + h2 * 6; const height = tower ? 24 + (h3 - 0.72) * 70 : tight ? Math.min(7, 3 + h3 * 5) : 5 + h3 * 12; const x = REF + side * (w / 2 + (tower ? 330 + 120 * h2 : T.city.setback) + depth / 2 / M);
         toWorld(road, x, s + len / 2, V); const yaw = -(road.frame(s + len / 2).psi);
         tint.setHSL(0.6 + h2 * 0.15, 0.25, 0.09 + h1 * 0.06);
         // the box runs along the road (z) with its depth across (x); the road-facing facade is at x = -side * depth / 2
@@ -157,10 +159,11 @@ export class City {
     const sA = Math.floor((rdist - 300) / 20) * 20, sB = rdist + 1400;
     for (let s = sA; s <= sB; s += 20) {
       const a = road.at(s); const w = a.width; const h = hash(road.seed, s / 20, 9);
-      if (s % 160 === 80 && !(a.corner && a.corner.hard)) for (const side of [-1, 1]) { const x = REF + side * (w / 2 + 40), hx = REF + side * (w / 2 + 22); this.put(this.glb.street_lamp && s < rdist + Q.lamps ? this.glb.street_lamp : this.lamp, road, x, s, side > 0 ? Math.PI : 0); this.fx.pool(G, hx, s, 1.0, 0.72, 0.38, 0.16 + 0.08 * neonOn, 3.6); this.fx.pool(G, REF + side * w / 4, s, 1.0, 0.8, 0.55, 0.075, 9.5); this.fx.reflect(G, hx, s, LAMP_COL, 0.55 * this.wet, 6); }   // Stop 3: each lamp also washes its half of the road   // street lamps with their light pools and wet-road streaks
+      // driver control: the lamp stands back on the sidewalk, its arm short of the road
+      if (s % 160 === 80 && !(a.corner && a.corner.hard)) for (const side of [-1, 1]) { const x = REF + side * (w / 2 + 52), hx = REF + side * (w / 2 + 26); this.put(this.glb.street_lamp && s < rdist + Q.lamps ? this.glb.street_lamp : this.lamp, road, x, s, side > 0 ? Math.PI : 0); this.fx.pool(G, hx, s, 1.0, 0.72, 0.38, 0.16 + 0.08 * neonOn, 3.6); this.fx.pool(G, REF + side * w / 4, s, 1.0, 0.8, 0.55, 0.075, 9.5); this.fx.reflect(G, hx, s, LAMP_COL, 0.55 * this.wet, 6); }   // Stop 3: each lamp also washes its half of the road   // street lamps with their light pools and wet-road streaks
       if (s % 20 === 0 && !(a.corner && a.corner.hard)) { const side = h < 0.5 ? -1 : 1; const kind = Math.floor(h * 977) % 5; const x = REF + side * (w / 2 + 44 + (h * 31 % 1) * 20);
         if (kind === 0) this.put(this.bollard, road, x, s, 0); else if (kind === 1 && s % 40 === 0) { if (this.glb.phone_booth && s % 80 === 0) this.put(this.glb.phone_booth, road, x, s, side * Math.PI / 2); else this.put(this.bench, road, x, s, side > 0 ? Math.PI / 2 : -Math.PI / 2); } else if (kind === 2 && s % 60 === 0) { if (this.glb.newsstand) this.put(this.glb.newsstand, road, x + side * 10, s, side * Math.PI / 2); else this.put(this.vending, road, x + side * 20, s, side > 0 ? -Math.PI / 2 : Math.PI / 2); } else if (kind === 3 && s % 40 === 0) this.put(this.hydrant, road, x, s, 0); }
-      if (s % 3200 === 1600 && !(a.corner)) { for (const side of [-1, 1]) this.put(this.pillar, road, REF + side * (w / 2 + 26), s, 0); this.put(this.beam, road, REF, s, 0, (w + 90) * M, 1, 1, 7); }   // overpass
+      // driver control: no overpass (nothing over the road)
       if (s % 1200 === 600) { const side = h < 0.5 ? -1 : 1; const x = REF + side * (w / 2 + 24); this.put(this.vent, road, x, s, 0); const n = 6; for (let j = 0; j < n; j++) { const ph = ((elapsed * 0.35 + j / n + h) % 1); toWorld(road, x + (ph * 10 - 2) * side, s + 10, V); this.fx.puff(V.x, V.y + 0.3 + ph * 4.5, V.z, 0.5 + ph * 1.6, (1 - ph) * 0.35 * this.steam, 0.75, 0.78, 0.84); } }
     }
     for (const lm of LANDMARKS) { const im = this.glb[lm.name]; if (!im || lm.s < rdist - 600 || lm.s > rdist + 2600) continue;

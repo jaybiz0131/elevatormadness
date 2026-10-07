@@ -9,7 +9,7 @@ import { Object3D } from 'three';
 import { Q } from '../../quality.js';
 const D = new Object3D();
 const SIZE = { civ: 0.8, weak: 1.0, bruiser: 1.35, gunner: 1.5, truck: 1.6, armored: 2.2 };   // bigger enemies, bigger explosions
-const LIFE = 1.7, SLOTS = 6;
+const LIFE = 2.8, SLOTS = 6;
 const hash = (n) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 export class Explosions {
@@ -17,35 +17,38 @@ export class Explosions {
   spawn(x, y, z, kind, seed) { const e = this.slots.find(q => !q.on) || this.slots.reduce((a, q) => q.t > a.t ? q : a, this.slots[0]); e.on = true; e.t = 0; e.x = x; e.y = y; e.z = z; e.s = SIZE[kind] || 1; e.seed = seed * 97 + this.n++; }
   // brightness the explosions add to a car at world (x, z): a hot flash for the first 0.35 s, within 38 m
   // Stop 3 brightness: the flash, then the fireball keeps lighting what is near it for about a second and a half
-  boost(x, z) { let b = 0; for (const e of this.slots) { if (!e.on || e.t > 1.5) continue; const d = Math.hypot(x - e.x, z - e.z); const r = 26 + 16 * e.s; if (d < r) { const f = e.t < 0.35 ? 1 - e.t / 0.35 * 0.6 : 0.4 * (1 - (e.t - 0.35) / 1.15); b += (1 - d / r) * f * 1.3 * Math.min(1.6, e.s); } } return Math.min(2.2, b); }
+  boost(x, z) { let b = 0; for (const e of this.slots) { if (!e.on || e.t > 2.2) continue; const d = Math.hypot(x - e.x, z - e.z); const r = 18 + 12 * e.s; if (d < r) { const f = 0.45 * (1 - e.t / 2.2); b += (1 - d / r) * f * 1.3 * Math.min(1.6, e.s); } } return Math.min(2.2, b); }
+  // Driver control: fire first. A small orange pop instead of the white flash, then a rolling fireball (hot lobes that swirl, climb and cool from yellow
+  // to deep red), flames licking at the base for a couple of seconds, a thick black column of smoke and slow embers drifting up. No shockwave rings.
   update(fx, dt) {
-    const low = Q.level === 'low', R = low ? 0.7 : 1;   // Low: smaller flash, rings and road pool (they are the big fill-rate items), fewer lobes, debris and sparks
+    const low = Q.level === 'low', R = low ? 0.7 : 1;
     for (const e of this.slots) { if (!e.on) continue; e.t += dt; if (e.t >= LIFE) { e.on = false; continue; } const a = e.t, s = e.s, k = a / LIFE, x = e.x, y = e.y, z = e.z, sd = e.seed;
-      // 1. the flash: white-hot, huge, gone in 0.2 s
-      if (a < 0.22) { const kf = a / 0.22; fx.glow(x, y + 2.2, z, (6 + 16 * kf) * s * R, 7, 6, 4.2, Math.pow(1 - kf, 1.4)); }
-      // 2. the fireball: three offset lobes that grow, rise, and cool from white to orange to red
-      const kk = clamp(a / 1.0, 0, 1), cool = 1 - kk;
-      if (kk < 1) { const al = Math.pow(cool, 1.2);
-        fx.glow(x, y + 2.4 + 5 * kk * s, z, (5 + 14 * kk) * s, 2.8, 1.1 - 0.8 * kk, 0.2 - 0.15 * kk, al * 0.8);
-        fx.glow(x + Math.cos(sd) * 1.6 * s * kk, y + 1.2 + 2.2 * kk * s, z + Math.sin(sd) * 1.6 * s * kk, (3.8 + 10 * kk) * s, 2.6, 0.9 - 0.6 * kk, 0.15, al * 0.7);
-        fx.glow(x - Math.cos(sd) * 1.4 * s * kk, y + 1.5 + 4.2 * kk * s, z - Math.sin(sd) * 1.4 * s * kk, (3.2 + 9 * kk) * s, 2.4, 0.7 - 0.4 * kk, 0.1, al * 0.7);
-        fx.glow(x, y + 2.0, z, (2.4 + 4 * kk) * s, 5, 3.4, 1.4, Math.max(0, 1 - kk * 2.6));
-        // a lumpy fireball: a dozen smaller hot lobes scattered through a sphere that grows and climbs, so it reads as billowing fire, not one soft glow
-        const nl = low ? 6 : 12; for (let i = 0; i < nl; i++) { const h = hash(sd + i * 3.3), h2 = hash(sd * 1.7 + i * 5.1), h3 = hash(sd * 2.3 + i * 7.7); const ang = h * 6.2832, rr = (0.5 + h2) * (1.2 + 5.5 * kk) * s, up = (0.3 + h3) * (1.5 + 6 * kk) * s;
-          const fade = Math.max(0, 1 - Math.max(0, kk - 0.15 - 0.4 * h3) * 1.5); fx.glow(x + Math.cos(ang) * rr, y + 1.2 + up, z + Math.sin(ang) * rr, (1.6 + 2.6 * h2 + 3.2 * kk) * s, 2.5 - 0.9 * kk, 0.95 - 0.8 * kk * (0.6 + h), 0.1, 0.5 * fade); } }
-      // 3. the shockwave: two rings racing out over the road
-      if (a < 0.6) { const kr = a / 0.6; fx.ring(x, y + 0.08, z, (4 + 30 * kr) * s * R, 0xffe3a8, (1 - kr) * 0.4, 1); const k2 = clamp((a - 0.07) / 0.6, 0, 1); if (a > 0.07) fx.ring(x, y + 0.1, z, (4 + 52 * k2) * s * R, 0xff9a40, (1 - k2) * 0.22, 1); }   // Stop 3: quieter rings
-      // 4. the road and the walls take the light: a wide orange pool on the asphalt that fades over about a second
-      if (a < 1.6) fx.poolAt(x, y, z, 1.0, 0.55, 0.22, 0.8 * Math.pow(1 - a / 1.6, 1.6), (22 + 10 * s) * R, 0, 1);   // Stop 3: lasts longer
-      // 5. hot debris on arcs, glowing for the first third of a second then charred; sparks on top
-      const nd = Math.round((low ? 12 : 26) * Math.min(2, s)), nsp = Math.round((low ? 14 : 34) * Math.min(2, s));
+      // 1. the pop: orange, small, a tenth of a second
+      if (a < 0.12) { const kf = a / 0.12; fx.glow(x, y + 1.6, z, (3 + 4 * kf) * s * R, 2.4, 1.1, 0.3, 0.55 * (1 - kf)); }
+      // 2. the rolling fireball: lobes on a swirl that turns over as it climbs (each lobe circles a horizontal axis), yellow-white at the core cooling to red
+      const kk = clamp(a / 1.5, 0, 1);
+      if (kk < 1) { const nl = low ? 9 : 16, roll = a * 3.2;
+        for (let i = 0; i < nl; i++) { const h = hash(sd + i * 3.3), h2 = hash(sd * 1.7 + i * 5.1), h3 = hash(sd * 2.3 + i * 7.7); const ang = h * 6.2832, ph = h2 * 6.2832 + roll * (0.7 + 0.6 * h3);
+          const rr = (0.6 + 2.6 * kk) * s * (0.6 + 0.6 * h2), up = (0.8 + 4.2 * kk * (0.6 + h3)) * s; const ox = Math.cos(ang) * (rr + Math.cos(ph) * 0.9 * s), oz = Math.sin(ang) * (rr + Math.cos(ph) * 0.9 * s), oy = up + Math.sin(ph) * 0.9 * s;
+          const heat = Math.max(0, 1 - kk * (1.1 + 0.6 * h3)); const fade = Math.pow(1 - kk, 0.8);
+          fx.glow(x + ox, y + 1 + oy, z + oz, (1.4 + 2.2 * h2 + 2.6 * kk) * s, 1.5 + 1.3 * heat, 0.3 + 0.9 * heat, 0.04 + 0.25 * heat * heat, 0.62 * fade); }
+        fx.glow(x, y + 1.4 + 2.4 * kk * s, z, (2.2 + 4 * kk) * s, 2.2, 0.9 * (1 - kk), 0.15, 0.5 * (1 - kk)); }
+      // 3. flames at the base, flickering for two seconds
+      if (a < 2.2) { const f = 1 - a / 2.2; for (let i = 0; i < (low ? 3 : 6); i++) { const h = hash(sd * 4.1 + i), fl = 0.7 + 0.3 * Math.sin(a * (17 + 9 * h) + i * 2.1); fx.glow(x + (h - 0.5) * 2.4 * s, y + 0.6 + fl * 1.2 * s * (0.6 + h), z + (hash(sd + i * 9.3) - 0.5) * 2 * s, (0.8 + 0.9 * fl) * s, 2.2, 0.7 + 0.3 * fl, 0.12, 0.7 * f * fl); } }
+      // 4. the road takes the firelight: a warm pool that fades with the fire
+      if (a < 2.2) fx.poolAt(x, y, z, 1.0, 0.45, 0.15, 0.6 * Math.pow(1 - a / 2.2, 1.3), (14 + 8 * s) * R, 0, 1);
+      // 5. a few pieces of hot debris, charred almost at once (the car's own pieces fly as physics, cars.js)
+      const nd = Math.round((low ? 5 : 10) * Math.min(2, s));
       for (let i = 0; i < nd; i++) { const j = fx.debris.count; if (j >= Q.debris) break; const h = hash(sd + i * 1.7), h2 = hash(sd * 3.1 + i * 2.3), h3 = hash(sd * 5.3 + i);
-        const ang = h * 6.2832, v = (5 + 12 * h2) * (0.6 + 0.4 * s), vy = (7 + 9 * h3) * (0.7 + 0.3 * s); const py = y + 0.8 + vy * a - 9.8 * 0.5 * a * a * 1.15; const gy = Math.max(0.12, py);
-        const hot = a < 0.35 ? 1 : Math.max(0, 1 - (a - 0.35) / 0.4); D.position.set(x + Math.cos(ang) * v * a * (py < 0.12 ? 0.7 : 1), gy, z + Math.sin(ang) * v * a * (py < 0.12 ? 0.7 : 1)); D.rotation.set(a * (4 + 9 * h) + i, a * (3 + 7 * h2), i); const sz = 0.6 + 1.0 * h3 * Math.min(1.6, s); D.scale.set(sz, sz * 0.55, sz * 0.8); D.updateMatrix(); fx.debris.setMatrixAt(j, D.matrix);
-        fx.debris.instanceColor.setXYZ(j, 0.12 + hot * 3.2, 0.1 + hot * 1.4, 0.1 + hot * 0.3); fx.debris.count = j + 1; }
-      if (a < 0.9) for (let i = 0; i < nsp; i++) { const h = hash(sd * 7.7 + i), h2 = hash(sd * 2.9 + i * 1.3); const ang = h * 6.2832, v = (9 + 16 * h2) * (0.7 + 0.3 * s); const py = y + 1 + (6 + 8 * h2) * a - 9.8 * 0.5 * a * a * 1.3; const f = 1 - a / 0.9; fx.spark(x + Math.cos(ang) * v * a, Math.max(0.15, py), z + Math.sin(ang) * v * a, 3 * f, 2 * f * f, 0.7 * f * f); }
-      // 6. a black column that rises and spreads, then drifts on into the burning wreck's own smoke (cars.js)
-      const np = low ? 4 : 8; for (let i = 0; i < np; i++) { const kp = clamp((a - 0.12 - i * 0.07) / 1.4, 0, 1); if (kp <= 0) continue; fx.puff(x + Math.sin(i * 1.9 + sd) * (0.8 + 2.2 * kp) * s, y + 1.5 + kp * (10 + i * 1.0) * Math.min(1.5, s), z + Math.cos(i * 1.3 + sd) * (0.8 + 2.2 * kp) * s, (2.6 + 7 * kp) * Math.min(1.7, s), 0.8 * (1 - kp * 0.85) * (1 - Math.pow(k, 4)), 0.1, 0.1, 0.11, sd + i); }
+        const ang = h * 6.2832, v = (4 + 8 * h2) * (0.6 + 0.4 * s), vy = (5 + 7 * h3) * (0.7 + 0.3 * s); const py = y + 0.8 + vy * a - 9.8 * 0.5 * a * a * 1.15; const gy = Math.max(0.12, py);
+        const hot = a < 0.2 ? 1 : Math.max(0, 1 - (a - 0.2) / 0.3); D.position.set(x + Math.cos(ang) * v * Math.min(a, 1.4), gy, z + Math.sin(ang) * v * Math.min(a, 1.4)); D.rotation.set(a * (4 + 9 * h) + i, a * (3 + 7 * h2), i); const sz = 0.4 + 0.7 * h3 * Math.min(1.6, s); D.scale.set(sz, sz * 0.55, sz * 0.8); D.updateMatrix(); fx.debris.setMatrixAt(j, D.matrix);
+        fx.debris.instanceColor.setXYZ(j, 0.08 + hot * 2.2, 0.07 + hot * 0.8, 0.07 + hot * 0.1); fx.debris.count = j + 1; }
+      // 6. embers: slow orange sparks drifting up and away, flickering out
+      const ne = Math.round((low ? 12 : 26) * Math.min(1.6, s));
+      for (let i = 0; i < ne; i++) { const h = hash(sd * 7.7 + i), h2 = hash(sd * 2.9 + i * 1.3), h3 = hash(sd * 4.4 + i * 0.7); const life = 1.2 + 1.4 * h3; if (a > life) continue; const f = 1 - a / life, fl = 0.6 + 0.4 * Math.sin(a * 23 + i);
+        const ang = h * 6.2832, v = (1.5 + 4 * h2) * s; fx.spark(x + Math.cos(ang) * v * a + Math.sin(a * 2 + i) * 0.5, y + 1 + (2 + 3.5 * h3) * a * s - 0.5 * a * a, z + Math.sin(ang) * v * a, 2.6 * f * fl, 1.1 * f * fl, 0.2 * f); }
+      // 7. black smoke: a thick column from the start, rising and spreading, then drifting on into the burning wreck's own smoke (cars.js)
+      const np = low ? 6 : 11; for (let i = 0; i < np; i++) { const kp = clamp((a - 0.05 - i * 0.09) / 2.0, 0, 1); if (kp <= 0) continue; fx.puff(x + Math.sin(i * 1.9 + sd) * (0.6 + 2.6 * kp) * s, y + 1.6 + kp * (11 + i * 1.2) * Math.min(1.5, s), z + Math.cos(i * 1.3 + sd) * (0.6 + 2.6 * kp) * s, (2.4 + 7.5 * kp) * Math.min(1.7, s), 0.9 * (1 - kp * 0.8) * (1 - Math.pow(k, 4)), 0.05, 0.05, 0.06, sd + i); }
     }
   }
 }

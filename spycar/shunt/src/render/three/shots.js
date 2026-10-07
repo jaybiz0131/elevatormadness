@@ -43,7 +43,7 @@ export class ShotDirector {
     const cn = G.road.cornerAhead(G.dist, 300); const inCorner = cn && cn.hard && G.speed > 380 && G.dist > cn.s0 - 260;
     const bend = Math.abs(G.road.at(G.dist).k) > 1 / 1500;   // a drift on a straight (a lane change that slid) is not a corner: no corner cam
     if ((G.drifting && G.driftT > 0.3 && bend) || inCorner) return 'corner';
-    const a = ((G.dist % 3200) + 3200) % 3200; if (Math.abs(a - 1600) < 230 && Math.floor(G.dist / 3200) % 4 === 1 && !G.road.at(G.dist).corner) return 'tunnel';   // one overpass in four
+    // driver control: no overpasses, so no tunnel shot
     return 'base';
   }
   // which shot now (a name from SHOTS or 'base'); `crashAt` receives the road point a crash cam should look at

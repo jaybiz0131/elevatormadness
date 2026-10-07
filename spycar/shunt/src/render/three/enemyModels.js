@@ -8,6 +8,7 @@ import { T } from '../../sim/constants.js';
 import { M } from './scale.js';
 import { MODELS, fitGlb, findWheels, paintCar, palette, carMaterial } from './carModel.js';
 import { ENEMY_ROLES, ENEMY_SHAPES } from './enemyShapes.js';
+import { splitCar, chunkMeshes } from './carChunks.js';
 export const ENEMY_FILES = { weak: 'dart', bruiser: 'ram', gunner: 'gunner', armored: 'bulwark', truck: 'mule', civ: 'traffic_car' };   // civ: the civilian traffic
 // nose direction per file in the model's own axes, set once someone has looked at each model ('auto' guesses from the roof);
 // ?nose-dart=+x (etc.) overrides for a quick check
@@ -45,6 +46,8 @@ export async function loadEnemyModels(scene, cap = 24) {
       if (civ) { const a = new InstancedBufferAttribute(new Float32Array(n * 4).fill(1), 4); geo.setAttribute('aTint', a); mesh.userData.aTint = a; }   // traffic: body colour and darkness per car
       else mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(n * 3).fill(1), 3);   // per instance tint: white, or dark for a wreck
       scene.add(mesh); out[kind] = { mesh, info };
+      // driver control: the model split into the pieces a wreck can shed (carChunks.js), on the same material
+      const split = splitCar(geo, size, wheels); out[kind].parts = chunkMeshes(scene, split, mesh.material, civ, kind === 'civ' ? 24 : 16, 'enemy-' + name); info.pieces = Object.fromEntries(Object.entries(out[kind].parts).map(([k, v]) => [k, v.tris]));
       if (kind === 'truck' && MODELS.mule_arm) {   // the Mule's arm (mule_arm.glb), folded along the right side, claw forward; it rides on
         // the Mule's own instance matrix (cars.js emit), one more draw; the side-dock animation comes in Sprint F
         const arm = await fitGlb(MODELS.mule_arm, { length: 3.2, width: 2, nose: '+x', up: 'y' });

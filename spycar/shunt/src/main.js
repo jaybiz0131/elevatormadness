@@ -10,7 +10,7 @@ import { initCrash, CRASH, crashLine } from './sim/crash.js';
 import { audio, buzz } from './audio/audio.js';
 import { stage, cv, ui, $, view, callout, hideCallout, updateSpecial, pulseSpecial, updateBoost, resetBoostUi } from './ui/dom.js';
 import { showCard, refreshSettings, screen, setScreen, setSettingsFrom, settingsFrom } from './ui/cards.js';
-import { input, bindInput } from './input/input.js';
+import { input, bindInput, applyControls, showInput } from './input/input.js';
 import { createCanvasRenderer } from './render/canvas.js';
 import { createThreeRenderer } from './render/three/index.js';
 import { createHud } from './ui/hud.js';
@@ -40,10 +40,10 @@ if (hud) hud.lookToggle([{ key: 'night', label: 'NIGHT' }, { key: 'dusk', label:
 function freshRun(reseed) {
   if (reseed) seed = dailyMode ? fnv1a(localDate()) : (Math.random() * 4294967296) >>> 0;
   newRun(seed, { sens: S.sens, autoDrift: S.autoDrift, hairpinWall: Q.get('wall') !== '0' });
-  if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.boost.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; updateSpecial(G);
+  if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.boost.hidden = true; ui.puck.hidden = true; ui.ebrake.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; updateSpecial(G);
 }
 function enterTitle() { phase = 'title'; showCard('title', app); }
-function startPlaying() { phase = 'playing'; hideCallout(); hadRun = true; ui.card.hidden = true; ui.pause.hidden = false; ui.camBtn.hidden = false; ui.pad.hidden = false; ui.gas.hidden = false; ui.fire.hidden = false; ui.special.hidden = false; ui.boost.hidden = false; resetBoostUi(); updateSpecial(G); updateBoost(G); ui.special.classList.toggle('armed', !!(G.special && G.special.ammo > 0)); lookBar(false); beginRun(); }
+function startPlaying() { phase = 'playing'; hideCallout(); hadRun = true; ui.card.hidden = true; ui.pause.hidden = false; ui.camBtn.hidden = false; ui.pad.hidden = false; ui.gas.hidden = false; ui.fire.hidden = false; ui.special.hidden = false; ui.boost.hidden = false; ui.puck.hidden = false; ui.ebrake.hidden = false; applyControls(); resetBoostUi(); updateSpecial(G); updateBoost(G); ui.special.classList.toggle('armed', !!(G.special && G.special.ammo > 0)); lookBar(false); beginRun(); }
 // iOS counts touchend and click as gestures for audio, not pointerdown: unlock on those, window-wide, until it sticks
 for (const ev of ['touchend', 'click', 'keydown']) window.addEventListener(ev, () => audio.unlock(), { passive: true });
 function lookBar(show) { const b = document.querySelector('#hud .look'); if (b) { if (show) b.removeAttribute('hidden'); else b.setAttribute('hidden', ''); } }
@@ -71,8 +71,8 @@ setSink((ev) => {
     else if (e.k === 'buzz') buzz(e.p);
     else if (e.k === 'say') { if (e.text === null) hideCallout(); else callout(e.text, e.sub, e.ms, e.big); }
     else if (e.k === 'rebase') input.carAnchor += e.d;
-    else if (e.k === 'won') { phase = 'won'; ui.special.hidden = true; ui.boost.hidden = true; ui.camBtn.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; input.reset(); callout('City reached', '', 2400, true); }
-    else if (e.k === 'died') { phase = 'dying'; ui.special.hidden = true; ui.boost.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; input.reset(); }
+    else if (e.k === 'won') { phase = 'won'; ui.special.hidden = true; ui.boost.hidden = true; ui.puck.hidden = true; ui.ebrake.hidden = true; ui.camBtn.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; input.reset(); callout('City reached', '', 2400, true); }
+    else if (e.k === 'died') { phase = 'dying'; ui.special.hidden = true; ui.boost.hidden = true; ui.puck.hidden = true; ui.ebrake.hidden = true; ui.pad.hidden = true; ui.gas.hidden = true; ui.fire.hidden = true; input.reset(); }
     else if (e.k === 'special') { if (e.show) { const first = ui.special.hidden; ui.special.hidden = false; if (first) pulseSpecial(); } updateSpecial(G); ui.special.classList.toggle('armed', !!e.armed && !!(G.special && G.special.ammo > 0)); }
     else if (e.k === 'pulse') pulseSpecial();
     else if (e.k === 'mines') updateBoost(G);
@@ -95,7 +95,7 @@ bindInput({
   onPause() { togglePause(); },
   onHide() { if (phase === 'playing' || phase === 'countdown') pause(); },
 });
-for (const [id, key] of [['sSound', 'sound'], ['sMusic', 'music'], ['sHaptics', 'haptics'], ['sShake', 'shake'], ['sMotion', 'motion'], ['sHand', 'left'], ['sTapSlam', 'tapSlam'], ['sAutoDrift', 'autoDrift'], ['sDebug', 'debug'], ['sFewShots', 'fewShots']]) $(id).addEventListener('click', () => { S[key] = !S[key]; saveSettings(); audio.apply(); refreshSettings(); });
+for (const [id, key] of [['sSound', 'sound'], ['sMusic', 'music'], ['sHaptics', 'haptics'], ['sShake', 'shake'], ['sMotion', 'motion'], ['sHand', 'left'], ['sTapSlam', 'tapSlam'], ['sAutoDrift', 'autoDrift'], ['sDebug', 'debug'], ['sFewShots', 'fewShots'], ['sSimple', 'simple']]) $(id).addEventListener('click', () => { S[key] = !S[key]; saveSettings(); applyControls(); audio.apply(); refreshSettings(); });
 $('sSens').addEventListener('input', e => { S.sens = parseFloat(e.target.value); saveSettings(); refreshSettings(); });
 $('sBench').addEventListener('click', () => { ui.card.hidden = true; perf.startBench('1', loadReplay); });
 const nextCam = () => { S.cam = S.cam === 'A' ? 'B' : S.cam === 'B' ? 'C' : 'A'; saveSettings(); if (renderer.setCamera) renderer.setCamera(S.cam); refreshSettings(); };
@@ -121,7 +121,7 @@ function frame(t) {
     else if (phase === 'won') { G.winT += dt; simulate(dt, false); if (G.winT >= 2.6) finishWin(); }
     else if (phase === 'over') G.replayT += dt;
     else if (phase === 'victory') simulate(dt, false);
-    const st = { G, phase, elapsed, best, bestDaily, dailyMode }; renderer.render(dt, st); if (hud) hud.update(st); if (phase === 'playing' || phase === 'countdown') updateBoost(G); perf.frame(dt, st);
+    const st = { G, phase, elapsed, best, bestDaily, dailyMode }; renderer.render(dt, st); if (hud) hud.update(st); if (phase === 'playing' || phase === 'countdown') { updateBoost(G); showInput(G.in); } perf.frame(dt, st);
   }
   requestAnimationFrame(frame);
 }
@@ -139,7 +139,7 @@ window.addEventListener('resize', fit);
 async function start() { await Promise.race([fontsReady, new Promise(r => setTimeout(r, 1500))]); /* the crash physics (Rapier) must be up before the first run: every run builds its own world */ await initCrash(); fit(); refreshSettings(); freshRun(false); enterTitle(); try { localStorage.setItem('shunt-runs', String(Number(localStorage.getItem('shunt-runs') || 0) + 1)); } catch (e) {} if (renderer.prewarm) await renderer.prewarm(); requestAnimationFrame(frame); perf.start(loadReplay); }
 
 // ---------------- hooks for bots and replays ----------------
-function loadReplay(r) { seed = r.seed >>> 0; dailyMode = false; S.sens = r.cfg.sens; S.autoDrift = r.cfg.autoDrift; newRun(seed, { sens: r.cfg.sens, autoDrift: r.cfg.autoDrift, hairpinWall: !!r.cfg.hairpinWall }); if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.boost.hidden = true; ui.pad.hidden = true; updateSpecial(G); attachReplay(r); startPlaying(); return G; }
+function loadReplay(r) { seed = r.seed >>> 0; dailyMode = false; S.sens = r.cfg.sens; S.autoDrift = r.cfg.autoDrift; newRun(seed, { sens: r.cfg.sens, autoDrift: r.cfg.autoDrift, hairpinWall: !!r.cfg.hairpinWall }); if (renderer.setRoad) renderer.setRoad(G.road); renderer.reset(); input.reset(); ui.card.hidden = true; ui.special.hidden = true; ui.boost.hidden = true; ui.puck.hidden = true; ui.ebrake.hidden = true; ui.pad.hidden = true; updateSpecial(G); attachReplay(r); startPlaying(); return G; }
 window.__shunt = {
   get phase() { return phase; }, get G() { return G; }, get T() { return T; }, get S() { return S; }, input, slamTarget, app,
   fireSpecial: () => input.requestSpecial(), trySlam: (d) => input.requestSlam(d),
@@ -148,6 +148,6 @@ window.__shunt = {
   audio, CRASH, crashLine, record: (bot) => startRecording(bot), exportReplay, loadReplay, runSteps: (n) => { syncRun = true; return runSteps(n, phase === 'playing'); }, hashState, STEP: STEP_LEN,
   renderer: () => renderer, perf, get phaseName() { return phase; },
   // for the capture tool: render one frame now (the sim is stepped by runSteps, which stops the frame loop simulating)
-  renderFrame: (dt) => { capElapsed += dt; const st = { G, phase, elapsed: capElapsed, best, bestDaily, dailyMode }; renderer.render(dt, st); if (hud) hud.update(st); updateBoost(G); },
+  renderFrame: (dt) => { capElapsed += dt; const st = { G, phase, elapsed: capElapsed, best, bestDaily, dailyMode }; renderer.render(dt, st); if (hud) hud.update(st); updateBoost(G); showInput(G.in); },
 };
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start); else start();

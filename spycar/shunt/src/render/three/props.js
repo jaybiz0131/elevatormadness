@@ -72,7 +72,8 @@ export class Props {
       for (let cs = cn.s0; cs <= cn.s1; cs += T.corner.chevronEvery) { if (cs < scroll - 100 || cs > yTop) continue; const w = road.at(cs).width; const x = REF - cn.dir * (w / 2 + 26); this.put(hard ? (cn.dir > 0 ? this.chevronR : this.chevronRL) : (cn.dir > 0 ? this.chevronY : this.chevronYL), G, x, cs, cn.dir > 0 ? 0.35 : -0.35); }
       if (cn.type === 'hairpin') for (let cs = cn.s0 + 30; cs < cn.s1; cs += 34) { if (cs < scroll - 100 || cs > yTop) continue; const w = road.at(cs).width; const hsp = hashI(road.seed, Math.round(cs)) / 4294967296; this.put(this.spectator, G, REF - cn.dir * (w / 2 + 48 + hsp * 24), cs, 0, 1, 0.9 + hsp * 0.3, 1); }
     }
-    for (const g of G.signs) { if (g.y < scroll || g.y > yTop) continue; this.put(this.sign, G, REF, g.y, 0); this.label(G, g.text, REF, g.y - 2, 4.0, 11, 2.2, '#1f6b3a', '#ffffff', g.big ? 44 : 34); }
+    // driver control: road signs stand at the roadside on a post (no gantry over the road), the board facing the oncoming car
+    for (const g of G.signs) { if (g.y < scroll || g.y > yTop) continue; const w = G.road.at(g.y).width; const x = REF + (w / 2 + 34); this.put(this.signPost, G, x, g.y, 0); this.label(G, g.text, x, g.y - 2, 3.4, 7, 1.8, '#1f6b3a', '#ffffff', g.big ? 40 : 32); }
     for (const rp of G.ramps) { if (rp.y < scroll - 120 || rp.y > yTop) continue; this.put(this.ramp, G, rp.x, rp.y - 5, 0, rp.w * M, 2.4, 60 * M, 0); if (rp.crate && !rp.crate.taken) this.put(this.crate, G, rp.x, rp.y + 240, elapsed, 1, 1, 1, 70 * M + Math.sin(elapsed * 4) * 0.3); }
     for (const b of G.barrels) if (b.alive && b.y > scroll - 120 && b.y < yTop) this.put(this.barrel, G, b.x, b.y, 0);
     for (const c of G.cones) if (c.alive && c.y > scroll - 120 && c.y < yTop) this.put(this.cone, G, c.x, c.y, 0);
