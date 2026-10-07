@@ -45,7 +45,7 @@ export class RoadCamera {
     // critically damped spring on the heading
     const w = CAM.spring; const a = -2 * w * this.psiV - w * w * (this.psi - target); this.psiV += a * dt; this.psi += this.psiV * dt;
     const speedK = clamp((G.speed - 480) / 1000, 0, 1);   // pulls back and widens from cruise to 1,480 pt/s (gas tops out at 1,000; a boost goes past it)
-    const zoomT = (G.air > 0 ? 0.6 * G.jumpZ : speedK) + (G.drifting ? 0.25 : 0); this.zoom += (zoomT - this.zoom) * Math.min(1, dt * 6);
+    const zoomT = (G.air > 0 ? 0.6 * G.jumpZ + 0.3 * speedK : speedK) + (G.drifting ? 0.25 : 0) + (G.bstT > 0 ? 0.3 : 0); this.zoom += (zoomT - this.zoom) * Math.min(1, dt * 6);
     this.look += (clamp(G.vx / 520, -1, 1) * CAM.look - this.look) * Math.min(1, dt * 4);
     this.fovKick += ((fovKick || 0) - this.fovKick) * Math.min(1, dt * 8);
     // the lift: blocked by a building (a ray from the car to the camera) takes it all the way up; a hard corner ahead takes it half way,
@@ -57,9 +57,10 @@ export class RoadCamera {
     const name = CAM.fixed ? 'base' : this.dir.pick(G, dt, baseName); const Tg = this.T, Pp = this.P;
     if (name === 'base') { Tg.pitch = CAM.pitch + (CAM.pitchHi - CAM.pitch) * this.lift; Tg.dist = CAM.dist + (CAM.distHi - CAM.dist) * this.lift + CAM.distSpeed * this.zoom; Tg.fov = CAM.fov + CAM.fovSpeed * this.zoom + this.fovKick; Tg.yaw = CAM.yaw; Tg.lower = CAM.lowerThird; Tg.lean = CAM.lean; Tg.aim = 0; Tg.blend = CAM.blend; }
     else { const sp = SHOTS[name]; const D = this.dir; let u = 0; if (sp.toPitch !== undefined) { const x = clamp(D.heroT / Math.max(0.5, D.heroDur), 0, 1); u = x * x * (3 - 2 * x); }
-      Tg.pitch = sp.pitch + ((sp.toPitch !== undefined ? sp.toPitch : sp.pitch) - sp.pitch) * u; Tg.dist = (sp.dist + ((sp.toDist !== undefined ? sp.toDist : sp.dist) - sp.dist) * u) * (sp.hold === undefined ? Math.sqrt(CAM.dist / CAM_DEFAULTS.presets.B.dist) : 1) + CAM.distSpeed * this.zoom * 0.3;   // the auto shots (corner, tunnel, airtime) keep the character of the chosen camera: C stays close Tg.fov = sp.fov + ((sp.toFov !== undefined ? sp.toFov : sp.fov) - sp.fov) * u + this.fovKick;
+      Tg.pitch = sp.pitch + ((sp.toPitch !== undefined ? sp.toPitch : sp.pitch) - sp.pitch) * u; Tg.dist = (sp.dist + ((sp.toDist !== undefined ? sp.toDist : sp.dist) - sp.dist) * u) * (sp.hold === undefined ? Math.sqrt(CAM.dist / CAM_DEFAULTS.presets.B.dist) : 1) + CAM.distSpeed * this.zoom * 0.3;   // the auto shots (corner, tunnel) keep the character of the chosen camera: C stays close
+      Tg.fov = sp.fov + ((sp.toFov !== undefined ? sp.toFov : sp.fov) - sp.fov) * u + this.fovKick;
       const kk = cn ? cn.k : road.at(rs).k; const outs = Math.sign(kk) || (G.driftDir || 1); Tg.lower = sp.lower; Tg.lean = sp.lean; Tg.blend = sp.blend; Tg.aim = 0;
-      if (name === 'corner') { Tg.yaw = sp.yaw * outs; Tg.aim = (sp.aim || 0) * outs; } else if (name === 'tracking' || name === 'crash') Tg.yaw = sp.yaw * D.side; else Tg.yaw = sp.yaw + ((sp.toYaw !== undefined ? sp.toYaw : sp.yaw) - sp.yaw) * u * D.side;
+      if (name === 'corner') { Tg.yaw = sp.yaw * outs; Tg.aim = (sp.aim || 0) * outs; } else if (name === 'tracking' || name === 'crash' || name === 'airtime') Tg.yaw = sp.yaw * D.side; else Tg.yaw = sp.yaw + ((sp.toYaw !== undefined ? sp.toYaw : sp.yaw) - sp.yaw) * u * D.side;
       if (name === 'crash') { const w = this.recentWreck(G); if (w) { road.world(w.x, w.y, this.wp2); const dx = this.wp2.X * M - this.anchor.x, dz = -this.wp2.Y * M - this.anchor.z; let d = Math.atan2(dx, -dz) - (this.psi + Tg.yaw * Math.PI / 180); d = Math.atan2(Math.sin(d), Math.cos(d)); Tg.aim = clamp(d * 180 / Math.PI, -35, 35); } } }
     if (!this.pInit) { for (const k in Pp) Pp[k] = Tg[k]; this.pInit = true; } else { const kb = 1 - Math.exp(-dt * 3 / Math.max(0.15, Tg.blend)); for (const k in Pp) Pp[k] += (Tg[k] - Pp[k]) * kb; }
     this.shot = name;
@@ -76,6 +77,8 @@ export class RoadCamera {
     // yaw: an orbit offset round the car (a tracking shot, the corner cam's outside swing); aim turns the view itself toward the corner exit or a crash
     const psiO = this.psi + Pp.yaw * Math.PI / 180; const psiC = psiO + Pp.aim * Math.PI / 180; const s = Math.sin(psiO), c = Math.cos(psiO); this.fwd.set(s, 0, -c); this.right.set(c, 0, s);
     this.pos.copy(this.anchor).addScaledVector(this.fwd, -back); this.pos.y += height; this.pos.addScaledVector(this.right, this.look);
+    // Stop 5: on a descent the road behind the car can rise above a low camera: keep it clear of the surface there
+    { const eb = road.at(rs - back / M * Math.cos(Pp.yaw * Math.PI / 180)).elev * M; if (this.pos.y < eb + 1.8) this.pos.y = eb + 1.8; }
     // shake, sized as a fraction of the screen: the view is 2 tan(fov/2) x dist metres tall, so a wreck's 2% is the same on the phone at any
     // camera distance. Trauma gives noise (4.5% of the screen at 1, falling off as trauma^2.3), the kick gives a directional jolt (3% at 16).
     if (shakeOn) { const viewH = 2 * Math.tan(fov / 2 * Math.PI / 180) * dist; const tr = Math.pow(G.trauma, 2.3);

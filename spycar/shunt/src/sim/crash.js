@@ -44,8 +44,6 @@ export function crashReset() {
   tags.clear(); dyn = []; kin = []; walls = new Map(); hero = null;
   W = new RAPIER.World({ x: 0, y: -T.crash.gravity, z: 0 }); W.timestep = 1 / 60; dormant = true; W.numSolverIterations = 4;
   EQ = new RAPIER.EventQueue(true);
-  const ground = W.createRigidBody(RAPIER.RigidBodyDesc.fixed());   // the road surface: one slab 160 m wide and 24 km long (y = 0 on top)
-  tags.set(W.createCollider(RAPIER.ColliderDesc.cuboid(80, 1, 12000).setTranslation(0, -1, -11000).setFriction(T.crash.friction).setRestitution(0.15), ground).handle, { type: 'ground' });
 }
 export const crashOn = () => CRASH.ready && W !== null;
 // remove a body and forget its colliders' tags
@@ -58,25 +56,32 @@ function buildingSide(s, side) {
   const a = G.road.at(s); const cn = a.corner; if (!cn) { for (const c of G.road.corners) { if (c.s0 > s + 700) break; if (c.hard && s > c.s0 - 1300 && s < c.s1 + 700) return side !== c.dir; } return true; }
   return !(cn.hard && side === cn.dir);
 }
+// Stop 5: the road has hills, so the ground is a row of short tilted slabs that follow the height profile (4 per wall segment, each 50 pt long), and the
+// rails and building faces ride on a body tilted to the segment's chord. A wreck that meets a crest at speed is launched by it.
+const SLAB = 4, tiltQ = (a, q) => { q.x = Math.sin(a / 2); q.y = 0; q.z = 0; q.w = Math.cos(a / 2); return q; };
 function syncWalls() {
   const k0 = Math.floor((G.dist - 900) / SEG), k1 = Math.floor((G.dist + 1700) / SEG);
-  for (const [k, b] of walls) if (k < k0 || k > k1) { drop(b); walls.delete(k); }
+  for (const [k, e] of walls) if (k < k0 || k > k1) { drop(e.b); drop(e.g); walls.delete(k); }
   for (let k = k0; k <= k1; k++) {
     if (walls.has(k) || k < -2) continue;
-    const s = k * SEG + SEG / 2; const w = G.road.at(s).width; const b = W.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, -s * M)); const half = SEG * M / 2 + 0.05;
+    const s = k * SEG + SEG / 2; const w = G.road.at(s).width; const eA = G.road.at(k * SEG).elev * M, eB = G.road.at(k * SEG + SEG).elev * M, eM = G.road.at(s).elev * M;
+    const b = W.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, (eA + eB) / 2, -s * M).setRotation(tiltQ(Math.atan2(eB - eA, SEG * M), QT))); const half = SEG * M / 2 + 0.05;
+    const g = W.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+    for (let q = 0; q < SLAB; q++) { const s0 = k * SEG + q * SEG / SLAB, s1 = s0 + SEG / SLAB; const e0 = G.road.at(s0).elev * M, e1 = G.road.at(s1).elev * M; const len = (s1 - s0) * M, a = Math.atan2(e1 - e0, len), em = (e0 + e1) / 2, zc = -(s0 + s1) / 2 * M;
+      tags.set(W.createCollider(RAPIER.ColliderDesc.cuboid(80, 1, len / 2 + 0.15).setTranslation(0, em - Math.cos(a), zc - Math.sin(a)).setRotation(tiltQ(a, { x: 0, y: 0, z: 0, w: 1 })).setFriction(T.crash.friction).setRestitution(0.15), g).handle, { type: 'ground' }); }
     for (const side of [-1, 1]) {
       const rx = side * ((w / 2 + 2) * M + 0.35);   // rail: inner face at the road edge plus 2 pt, kerb height, so a tumbling wreck trips over it into the buildings
       tags.set(W.createCollider(RAPIER.ColliderDesc.cuboid(0.35, 0.18, half).setTranslation(rx, 0.18, 0).setFriction(0.5).setRestitution(0.3), b).handle, { type: 'rail', side });
       if (buildingSide(s, side)) { const fx = side * ((w / 2 + 66) * M + 2); tags.set(W.createCollider(RAPIER.ColliderDesc.cuboid(2, 5, half).setTranslation(fx, 5, 0).setFriction(0.6).setRestitution(0.25), b).handle, { type: 'wall', side }); }
     }
-    walls.set(k, b);
+    walls.set(k, { b, g });
   }
   CRASH.walls = walls.size;
 }
 // ---- kinematic stand-ins for the hero and live cars ----
 function boxDesc(kind, w, l) { const h = HEIGHT[kind] || 1.3; return RAPIER.ColliderDesc.roundCuboid(Math.max(0.3, w * M / 2 - 0.12), h / 2 - 0.12, Math.max(0.5, l * M / 2 - 0.12), 0.12); }
 // teleport: after a dormant spell the boxes jump to where the cars are now (a 'next' pose would give them a huge one-step velocity)
-function placeKin(b, x, s, yaw, h, lift, teleport) { VT.x = (x - REF) * M; VT.y = h / 2 + lift; VT.z = -s * M; yawQ(-yaw, QT); if (teleport) { b.setTranslation(VT, true); b.setRotation(QT, true); } else { b.setNextKinematicTranslation(VT); b.setNextKinematicRotation(QT); } }
+function placeKin(b, x, s, yaw, h, lift, teleport) { const ra = G.road.at(s); VT.x = (x - REF) * M; VT.y = h / 2 + lift + ra.elev * M; VT.z = -s * M; yawQ(-yaw, QT); { const pa = Math.atan(ra.slope) / 2, sn = Math.sin(pa), cs = Math.cos(pa), y0 = QT.y, w0 = QT.w; QT.x = cs * 0 + w0 * sn; QT.y = y0 * cs; QT.z = -y0 * sn; QT.w = w0 * cs; } if (teleport) { b.setTranslation(VT, true); b.setRotation(QT, true); } else { b.setNextKinematicTranslation(VT); b.setNextKinematicRotation(QT); } }
 function syncKinematic(tp) {
   if (!hero) { hero = W.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation((G.x - REF) * M, HEIGHT.player / 2, -G.dist * M)); tags.set(W.createCollider(boxDesc('player', T.sizes.player[0], T.sizes.player[1]), hero).handle, { type: 'hero' }); }
   placeKin(hero, G.x, G.dist, G.heading, HEIGHT.player, G.jumpZ * 3.5 + (G.roll ? G.roll.lift : 0), tp);
@@ -100,12 +105,13 @@ export function crashLaunch(c, how, kick) {
   if (c.rb) return true;
   retireOver(T.crash.cap - 1);
   const h = HEIGHT[c.kind] || 1.3; const r = G.rng; const C = T.crash;
-  const desc = RAPIER.RigidBodyDesc.dynamic().setTranslation((c.x - REF) * M, h / 2 + 0.02, -c.y * M).setRotation(yawQ(-((c.lean || 0) * Math.PI / 180 + (c.spin || 0)), QT)).setCcdEnabled(true).setLinearDamping(0.05).setAngularDamping(0.35).setCanSleep(true);
+  const ra = G.road.at(c.y); const tz = ra.elev * M, slopeV = ra.slope * (c.speed || 0) * M;
+  const desc = RAPIER.RigidBodyDesc.dynamic().setTranslation((c.x - REF) * M, tz + h / 2 + 0.02, -c.y * M).setRotation(yawQ(-((c.lean || 0) * Math.PI / 180 + (c.spin || 0)), QT)).setCcdEnabled(true).setLinearDamping(0.05).setAngularDamping(0.35).setCanSleep(true);
   const b = W.createRigidBody(desc);
   const col = boxDesc(c.kind, c.w, c.l).setMass(c.mass * C.massK).setFriction(T.crash.friction).setRestitution(c.kind === 'civ' ? 0.2 : 0.3).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
   tags.set(W.createCollider(col, b).handle, { type: 'wreck', car: c });
   const vx = (c.vx || 0) * M, vz = -(c.speed || 0) * M; const k = kick || {}; const heavy = c.kind === 'armored' || c.kind === 'truck' ? 0.45 : 1;
-  let lx = vx + (k.vx || 0), ly = k.vy || 0, lz = vz + (k.vz || 0), ax = 0, ay = (r() * 2 - 1) * 2, az = 0;
+  let lx = vx + (k.vx || 0), ly = (k.vy || 0) + slopeV, lz = vz + (k.vz || 0), ax = 0, ay = (r() * 2 - 1) * 2, az = 0;
   const side = Math.sign(c.vx || (r() - 0.5)) || 1;
   if (how === 'gun' || how === 'missile' || how === 'barrel') {   // the car blows up: thrown up and tumbling
     const big = how === 'missile' || how === 'barrel' ? 1.35 : 1; ly += (C.blastUp[0] + r() * C.blastUp[1]) * big * heavy; lx += (r() * 2 - 1) * 7;
@@ -114,6 +120,7 @@ export function crashLaunch(c, how, kick) {
     ly += 3 + r() * 2.5; lx += side * 4; az = -side * (6 + r() * 4) * heavy; ax = -(r() * 2);
   } else if (how === 'ram') { ly += 4 + r() * 2; ax = -(5 + r() * 3) * heavy; lz -= 6; }   // punted from behind: the tail comes up and it goes end over end
   else if (how === 'stomp') { ly += 1.2; ay = (r() < 0.5 ? -1 : 1) * (5 + r() * 3); lz += 4; }   // crushed from above: flattened, it spins away under the car
+  else if (how === 'mine') { ly += 5 + r() * 3; lx += side * 3; lz *= 0.45; ay = side * (7 + r() * 5); az = -side * (5 + r() * 5); ax = -(2 + r() * 4); }   // a shock mine: thrown up, spinning and rolling, slowed so it tumbles behind the hero into its friends
   else if (how === 'launch') { ay = (r() * 2 - 1) * 3; az = -side * (5 + r() * 6); ax = -(3 + r() * 5); }   // a civilian the hero ran into: thrown up and ahead, end over end and rolling
   else if (how === 'spin') { ly += 0.4; ay = side * (4 + r() * 4); if (k.roll) { ly += 2.5; az = -side * (5 + r() * 3); } }   // a civilian spun out: a skid, sometimes a roll
   else { ly += 2.5 + r() * 3; az = (r() < 0.5 ? -1 : 1) * (2 + r() * 5); ax = -(r() * 4); }   // pile-up and chain: knocked about by what hit it
@@ -143,7 +150,7 @@ export function crashStep(dt) {
   // the corner throws a sliding wreck outward, as the arcade model did (v^2 k, road-space)
   for (const c of dyn) { const b = c.rb; const v = b.linvel(); const s = -b.translation().z / M; const kk = G.road.at(s).k; const fwd = -v.z / M; if (Math.abs(kk) > 1e-6 && Math.abs(fwd) > 20) { const ax = -kk * fwd * fwd * M; b.setLinvel({ x: v.x + ax * h, y: v.y, z: v.z }, true); } }
   W.step(EQ);
-  for (const c of dyn) { const b = c.rb; const p = b.translation(), q = b.rotation(), v = b.linvel(); c.x = REF + p.x / M; c.y = -p.z / M; c.h = p.y; c.qx = q.x; c.qy = q.y; c.qz = q.z; c.qw = q.w; c.vx = v.x / M; c.speed = -v.z / M; c.vy = v.y; }
+  for (const c of dyn) { const b = c.rb; const p = b.translation(), q = b.rotation(), v = b.linvel(); c.x = REF + p.x / M; c.y = -p.z / M; c.h = p.y - G.road.at(c.y).elev * M; c.qx = q.x; c.qy = q.y; c.qz = q.z; c.qw = q.w; c.vx = v.x / M; c.speed = -v.z / M; c.vy = v.y; }
   EQ.drainCollisionEvents((h1, h2, started) => {
     if (!started) return; const a = tags.get(h1), b = tags.get(h2); if (!a || !b) return;
     CRASH.events++;

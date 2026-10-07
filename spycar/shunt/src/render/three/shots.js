@@ -16,14 +16,16 @@ export const SHOTS = {
   corner: { pitch: 14, dist: 38, fov: 52, yaw: 34, lower: 0.40, lean: 7, blend: 0.55, aim: 4 },
   tunnel: { pitch: 4, dist: 15, fov: 64, yaw: 0, lower: 0.30, lean: 4, blend: 0.5 },
   crash: { pitch: 12, dist: 30, fov: 52, yaw: 55, lower: 0.40, lean: 3, blend: 0.45, hold: 2.0 },
-  airtime: { pitch: 6, dist: 36, fov: 58, yaw: 0, lower: 0.34, lean: 2, blend: 0.6 },
+  // Stop 5: the rear shot (a shock mine goes off): the camera swings round in front of the car and looks back at the wreck and what tumbles into it
+  rear: { pitch: 11, dist: 24, fov: 56, yaw: 180, lower: 0.52, lean: 0, blend: 0.45, hold: 2.3 },
+  airtime: { pitch: 17, dist: 34, fov: 52, yaw: 12, lower: 0.40, lean: 2, blend: 0.5, hold: 1.6 },   // Stop 5: low, close behind and a little to one side, so the crest and the drop beyond it show round the car
 };
-export const SHOT_NAMES = { closeChase: 'Close chase', tracking: 'Tracking alongside', crane: 'Rising crane', corner: 'Corner and drift cam', tunnel: 'Tunnel low', crash: 'Crash cam', airtime: 'Airtime' };
-const HERO_BY_EVENT = { takedown: ['tracking', 'crane', 'closeChase'], pileup: ['crash', 'tracking', 'crane'], near: ['closeChase', 'tracking', 'crane'] };
+export const SHOT_NAMES = { closeChase: 'Close chase', tracking: 'Tracking alongside', crane: 'Rising crane', corner: 'Corner and drift cam', tunnel: 'Tunnel low', crash: 'Crash cam', airtime: 'Airtime', rear: 'Rear (mine)' };
+const HERO_BY_EVENT = { takedown: ['tracking', 'crane', 'closeChase'], pileup: ['crash', 'tracking', 'crane'], near: ['closeChase', 'tracking', 'crane'], mine: ['rear'] };
 const ENEMY = new Set(['weak', 'bruiser', 'gunner', 'armored']);
 export class ShotDirector {
   constructor() { this.force = null; this.reset(); }
-  reset() { this.heroLeft = 0; this.heroName = null; this.heroT = 0; this.heroDur = 0; this.last = null; this.lastEnd = -99; this.count = 0; this.kills = 0; this.pileups = 0; this.near = 0; this.pending = null; this.name = 'base'; this.autoName = null; this.autoUntil = 0; this.side = 1; this.aimPt = null; this.log = []; this.civ = 0; }
+  reset() { this.heroLeft = 0; this.heroName = null; this.heroT = 0; this.heroDur = 0; this.last = null; this.lastEnd = -99; this.count = 0; this.kills = 0; this.pileups = 0; this.near = 0; this.pending = null; this.name = 'base'; this.autoName = null; this.autoUntil = 0; this.side = 1; this.aimPt = null; this.log = []; this.civ = 0; this.mines = 0; this.airShot = false; }
   skip() { if (this.heroName) { this.heroLeft = 0; this.endHero(this.t); } }
   get budget() { return S.fewShots ? 5 : 12; }
   get gap() { return S.fewShots ? 16 : 8; }
@@ -54,8 +56,12 @@ export class ShotDirector {
     if (G.pileups > this.pileups) { this.pending = { kind: 'pileup', t }; this.crashPt = { x: G.crashX || G.x, y: G.crashY || G.dist + 150 }; } this.pileups = G.pileups;
     if (G.nearMisses > this.near) { if (!this.pending) this.pending = { kind: 'near', t }; } this.near = G.nearMisses;
     if ((G.launches || 0) > this.civ) { this.pending = { kind: 'pileup', t }; } this.civ = G.launches || 0;
+    if ((G.mineHits || 0) > this.mines) { this.pending = { kind: 'mine', t }; } this.mines = G.mineHits || 0;   // a mine takes the shot even when its pile-up lands the same moment
+    // Stop 5: airtime is earned: a jump long enough (the time in the air so far plus what the arc has left) takes the camera at take-off, danger or not (nothing can touch the car up there)
+    if (G.air <= 0) this.airShot = false;
+    else if (!this.airShot && !this.heroName && G.hang > 0.05 && (G.hang + G.air >= 0.45 || (G.crestAir && G.fvz > 20 && G.speed > 900)) && t - this.lastEnd >= 3 && this.count < this.budget + 3 && G.playing) { this.airShot = true; this.heroName = 'airtime'; this.heroT = 0; this.heroDur = Math.min(2.4, G.hang + G.air + 0.7); this.last = 'airtime'; this.count++; this.side = -this.side; this.pending = null; this.log.push([+t.toFixed(1), 'airtime']); }
     // an earned shot in progress
-    if (this.heroName) { this.heroT += dt; if (this.heroT >= this.heroDur || this.danger(G)) { this.endHero(t); } else { this.name = this.heroName; return this.name; } }
+    if (this.heroName) { this.heroT += dt; if (this.heroT >= this.heroDur || (this.danger(G) && this.heroName !== 'airtime')) { this.endHero(t); } else { this.name = this.heroName; return this.name; } }
     // start one: an event is pending (fresh), a quarter second has passed (the hit lands first), the gap is kept, the budget is not spent, no danger
     if (this.pending && t - this.pending.t > 3.5) this.pending = null;
     if (this.pending && t - this.pending.t >= 0.25 && t - this.lastEnd >= this.gap && this.count < this.budget && G.playing && !this.danger(G) && G.air <= 0) {
@@ -66,7 +72,7 @@ export class ShotDirector {
     // auto shots
     const k = G.road.at(G.dist).k;
     // each auto shot is held a little after its cause ends (hold-over), so a short drift or a quick jump does not flap the camera in and out
-    const want = (G.air > 0 && G.jumpZ > 0.25) ? 'airtime' : this.autoWant(G);
+    const want = this.autoWant(G);
     if (want !== 'base') { this.autoName = want; this.autoUntil = t + (want === 'corner' ? 1.0 : 0.7); }
     if (this.autoName && t < this.autoUntil) { this.name = this.autoName; return this.name; }
     this.autoName = null; this.name = 'base'; return 'base';

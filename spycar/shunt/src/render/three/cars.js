@@ -59,7 +59,7 @@ export class CarSystem {
     const at = im.userData.attach; if (at && at.mesh.count < at.mesh.instanceMatrix.count) { this.attachM.multiplyMatrices(o.matrix, at.local); at.mesh.setMatrixAt(at.mesh.count, this.attachM); at.mesh.instanceColor.setXYZ(at.mesh.count, tint, tint, tint); at.mesh.count++; } }   // an attached part (the Mule's arm)
   acquire(kind) { let m = this.free[kind].pop(); if (!m) { m = new Mesh(this.geo[kind], this.mat[kind]); m.castShadow = true; m.frustumCulled = false; } this.scene.add(m); return m; }
   release(m) { this.scene.remove(m); this.free[m.userData.kind].push(m); }
-  place(mesh, G, x, s, yaw, lift) { toWorld(G.road, x, s, this.pos); mesh.position.copy(this.pos); mesh.position.y += lift; mesh.rotation.set(0, -(G.road.frame(s).psi + yaw), 0, 'YXZ'); mesh.scale.set(1, 1, 1); }
+  place(mesh, G, x, s, yaw, lift) { toWorld(G.road, x, s, this.pos); this.slopeA = Math.atan(G.road.out.slope); mesh.position.copy(this.pos); mesh.position.y += lift; mesh.rotation.set(this.slopeA, -(G.road.frame(s).psi + yaw), 0, 'YXZ'); mesh.scale.set(1, 1, 1); }   // Stop 5: a car sits on the slope it is on
   // a crash-physics wreck (Stop 3): its body pose is in the straightened road frame (crash.js), so turn it by the road heading at its s;
   // the box centre is c.h above the road and the model stands on its own y = 0, so step down half the box height along the body's up
   placeBody(mesh, G, x, s, c) { toWorld(G.road, x, s, this.pos); QY.setFromAxisAngle(UP, -G.road.frame(s).psi); QB.set(c.qx, c.qy, c.qz, c.qw); mesh.quaternion.copy(QY).multiply(QB);
@@ -125,7 +125,7 @@ export class CarSystem {
     this.place(m, G, rx, rdist, lean, lift); m.scale.set((2 - G.sq), G.sq, 1 + z * 0.1);
     // Stop 3: the body. Roll with the lateral load and squat or dive with the speed change (G.body, stepped in the sim); in a hard turn the
     // inside wheels lift and the car pivots on its outside wheels (two wheels); a big hit throws it once round its long axis (G.roll)
-    const B = G.body; if (B && st.phase !== 'over') { const D2R = Math.PI / 180; let rz = B.roll * D2R, rxx = -B.pitch * D2R; const R = G.roll;
+    const B = G.body; if (B && st.phase !== 'over') { const D2R = Math.PI / 180; let rz = B.roll * D2R, rxx = -B.pitch * D2R + (G.air > 0 ? Math.atan2(G.fvz, Math.max(250, G.fwd)) : this.slopeA); const R = G.roll;   // in the air the nose follows the flight path, on the ground the slope
       const tilt = B.tilt * D2R; let dx = 0, dy = 0; if (tilt > 0.001) { const th = -B.twoDir * tilt, px = B.twoDir * 34 * M / 2; rz += th; dx = px * (1 - Math.cos(th)); dy = -px * Math.sin(th); }
       if (R) { rz += R.a; dy += R.lift; }
       m.rotation.x = rxx; m.rotation.z = rz; const yw = -m.rotation.y; m.position.x += Math.cos(yw) * dx; m.position.z += Math.sin(yw) * dx; m.position.y += dy; }
@@ -145,6 +145,10 @@ export class CarSystem {
         fx.glow(V3.x, V3.y, V3.z, 0.5 * k, 4.5, 3.8, 2.4, flash); fx.glow(V3.x + fwx * 0.4, V3.y, V3.z + fwz * 0.4, 1.4 * k, 3.0, 1.6, 0.5, flash * 0.9); fx.glow(V3.x + fwx * 1.2, V3.y, V3.z + fwz * 1.2, 0.8, 1.6, 0.9, 0.3, flash * 0.6);
         fx.glow(V3.x - fwx * 0.7, V3.y, V3.z - fwz * 0.7, 1.0, 0.25, 1.0, 1.4, flash * 0.7); }   // the cyan trim blooms
     }
+    // Stop 5: BOOST: twin flames from the exhausts (a white core, an orange body, a long red tail), a hot glow behind the car and a streak on the road
+    if (G.bstT > 0 && st.phase === 'playing') { const fl = 0.8 + 0.2 * Math.sin(elapsed * 70), kk = Math.min(1, G.bstT / 0.25) * Math.min(1, (G.bstDur - G.bstT) / 0.06 + 0.4); const fw = Math.sin(-m.rotation.y), fz2 = -Math.cos(-m.rotation.y), rw = Math.cos(-m.rotation.y), rz2 = Math.sin(-m.rotation.y);
+      for (const sx of [-1, 1]) { const bx = m.position.x - fw * (60 * M * 0.5 + 0.3) + rw * sx * 34 * M * 0.3, bz = m.position.z - fz2 * (60 * M * 0.5 + 0.3) + rz2 * sx * 34 * M * 0.3, by = m.position.y + 0.55; fx.glow(bx - fw * 0.3, by, bz - fz2 * 0.3, 0.9 * fl, 3, 2.6, 2, kk); fx.glow(bx - fw * 1.8 * fl, by, bz - fz2 * 1.3 * fl, 1.7 * fl, 1, 0.5, 0.1, 0.95 * kk); fx.glow(bx - fw * 3.8 * fl, by, bz - fz2 * 2.8 * fl, 1.5, 1, 0.22, 0.04, 0.7 * kk); fx.glow(bx - fw * 6.2 * fl, by, bz - fz2 * 4.6 * fl, 1.2, 0.8, 0.1, 0.05, 0.45 * kk); if (Math.sin(elapsed * 41 + sx) > 0.2) fx.spark(bx - fw * 2.2, by + 0.1, bz - fz2 * 2.2, 1, 0.7, 0.25); }
+      fx.glow(m.position.x - fw * 5, m.position.y + 0.6, m.position.z - fz2 * 5, 3.4, 1, 0.4, 0.1, 0.32 * kk); fx.poolAt(m.position.x - fw * 4, m.position.y - lift, m.position.z - fz2 * 4, 1, 0.5, 0.15, 0.5 * kk, 5, -m.rotation.y, 2.2); }
     m.visible = !(st.phase === 'playing' && G.flashT > 0 && Math.floor(elapsed * 16) % 2 === 0);
     const p = m.position; fx.shadow(p, 34 * M * (1 - z * 0.2), 60 * M * (1 - z * 0.2), p.y - lift);
     const fx_ = Math.sin(-m.rotation.y), fz_ = -Math.cos(-m.rotation.y); const rx_ = Math.cos(-m.rotation.y), rz_ = Math.sin(-m.rotation.y); const w = 34 * M, l = 60 * M;

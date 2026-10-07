@@ -23,7 +23,7 @@ export let G = null;
 // A fresh run from a seed and the settings the sim is allowed to read. The caller owns the seed (random, daily or replayed).
 export function newRun(seed, cfg) {
   const road = new Road(seed);
-  G = { road, rng: mulberry32(seed ^ 0x5bd1e995), seed, cfg: { sens: cfg.sens, autoDrift: cfg.autoDrift, hairpinWall: !!cfg.hairpinWall }, ticks: 0, steps: 0, ev: [], hashes: [], rec: null, rep: null, in: { off: 0, brake: false, gas: false, fire: false, special: false, slam: 0, flicks: 0, p: 0 }, playing: false, dead: false, t: 0, acc: 0, dist: 0, pdist: 0, speed: 0, cruise: T.drive.cruise, fwd: 0, x: REF, px: REF, vx: 0, targetX: REF, rawTargetX: REF, lean: 0, sq: 1,
+  G = { road, rng: mulberry32(seed ^ 0x5bd1e995), seed, cfg: { sens: cfg.sens, autoDrift: cfg.autoDrift, hairpinWall: !!cfg.hairpinWall }, ticks: 0, steps: 0, ev: [], hashes: [], rec: null, rep: null, in: { off: 0, brake: false, gas: false, fire: false, special: false, slam: 0, flicks: 0, p: 0, turn: 0, boost: false, mine: false }, playing: false, dead: false, t: 0, acc: 0, dist: 0, pdist: 0, speed: 0, cruise: T.drive.cruise, fwd: 0, x: REF, px: REF, vx: 0, targetX: REF, rawTargetX: REF, lean: 0, sq: 1,
         heading: 0, phi: 0, slip: 0, slipping: false, drifting: false, easyDrift: false, brakeOn: false, driftDir: 0, driftT: 0, driftTier: 0, driftCharge: 0, driftBank: 0, driftDirty: false, driftExitT: 0, wobble: 0,
         turbo: 0, turboT: 0, slipT: 0, slipBoostT: 0, braking: false, burnout: 0, popT: 0, puffAcc: 0, sparkAcc: 0, puffs: [], ribbons: [], ribL: null, ribR: null, slideVx: 0, rumbleT: 0, cornerCalls: 0, hairpins: 0, cornerLog: [], teach: null, teachT: 0, pulsed: false,
         wallHits: 0, wideT: 0, wallT: 0, drifts: 0, driftSlams: 0, turbos: 0, driftPoints: 0, driftTierMax: 0, topSpeed: 0, speedSum: 0, speedN: 0, districtsPassed: 0,
@@ -34,7 +34,9 @@ export function newRun(seed, cfg) {
         waveIdx: 0, fillT: 0, fillCool: 0, weaveT: 9, pickT: 20, finale: 0, leadIn: false, won: false, winT: 0, stars: 0, limp: false, limpT: 0, limpCount: 0, killBursts: 0, timeScore: 0, scoreScore: 0, repaired: 0, grade: '', rating: 0, killBurst: 0, speedLoss: 0, prog: 0, opened: false, shown: {}, killFlash: 0, lastKillT: -9, lastAidT: -99, nearMisses: 0, armorLeft: 0,
         scripted: false, script: 0, district: 0, nextDistrictY: 600 * 8, signShown: -1, cause: '', killedBy: '', boost: 0, grazeT: 0, grazePaid: 0, gunCd: 0, gunSpin: 0, heat: 0, hot: 0, shots: 0, reversing: false, gasT: 0, spinning: false, spinA: 0, spinDir: 0, spins: 0, spinArm: 0, slamT: 0, slamDir: 0, slamCd: 0, replay: makeReplay(), replayT: 0, deathT: 0, bestMoment: 0,
         // Stop 3: crash physics hits waiting for the sim, counters, the hero rollover and the hero's body (roll, pitch, two wheels)
-        crashHits: [], pileups: 0, civCrashes: 0, wallSlams: 0, rolls: 0, twoWheels: 0, roll: null, body: { roll: 0, rollV: 0, pitch: 0, pitchV: 0, tilt: 0, two: false, twoT: 0, twoDir: 1, twoHeld: 0 }, autoLift: false, driftBuild: 0, prevPhi: 0, prevSpeed: 0, steerT: 0 };
+        crashHits: [], pileups: 0, civCrashes: 0, wallSlams: 0, rolls: 0, twoWheels: 0, roll: null, body: { roll: 0, rollV: 0, pitch: 0, pitchV: 0, tilt: 0, two: false, twoT: 0, twoDir: 1, twoHeld: 0 }, autoLift: false, driftBuild: 0, prevPhi: 0, prevSpeed: 0, steerT: 0,
+        // Stop 5: the airborne state (height above the datum, vertical speed, time in the air), BOOST and the shock mines
+        fz: 0, fvz: 0, hang: 0, hop: false, crestAir: false, airs: 0, airBest: 0, airEvt: 0, bst: T.boost.start, bstT: 0, bstDur: 1, boosts: 0, mines: [], mineAmmo: T.mine.ammo, minesDropped: 0, mineHits: 0, mineWrecks: 0 };
   crashReset();   // a fresh physics world for every run (replays rebuild it from the same start)
   G.x = REF; G.special = { kind: 'missiles', ammo: 3, level: 1 };   // Sprint 4: start armed, the supply truck tops it up
   return G;

@@ -10,9 +10,9 @@ export class Road {
   // road space (s along the road, x across it, centre always REF). A table integrated every 20 pt gives heading and world position
   // for rendering: forward = (sin psi, cos psi), right = (cos psi, -sin psi).
   constructor(seed) {
-    this.seed = seed; this.pieces = []; this.corners = []; this.crests = []; this.sectors = []; this.end = -2400; this.curSector = null;
+    this.seed = seed; this.pieces = []; this.corners = []; this.crests = []; this.hills = [{ s: -2400, e: 0 }, { s: 2200, e: 0 }]; this.hi = 0; this.sectors = []; this.end = -2400; this.curSector = null;
     this.step = 20; this.s0 = -2400; this.n = 0; this.cap = 4096; this.psi = new Float64Array(this.cap); this.X = new Float64Array(this.cap); this.Y = new Float64Array(this.cap);
-    this.pi = 0; this.ci = 0; this.out = { center: REF, lanes: 4, width: 4 * T.laneW, k: 0, sector: null, corner: null, elev: 0, slope: 0 };
+    this.pi = 0; this.ci = 0; this.out = { center: REF, lanes: 4, width: 4 * T.laneW, k: 0, sector: null, corner: null, elev: 0, slope: 0, curv: 0 };
     this.fr = { psi: 0, X: 0, Y: 0 }; this.ensure(3000);
   }
   ensure(sMax) { while (this.end < sMax + 3000) this.buildSector(); this.integrate(sMax + 3000); }
@@ -30,7 +30,7 @@ export class Road {
     else { kind = this.sectors[i - 1].kind === 'combat' ? 'technical' : 'combat'; len = kind === 'combat' ? 14000 + rng() * 7000 : 7000 + rng() * 5000; lanes = kind === 'combat' ? 4 + Math.floor(rng() * 2) : 2 + Math.floor(rng() * 2); }
     const sector = { kind, s0: this.end, s1: this.end + len, lanes, lanes0: i ? this.sectors[i - 1].lanes : 4, index: i }; this.sectors.push(sector); this.curSector = sector;
     if (kind === 'combat') {
-      while (this.end < sector.s1 - 2600) { const st = 1500 + rng() * 2000; if (st > 2300 && rng() < 0.6) this.crests.push({ s: this.end + st / 2, h: 40 }); this.addStraight(st); this.addCorner('sweeper', 1200 + rng() * 800, 20 + rng() * 25, rng() < 0.5 ? -1 : 1); }
+      while (this.end < sector.s1 - 2600) { const st = 1500 + rng() * 2000; this.addStraight(st); this.addCorner('sweeper', 1200 + rng() * 800, 20 + rng() * 25, rng() < 0.5 ? -1 : 1); }
       this.addStraight(sector.s1 - this.end);
     } else {
       this.addStraight(700); const n = 3 + Math.floor(rng() * 4); let dir = rng() < 0.5 ? -1 : 1;   // the lane change settles before the first corner
@@ -41,6 +41,23 @@ export class Road {
       }
       this.addStraight(Math.max(200, sector.s1 - this.end)); sector.s1 = this.end;
     }
+    this.buildHills(sector, mulberry32(hashI(this.seed, 3000 + i)));
+  }
+  // Stop 5: the height profile. Control points (s, e) joined by cosine easing, so every point is a flat top or a flat bottom: the car climbs, goes over a crest
+  // and drops into a dip. Combat sectors alternate long rolling hills (the road stays under the car) with jump crests: a long climb, then a short steep drop
+  // the car cannot follow at speed, so it leaves the ground at the top (speed^2 x curvature over the pull of gravity, see physics.js) and the road falls
+  // away ahead of it, hiding what is in the dip. Technical sectors only roll gently. The first 2,200 pt (the garage ramp and the opening) are flat.
+  buildHills(sector, rng) {
+    const H = this.hills; const big = sector.kind === 'combat'; let s = H[H.length - 1].s, e = H[H.length - 1].e;
+    while (s < sector.s1 - 2000) {
+      const jump = big && (rng() < 0.4 || (sector.index === 0 && s < 3000)); let dh, L1, L2;
+      if (jump) { dh = 30 + rng() * 26; L1 = 1000 + rng() * 500; L2 = 320 + rng() * 160; if (sector.index === 0 && s < 3000) { dh = 42; L1 = 1100; L2 = 380; } this.crests.push({ s: s + L1, curv: (dh / 2) * Math.pow(Math.PI / L2, 2) }); }
+      else if (big) { dh = 14 + rng() * 20; L1 = 900 + rng() * 500; L2 = L1 * (0.85 + rng() * 0.3); }
+      else { dh = 6 + rng() * 10; L1 = 700 + rng() * 300; L2 = L1; }
+      const low = rng() * 8; H.push({ s: s + L1, e: e + dh }); H.push({ s: s + L1 + L2, e: low }); s += L1 + L2; e = low;
+      if (rng() < 0.5) { const f = 300 + rng() * 600; s += f; H.push({ s, e }); }   // a flat stretch between hills
+    }
+    H.push({ s: Math.max(s, sector.s1), e });
   }
   piece(s) { const P = this.pieces; let j = Math.min(this.pi, P.length - 1); while (j > 0 && s < P[j].s0) j--; while (j + 1 < P.length && s >= P[j].s1) j++; this.pi = j; return P[j]; }
   kAt(s) { const p = this.piece(s); const t = clamp((s - p.s0) / (p.s1 - p.s0), 0, 1); return p.k0 + (p.k1 - p.k0) * t; }
@@ -49,9 +66,9 @@ export class Road {
     const p = this.piece(s); const t = clamp((s - p.s0) / (p.s1 - p.s0), 0, 1); const o = this.out;
     o.k = p.k0 + (p.k1 - p.k0) * t; o.sector = p.sector; o.corner = p.corner;
     const sec = p.sector; o.lanes = sec.lanes0 + (sec.lanes - sec.lanes0) * smooth((s - sec.s0) / 600); o.width = o.lanes * T.laneW; o.center = REF;
-    // crests: a 400 pt bump; the slope says whether the car is climbing or over the top
-    const C = this.crests; let j = Math.min(this.ci, Math.max(0, C.length - 1)); while (j > 0 && s < C[j].s - 200) j--; while (j + 1 < C.length && s > C[j].s + 200) j++; this.ci = j;
-    o.elev = 0; o.slope = 0; if (C.length && Math.abs(s - C[j].s) < 200) { const u = (s - C[j].s) / 200; o.elev = C[j].h * 0.5 * (1 + Math.cos(Math.PI * u)); o.slope = -C[j].h * 0.5 * Math.PI / 200 * Math.sin(Math.PI * u); }
+    // the height profile: cosine easing between control points, so the slope is zero at every crest and every dip
+    const Hh = this.hills; let j = Math.min(this.hi, Hh.length - 2); while (j > 0 && s < Hh[j].s) j--; while (j + 2 < Hh.length && s >= Hh[j + 1].s) j++; this.hi = j;
+    { const a = Hh[j], b = Hh[j + 1]; const L = b.s - a.s; const u = clamp((s - a.s) / L, 0, 1); o.elev = a.e + (b.e - a.e) * 0.5 * (1 - Math.cos(Math.PI * u)); o.slope = (b.e - a.e) * 0.5 * Math.PI / L * Math.sin(Math.PI * u); o.curv = (b.e - a.e) * 0.5 * Math.pow(Math.PI / L, 2) * Math.cos(Math.PI * u); }
     return o;
   }
   integrate(sMax) {

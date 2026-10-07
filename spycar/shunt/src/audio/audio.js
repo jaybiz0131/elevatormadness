@@ -25,6 +25,10 @@ export const audio = {
   turbo(tier) { this.noise(0.35, 0.3 + 0.15 * tier, 1500 + 800 * tier); this.tone('sawtooth', 180 * tier, 500 * tier, 0.3, 0.07); },
   draft() { this.noise(0.5, 0.25, 1200); this.tone('square', 600, 900, 0.08, 0.06, 0.5); },
   brake() { this.noise(0.2, 0.25, 500); },
+  // Stop 5: BOOST (a rising roar and a burst of air), the mine dropping (a click and two beeps) and the shock (a crack, a falling zap, a thump)
+  boost() { this.noise(0.6, 0.55, 2400); this.tone('sawtooth', 90, 520, 0.55, 0.14); this.tone('square', 180, 700, 0.4, 0.06, 0.04); this.tone('sine', 60, 40, 0.5, 0.35); },
+  mine() { this.tone('square', 1200, 1200, 0.04, 0.06); this.tone('square', 900, 900, 0.05, 0.06, 0.1); this.tone('sine', 120, 70, 0.1, 0.2); },
+  shock() { this.noise(0.25, 0.9, 5000); this.tone('sawtooth', 2400, 200, 0.35, 0.16); this.tone('square', 1500, 120, 0.25, 0.1, 0.05); this.tone('sine', 70, 30, 0.4, 0.45, 0.04); },
   pop() { this.noise(0.05, 0.4, 2000); this.tone('square', 90, 60, 0.06, 0.12); },
   chirp() { this.tone('triangle', 1400, 900, 0.05, 0.06); },
   apply() { if (!this.ctx) return; this.sfx.gain.value = S.sound ? 1 : 0; this.musicG.gain.value = S.music ? 0.5 : 0; },

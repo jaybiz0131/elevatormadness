@@ -20,9 +20,12 @@ const dsf = Number(opt.dsf || 2); const page = await browser.newPage({ viewport:
 page.on('pageerror', e => console.log('PAGE ERROR', e.message.slice(0, 200)));
 await page.goto('file://' + pageFile + '?scale=' + (opt.scale || 1.25) + (opt.cam ? '&cam=' + opt.cam : '') + (opt.seed ? '&seed=' + opt.seed : '') + (opt.q ? '&' + opt.q : ''));
 await page.waitForFunction(() => window.__shunt && window.__shunt.G, null, { timeout: 30000 }); await page.waitForTimeout(1200);
-await page.evaluate(({ rep, mode }) => { const sh = window.__shunt;
+await page.evaluate(({ rep, mode, stage, boostAt }) => { const sh = window.__shunt;
   if (rep) { sh.loadReplay(rep); window.__drive = () => {}; return; }
   sh.startPlaying();
+  // --stage=clean: an empty road (every car is removed each step) and the car holding its lane, for the Stop 5 showcase clips; --boostAt=S presses BOOST once at that time
+  if (stage) { window.__drive = () => { const g = sh.G, inp = sh.input; if (inp.id === null) inp.down(1, 200, 700, 0); inp.anchor = { x: 200, y: 700 }; inp.carAnchor = g.targetX - g.road.at(g.dist).center; inp.cur = { x: 200, y: 700 };
+      for (const c of g.cars) c.alive = false; g.crates.length = 0; if (boostAt >= 0 && g.t >= boostAt && !window.__bp) { window.__bp = 1; inp.boostReq = true; } }; return; }
   window.__drive = () => { const g = sh.G, inp = sh.input; if (inp.id === null) inp.down(1, 200, 700, 0); inp.anchor = { x: 200, y: 700 }; inp.carAnchor = g.targetX - g.road.at(g.dist).center;
     const e = g.cars.filter(c => c.alive && !c.wrecked && (c.kind === 'weak' || c.kind === 'bruiser' || c.kind === 'gunner') && c.y > g.dist + 40 && c.y < g.dist + 700).sort((a, b) => a.y - b.y)[0];
     const civ = g.cars.find(c => c.alive && !c.wrecked && c.kind === 'civ' && c.y > g.dist && c.y < g.dist + 260 && Math.abs(c.x - g.x) < 40);
@@ -30,7 +33,7 @@ await page.evaluate(({ rep, mode }) => { const sh = window.__shunt;
     const k = g.road.at(g.dist).k; if (Math.abs(k) > 1 / 900) want += Math.sign(k) * (mode === 'weak' ? 40 : 110);
     inp.fireHeld = !!e || g.cars.some(c => c.alive && !c.wrecked && c.kind !== 'civ' && c.kind !== 'truck' && c.y > g.dist - 50 && c.y < g.dist + 800);
     const lim = mode === 'weak' ? 40 : 90; inp.cur = { x: 200 + Math.max(-lim, Math.min(lim, (want - g.targetX) / 1.4)), y: 700 }; };
-}, { rep: opt.replay ? JSON.parse(fs.readFileSync(opt.replay, 'utf8')) : null, mode: opt.mode || 'gunner' });
+}, { rep: opt.replay ? JSON.parse(fs.readFileSync(opt.replay, 'utf8')) : null, mode: opt.mode || 'gunner', stage: opt.stage || '', boostAt: opt.boostAt !== undefined ? Number(opt.boostAt) : -1 });
 // run to the start (finding the event first if asked)
 const start = await page.evaluate(({ at, find, before }) => { const sh = window.__shunt, G = sh.G; const step = () => { window.__drive(); sh.runSteps(1); };
   while (G.t < at && !(G.rep && G.rep.ended)) step();

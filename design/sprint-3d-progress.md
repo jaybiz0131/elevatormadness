@@ -118,3 +118,7 @@ hairpin barrier tuning frozen until Jack reports a human playtest; no scenery mo
 - Stop 4 (controls, carnage and cameras): BRAKE back with the brake-tap drift, no auto-fire, FIRE and BRAKE side by side, MISSILE above, BOOST spot reserved; fewer civilians and every hit on one is catastrophic (launch, civilian pile-up bonus); cameras A, B, C
   (title card selector, Settings, in-play button); camera director with seven named shots, corner/drift cam, see-through buildings, hero shots with a budget and tap to skip, Fewer hero shots; Camera Lab in the tune panel.
   Sim changed: new baselines (rev D4). Report: design/stop4/stop4-report.md. Next: Stop 5 (hills and jumps, boost, the turn-around move, shock mines).
+- Stop 5 checkpoint (cut short by Jack's change of plan): hills and jumps (rolling height profile, jump crests, ballistic air with soft landings, wrecks on a terrain-following
+  ground, ramps over a pile of wrecks, airtime as an earned hero shot), BOOST (meter on the button, flame, lens kick), shock mines (hold MISSILE, pursuer tumbles into the
+  others, crates refill), regrade on time, score, takedowns, pile-ups and best combo. The swipe turn-around was built, then removed (replaced by the e-brake 180 in the next stop).
+  Sim changed: baselines `replays/hill-s{1,2,3}-{active,idle}.json` and `beauty.json` (rev D5, replay format 3). The `ctrl-*` D4 baselines are retired.

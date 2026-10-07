@@ -28,6 +28,7 @@ export function spawnRamp(yAhead, lane, setup) {
   G.ramps.push(rp); event();
   const pl = lane;
   if (setup === 'jam') { const n = G.road.laneCount(y + 420); let placed = 0; for (let i = 0; i < n && placed < 4; i++) { if (G.rng() < 0.85) { spawnCar(i === pl ? 'weak' : 'civ', i, yAhead + 400 + (G.rng() * 2 - 1) * 30, { factor: 0.6 }); placed++; } } }
+  if (setup === 'wrecks') { const n = G.road.laneCount(y + 300); for (let i = 0; i < 3; i++) { const w = spawnCar('civ', clamp(pl + i - 1, 0, n - 1), yAhead + 300 + i * 70); Object.assign(w, { wrecked: true, rested: true, civCrash: true, boom: false, boomed: true, debrisT: 6, speed: 0, vx: 0, obst: true, penalised: true, spin: (G.rng() * 2 - 1) * 1.4 }); } }   // Stop 5: a pile of wrecks past the ramp: jump it or hit it
   if (setup === 'gap') { G.gaps.push({ y0: y + 120, y1: y + 420 }); }
   if (setup === 'block') { G.barriers.push({ y: y + 380, lanes: Math.min(3, G.road.laneCount(y + 380)), lane0: Math.max(0, pl - 1) }); }
 }
@@ -109,6 +110,9 @@ function teaching() {
 }
 export function director() {
   teaching();
+  // Stop 5: two one-line hints, once each: BOOST when the meter first holds half, and the shock mines
+  if (!G.hintBoost && G.t >= 12 && G.bst >= 0.5 && G.boosts === 0) { G.hintBoost = 1; say('Boost ready', ['tap BOOST', 'press B'], 1700); }
+  else if (!G.hintMine && G.t >= 24 && G.minesDropped === 0 && G.cars.some(c => c.alive && !c.wrecked && isAttacker(c.kind) && c.y < G.dist - 60 && c.y > G.dist - 600)) { G.hintMine = 1; say('Shock mines', ['hold MISSILE to drop one', 'press M to drop one'], 1900); }
   if (G.ticks % 6 !== 0) return;
   const dt = 6 * STEP, p = progress(); G.prog = p;
   if (!G.opened && G.t >= 0.2) { G.opened = true; spawnRamp(170, playerLane(), 'none');   // the jump off the garage ramp
@@ -140,7 +144,7 @@ export function director() {
   if (technical || winding) return;   // inside a technical sector and in the finale: the corners and the wave are the content
   if (G.t >= G.weaveT) { G.weaveT = G.t + T.pace.weaveEvery[0] + G.rng() * (T.pace.weaveEvery[1] - T.pace.weaveEvery[0]); spawnWeave(p); }
   pickups();
-  if (G.t >= G.nextRamp) { G.nextRamp = G.t + T.ramp.every[0] + G.rng() * (T.ramp.every[1] - T.ramp.every[0]); const setups = ['jam', 'gap', 'block', 'crate']; spawnRamp(farAhead(), nearLane(G.dist + 900), setups[G.rampIndex++ % 4]); }
+  if (G.t >= G.nextRamp) { G.nextRamp = G.t + T.ramp.every[0] + G.rng() * (T.ramp.every[1] - T.ramp.every[0]); const setups = ['jam', 'gap', 'wrecks', 'block', 'crate']; spawnRamp(farAhead(), nearLane(G.dist + 900), setups[G.rampIndex++ % 5]); }
   if (G.t >= G.nextTruck) { G.nextTruck = G.t + T.truckEvery; spawnCar('truck', nearLane(G.dist + 900), farAhead()); say('Supply truck', '', 900); }
   if (G.t >= G.nextBarrel) { G.nextBarrel = G.t + T.barrelEvery; spawnBarrels(farAhead(), freeLane(G.dist + 900, [])); }
   if (G.t >= G.nextClosure) { G.nextClosure = G.t + T.closureEvery; spawnClosure(farAhead() + 100); }

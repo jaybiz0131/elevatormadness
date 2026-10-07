@@ -39,7 +39,18 @@ export const T = {
   bruiser: { hold: [0.8, 1.6], tell: 0.6, lunge: 70, lungeSpeed: 260, recover: 1.0, push: 22, shove: 300, closeCap: 190, dropCap: 150, damage: 1, hp: 18 },
   dart: { hold: [0.8, 1.6], tell: 0.45, lunge: 60, lungeSpeed: 420, recover: 2.2, push: 14, shove: 180, closeCap: 280, dropCap: 260, damage: 0.5, hp: 9 },
   gunner: { sight: 0.8, cooldown: 3.0, hp: 21 },
-  ramp: { first: 12, every: [12, 18], warn: 2.0, air: 1.2, steerAir: 0.5, slowmo: 0.7, slowmoFor: 0.3 },
+  // Stop 5: a ramp is a ballistic launch (vz pt/s up, so about 2 vz / g seconds in the air on the flat); `air` is only the nominal time
+  ramp: { first: 12, every: [12, 18], warn: 2.0, air: 0.9, vz: 190, steerAir: 0.5, slowmo: 0.7, slowmoFor: 0.3 },
+  // Stop 5: hills. The car is a point that follows the road's height until the road curves away faster than gravity can pull it (speed^2 x curvature
+  // over `g`, times `k`): then it is airborne, on a parabola, until it meets the road again. A landing is always soft (compression, a bounce over
+  // `hopAt` s of air, sparks). `airMin` s of air and up pays `airScore` a second and charges BOOST.
+  hill: { g: 420, k: 1.5, minSpeed: 520, maxAir: 1.6, hopAt: 0.75, airScore: 260, airMin: 0.35 },
+  // Stop 5: BOOST. A full meter is `dur` s at +`speed` pt/s over the auto speed; a tap spends the whole meter (at least `min`). Fills: a near miss,
+  // each tier of a clean drift, a takedown, a pile-up, and airtime. `start` is the meter at the start of a run.
+  boost: { speed: 560, dur: 1.6, accel: 3200, start: 0.5, min: 0.3, near: 0.12, drift: 0.07, air: 0.3, kill: 0.1, pile: 0.08 },
+  // Stop 5: shock mines: `ammo` at the start, `max` carried, `crate` more from every supply crate; armed after `arm` s; a pursuer within `r` pt sideways
+  // and `ry` pt along trips it
+  mine: { ammo: 3, max: 6, crate: 2, arm: 0.25, r: 30, ry: 24, hold: 0.32, stun: 0.9, shock: 90 },
   truckEvery: 25, barrelEvery: 20, closureEvery: 30, forkEvery: [60, 90], onrampEvery: 45, districtEvery: 60,
   missiles: 6, oil: 4, nitro: 3, crateDrop: 0.25,
   // combo: a kill within `window` seconds of the last one raises the multiplier (x2 up to x5); the multiplier is held for `hold` seconds
@@ -51,7 +62,9 @@ export const T = {
   // pt/s per armor pip, as a one-off speed loss), no armor means limp mode (slower, no gas, smoking) until a repair crate is collected, and
   // every kill gives a short speed burst. The finish card grades time plus score: each is turned into 0..1 (time between `fast` and `slow`
   // seconds, score up to `scoreRef`), averaged, and the average gives the letter and the stars.
-  goal: { city: 120000, finale: 0.9, bonus: 1000, bonusArmor: 300, time: { fast: 105, slow: 210 }, scoreRef: 40000, letters: [[0.88, 'S'], [0.72, 'A'], [0.55, 'B'], [0, 'C']], stars: [0.45, 0.75] },
+  // Stop 5: speed is automatic, so time alone is generous (everyone finishes in about two minutes). The rating is a weighted sum of five 0..1 measures: time (`fast` s = 1, `slow` s = 0),
+  // score (to `scoreRef`), takedowns (to `killRef`), pile-ups (to `pileRef`) and the best combo (x`comboRef`). A weak driver lands on C, a casual one on B, a skilled one on A; S is for a great run.
+  goal: { city: 120000, finale: 0.9, bonus: 1000, bonusArmor: 300, time: { fast: 95, slow: 132 }, scoreRef: 70000, killRef: 50, pileRef: 16, comboRef: 5, weights: { time: 0.50, score: 0.20, kills: 0.12, pile: 0.10, combo: 0.08 }, letters: [[0.88, 'S'], [0.66, 'A'], [0.38, 'B'], [0, 'C']], stars: [0.38, 0.66] },
   hurt: { perPip: 380, wall: 0, min: 120 },
   kill: { burst: 240, perCombo: 60, burstFor: 1.1, carStop: 0.07, carSlow: 0.18, carSlowRate: 0.6 },
   limp: { speedK: 0.55, repairAfter: 2.5, repairAt: 1600, armorBack: 2 },
@@ -62,7 +75,7 @@ export const T = {
   pace: { first: 3.5, waveMin: 8, waveMax: 15, floor: 0.3, floorMore: 0.8, window: [-700, 3200], visible: [-300, 1800], fillCool: 1.6, weaveEvery: [12, 18], pickupEvery: [12, 20], caps: [3, 4, 5, 6], nearMiss: 16 },
   // score by cause (audit, "Give the kills back to the player"): a wreck the player caused pays base × the cause multiplier;
   // the car is the main weapon, so Slam, shunt, ram, wall and oil kills pay 3× a gun kill; enemy-on-enemy accidents pay nothing
-  score: { weak: 100, bruiser: 250, gunner: 250, armored: 400, cause: { gun: 1, missile: 1, slam: 3, shunt: 3, ram: 3, rail: 3, wall: 3, oil: 3, stomp: 3, chain: 2, barrel: 2, pileup: 2 }, pileUp: 150, civPile: 450,
+  score: { weak: 100, bruiser: 250, gunner: 250, armored: 400, cause: { gun: 1, missile: 1, mine: 3, slam: 3, shunt: 3, ram: 3, rail: 3, wall: 3, oil: 3, stomp: 3, chain: 2, barrel: 2, pileup: 2 }, pileUp: 150, civPile: 450,
            civilian: -100, crate: 250, graze: 10, grazeCap: 3, truckLoad: 100, clean: 120, closeCall: 50, shuntEnemy: 100, barrelDouble: 150, distancePer: 100 },
   mercy: 2.5,   // after the car takes a hit, enemies wait this long before the next lunge or shot (and twice as long on one armor pip)
   graceSeconds: 60,   // damage halved for the first minute; armor comes from pickups and the supply truck
